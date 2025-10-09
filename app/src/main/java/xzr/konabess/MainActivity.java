@@ -153,31 +153,9 @@ public class MainActivity extends Activity {
         }
         {
             Button button = new Button(this);
-            button.setText(R.string.help);
+            button.setText(R.string.settings);
             toolbar.addView(button);
-            button.setOnClickListener(v -> new AlertDialog.Builder(MainActivity.this)
-                    .setTitle(R.string.help)
-                    .setMessage(KonaBessStr.generic_help(this))
-                    .setPositiveButton(R.string.ok, null)
-                    .setNeutralButton(R.string.about,
-                            (dialog, which) -> new AlertDialog.Builder(MainActivity.this)
-                                    .setTitle(R.string.about)
-                                    .setMessage(getResources().getString(R.string.author) + " " +
-                                            "xzr467706992 (LibXZR)\n" + getResources().getString(R.string.release_at) + " www.akr-developers.com\n")
-                                    .setPositiveButton(R.string.ok, null)
-                                    .setNegativeButton("Github",
-                                            (dialog1, which1) -> MainActivity.this.startActivity(new Intent() {{
-                                                setAction(Intent.ACTION_VIEW);
-                                                setData(Uri.parse("https://github" +
-                                                        ".com/xzr467706992/KonaBess"));
-                                            }}))
-                                    .setNeutralButton(R.string.visit_akr,
-                                            (dialog1, which1) -> MainActivity.this.startActivity(new Intent() {{
-                                                setAction(Intent.ACTION_VIEW);
-                                                setData(Uri.parse("https://www.akr-developers" +
-                                                        ".com/d/441"));
-                                            }})).create().show())
-                    .create().show());
+            button.setOnClickListener(v -> startActivity(new Intent(MainActivity.this, SettingsActivity.class)));
         }
 
         //Editor

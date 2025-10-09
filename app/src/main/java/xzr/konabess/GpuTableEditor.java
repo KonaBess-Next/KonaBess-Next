@@ -630,7 +630,7 @@ public class GpuTableEditor {
             if (freq == 0)
                 continue;
             ParamAdapter.item item = new ParamAdapter.item();
-            item.title = freq / 1000000 + "MHz";
+            item.title = SettingsActivity.formatFrequency(freq, activity);
             item.subtitle = "";
             items.add(item);
         }
@@ -693,8 +693,7 @@ public class GpuTableEditor {
             try {
                 new AlertDialog.Builder(activity)
                         .setTitle(R.string.remove)
-                        .setMessage(String.format(activity.getResources().getString(R.string.remove_msg),
-                                getFrequencyFromLevel(bins.get(id).levels.get(position - 2)) / 1000000))
+                        .setMessage("Are you sure to remove " + SettingsActivity.formatFrequency(getFrequencyFromLevel(bins.get(id).levels.get(position - 2)), activity) + "?")
                         .setPositiveButton(R.string.yes, (dialog, which) -> {
                             bins.get(id).levels.remove(position - 2);
                             try {

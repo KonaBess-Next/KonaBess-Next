@@ -278,7 +278,7 @@ public class GpuVoltEditor {
 
         for (opp opp : opps) {
             items.add(new ParamAdapter.item() {{
-                title = opp.frequency / 1000000 + "MHz";
+                title = SettingsActivity.formatFrequency(opp.frequency, activity);
                 subtitle = "";
             }});
         }
@@ -324,7 +324,7 @@ public class GpuVoltEditor {
             int finalPosition = position;
             new AlertDialog.Builder(activity)
                     .setTitle(R.string.remove)
-                    .setMessage(String.format(activity.getResources().getString(R.string.remove_msg_volt), opps.get(position).frequency / 1000000))
+                    .setMessage("Are you sure to remove the voltage level of " + SettingsActivity.formatFrequency(opps.get(position).frequency, activity) + "?")
                     .setPositiveButton(R.string.yes, (dialog, which) -> {
                         opps.remove(finalPosition);
                         generateVolts(activity, page);

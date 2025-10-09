@@ -133,4 +133,16 @@
      <string name="sd8e">骁龙 8 Elite</string>
      <string name="sd8e_gen5">骁龙 8 Elite Gen5</string>
      <string name="sd8sg4">骁龙 8s Gen 4</string>
+     <string name="settings">设置</string>
+     <string name="language">语言</string>
+     <string name="gpu_freq_unit">GPU频率单位</string>
+     <string name="english">English</string>
+     <string name="german">Deutsch</string>
+     <string name="chinese">中文</string>
+     <string name="indonesian">Bahasa Indonesia</string>
+     <string name="hz">Hz</string>
+     <string name="mhz">MHz</string>
+     <string name="ghz">GHz</string>
+     <string name="preview_gpu_freq_table">预览GPU频率表</string>
+     <string name="freq_unit_description">选择GPU频率的显示方式</string>
  </resources>

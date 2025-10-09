@@ -133,4 +133,16 @@
      <string name="sd8e">Snapdragon 8 Elite</string>
      <string name="sd8e_gen5">Snapdragon 8 Elite Gen5</string>
      <string name="sd8sg4">Snapdragon 8s Gen 4</string>
+     <string name="settings">Settings</string>
+     <string name="language">Language</string>
+     <string name="gpu_freq_unit">GPU Frequency Unit</string>
+     <string name="english">English</string>
+     <string name="german">Deutsch</string>
+     <string name="chinese">中文</string>
+     <string name="indonesian">Bahasa Indonesia</string>
+     <string name="hz">Hz</string>
+     <string name="mhz">MHz</string>
+     <string name="ghz">GHz</string>
+     <string name="preview_gpu_freq_table">Preview GPU Frequency Table</string>
+     <string name="freq_unit_description">Choose how GPU frequencies are displayed</string>
  </resources>
