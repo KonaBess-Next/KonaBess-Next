@@ -12,7 +12,6 @@ import android.view.ViewGroup;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.appcompat.app.AppCompatDelegate;
 import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -30,16 +29,10 @@ public class SettingsFragment extends Fragment {
     private SettingsAdapter adapter;
     private SharedPreferences prefs;
 
-    private static final String PREFS_NAME = "KonaBessSettings";
-    private static final String KEY_LANGUAGE = "language";
-    private static final String KEY_FREQ_UNIT = "freq_unit";
-    private static final String KEY_THEME = "theme";
-    private static final String KEY_COLOR_PALETTE = "color_palette";
-
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
-        prefs = requireContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        prefs = requireContext().getSharedPreferences(SettingsActivity.PREFS_NAME, Context.MODE_PRIVATE);
         
         recyclerView = new RecyclerView(requireContext());
         recyclerView.setLayoutManager(new LinearLayoutManager(requireContext()));
@@ -77,8 +70,16 @@ public class SettingsFragment extends Fragment {
         items.add(new SettingsAdapter.SettingItem(
             R.drawable.ic_frequency,
             getString(R.string.gpu_freq_unit),
-            "Choose frequency display unit",
+            getString(R.string.freq_unit_description),
             getCurrentFreqUnitName()
+        ));
+
+        // Auto-save GPU freq table toggle
+        items.add(new SettingsAdapter.SettingItem(
+            R.drawable.ic_save,
+            getString(R.string.auto_save_gpu_freq_table),
+            getString(R.string.auto_save_gpu_freq_table_desc),
+            getAutoSaveStatusText()
         ));
 
         items.add(new SettingsAdapter.SettingItem(
@@ -104,6 +105,9 @@ public class SettingsFragment extends Fragment {
                     showFreqUnitDialog();
                     break;
                 case 4:
+                    toggleAutoSave();
+                    break;
+                case 5:
                     showHelpDialog();
                     break;
             }
@@ -119,12 +123,12 @@ public class SettingsFragment extends Fragment {
             getString(R.string.theme_dark)
         };
 
-        int currentTheme = prefs.getInt(KEY_THEME, SettingsActivity.THEME_SYSTEM);
+    int currentTheme = prefs.getInt(SettingsActivity.KEY_THEME, SettingsActivity.THEME_SYSTEM);
 
         new AlertDialog.Builder(requireContext())
                 .setTitle(getString(R.string.theme))
                 .setSingleChoiceItems(themes, currentTheme, (dialog, which) -> {
-                    prefs.edit().putInt(KEY_THEME, which).apply();
+                    prefs.edit().putInt(SettingsActivity.KEY_THEME, which).apply();
                     adapter.updateItem(0, getCurrentThemeName());
                     dialog.dismiss();
                     SettingsActivity.applyThemeFromSettings(requireContext());
@@ -144,12 +148,12 @@ public class SettingsFragment extends Fragment {
             "Pure AMOLED (Black)"
         };
 
-        int currentPalette = prefs.getInt(KEY_COLOR_PALETTE, 0);
+    int currentPalette = prefs.getInt(SettingsActivity.KEY_COLOR_PALETTE, 0);
 
         new AlertDialog.Builder(requireContext())
                 .setTitle("Color Palette")
                 .setSingleChoiceItems(palettes, currentPalette, (dialog, which) -> {
-                    prefs.edit().putInt(KEY_COLOR_PALETTE, which).apply();
+                    prefs.edit().putInt(SettingsActivity.KEY_COLOR_PALETTE, which).apply();
                     adapter.updateItem(1, getCurrentColorPaletteName());
                     dialog.dismiss();
                     // Apply color palette by recreating activity
@@ -179,8 +183,8 @@ public class SettingsFragment extends Fragment {
         new AlertDialog.Builder(requireContext())
                 .setTitle(getString(R.string.language))
                 .setSingleChoiceItems(languages, currentIndex, (dialog, which) -> {
-                    prefs.edit().putString(KEY_LANGUAGE, languageCodes[which]).apply();
-                    adapter.updateItem(1, getCurrentLanguageName());
+                    prefs.edit().putString(SettingsActivity.KEY_LANGUAGE, languageCodes[which]).apply();
+                    adapter.updateItem(2, getCurrentLanguageName());
                     dialog.dismiss();
                     requireActivity().recreate();
                 })
@@ -195,13 +199,13 @@ public class SettingsFragment extends Fragment {
             getString(R.string.ghz)
         };
 
-        int currentUnit = prefs.getInt(KEY_FREQ_UNIT, SettingsActivity.FREQ_UNIT_MHZ);
+    int currentUnit = prefs.getInt(SettingsActivity.KEY_FREQ_UNIT, SettingsActivity.FREQ_UNIT_MHZ);
 
         new AlertDialog.Builder(requireContext())
                 .setTitle(getString(R.string.gpu_freq_unit))
                 .setSingleChoiceItems(units, currentUnit, (dialog, which) -> {
-                    prefs.edit().putInt(KEY_FREQ_UNIT, which).apply();
-                    adapter.updateItem(2, getCurrentFreqUnitName());
+                    prefs.edit().putInt(SettingsActivity.KEY_FREQ_UNIT, which).apply();
+                    adapter.updateItem(3, getCurrentFreqUnitName());
                     dialog.dismiss();
                 })
                 .setNegativeButton(getString(R.string.cancel), null)
@@ -232,13 +236,32 @@ public class SettingsFragment extends Fragment {
                 .create().show();
     }
 
+    private void toggleAutoSave() {
+        boolean currentState = prefs.getBoolean(SettingsActivity.KEY_AUTO_SAVE_GPU_TABLE, false);
+        boolean newState = !currentState;
+        
+        prefs.edit().putBoolean(SettingsActivity.KEY_AUTO_SAVE_GPU_TABLE, newState).apply();
+        adapter.updateItem(4, getAutoSaveStatusText());
+        
+        // Show toast to confirm the change
+        String message = newState ? 
+            getString(R.string.auto_save_enabled_toast) : 
+            getString(R.string.auto_save_disabled_toast);
+        android.widget.Toast.makeText(requireContext(), message, android.widget.Toast.LENGTH_SHORT).show();
+    }
+
+    private String getAutoSaveStatusText() {
+        boolean isEnabled = prefs.getBoolean(SettingsActivity.KEY_AUTO_SAVE_GPU_TABLE, false);
+        return isEnabled ? getString(R.string.common_on) : getString(R.string.common_off);
+    }
+
     private String getCurrentThemeName() {
         String[] names = {
             getString(R.string.theme_system),
             getString(R.string.theme_light),
             getString(R.string.theme_dark)
         };
-        return names[prefs.getInt(KEY_THEME, SettingsActivity.THEME_SYSTEM)];
+    return names[prefs.getInt(SettingsActivity.KEY_THEME, SettingsActivity.THEME_SYSTEM)];
     }
 
     private String getCurrentLanguageName() {
@@ -255,7 +278,7 @@ public class SettingsFragment extends Fragment {
             SettingsActivity.LANGUAGE_INDONESIAN
         };
 
-        String currentLang = prefs.getString(KEY_LANGUAGE, SettingsActivity.LANGUAGE_ENGLISH);
+    String currentLang = prefs.getString(SettingsActivity.KEY_LANGUAGE, SettingsActivity.LANGUAGE_ENGLISH);
         for (int i = 0; i < codes.length; i++) {
             if (codes[i].equals(currentLang)) {
                 return names[i];
@@ -270,11 +293,11 @@ public class SettingsFragment extends Fragment {
             getString(R.string.mhz),
             getString(R.string.ghz)
         };
-        return names[prefs.getInt(KEY_FREQ_UNIT, SettingsActivity.FREQ_UNIT_MHZ)];
+    return names[prefs.getInt(SettingsActivity.KEY_FREQ_UNIT, SettingsActivity.FREQ_UNIT_MHZ)];
     }
 
     private String getCurrentColorPaletteName() {
-        int palette = prefs.getInt(KEY_COLOR_PALETTE, 0);
+    int palette = prefs.getInt(SettingsActivity.KEY_COLOR_PALETTE, 0);
         switch (palette) {
             case 0: return "Dynamic (Material You)";
             case 1: return "Purple & Teal";
@@ -293,7 +316,7 @@ public class SettingsFragment extends Fragment {
             SettingsActivity.LANGUAGE_CHINESE,
             SettingsActivity.LANGUAGE_INDONESIAN
         };
-        String currentLang = prefs.getString(KEY_LANGUAGE, SettingsActivity.LANGUAGE_ENGLISH);
+    String currentLang = prefs.getString(SettingsActivity.KEY_LANGUAGE, SettingsActivity.LANGUAGE_ENGLISH);
 
         for (int i = 0; i < codes.length; i++) {
             if (codes[i].equals(currentLang)) {

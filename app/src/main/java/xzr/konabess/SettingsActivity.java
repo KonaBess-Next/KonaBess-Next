@@ -7,6 +7,7 @@ import android.content.SharedPreferences;
 import android.net.Uri;
 import android.os.Bundle;
 import android.widget.LinearLayout;
+import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.app.AppCompatDelegate;
@@ -21,11 +22,12 @@ import xzr.konabess.adapters.SettingsAdapter;
 import xzr.konabess.utils.LocaleUtil;
 
 public class SettingsActivity extends AppCompatActivity {
-    private static final String PREFS_NAME = "KonaBessSettings";
-    private static final String KEY_LANGUAGE = "language";
-    private static final String KEY_FREQ_UNIT = "freq_unit";
-    private static final String KEY_THEME = "theme";
-    private static final String KEY_COLOR_PALETTE = "color_palette";
+    public static final String PREFS_NAME = "KonaBessSettings";
+    public static final String KEY_LANGUAGE = "language";
+    public static final String KEY_FREQ_UNIT = "freq_unit";
+    public static final String KEY_THEME = "theme";
+    public static final String KEY_COLOR_PALETTE = "color_palette";
+    public static final String KEY_AUTO_SAVE_GPU_TABLE = "auto_save_gpu_table";
     
     public static final int FREQ_UNIT_HZ = 0;
     public static final int FREQ_UNIT_MHZ = 1;
@@ -132,6 +134,13 @@ public class SettingsActivity extends AppCompatActivity {
         ));
 
         items.add(new SettingsAdapter.SettingItem(
+            R.drawable.ic_save,
+            getString(R.string.auto_save_gpu_freq_table),
+            getString(R.string.auto_save_gpu_freq_table_desc),
+            getAutoSaveStatus()
+        ));
+
+        items.add(new SettingsAdapter.SettingItem(
             R.drawable.ic_help,
             getString(R.string.help),
             "About and documentation",
@@ -151,6 +160,9 @@ public class SettingsActivity extends AppCompatActivity {
                     showFreqUnitDialog();
                     break;
                 case 3:
+                    toggleAutoSave();
+                    break;
+                case 4:
                     showHelpDialog();
                     break;
             }
@@ -308,6 +320,10 @@ public class SettingsActivity extends AppCompatActivity {
         return names[getSavedFreqUnit()];
     }
 
+    private String getAutoSaveStatus() {
+        return getString(isAutoSaveEnabled() ? R.string.common_on : R.string.common_off);
+    }
+
     private int getCurrentLanguageIndex() {
         String[] codes = {LANGUAGE_ENGLISH, LANGUAGE_GERMAN, LANGUAGE_CHINESE, LANGUAGE_INDONESIAN};
         String currentLang = getSavedLanguage();
@@ -334,6 +350,18 @@ public class SettingsActivity extends AppCompatActivity {
 
     private int getSavedFreqUnit() {
         return prefs.getInt(KEY_FREQ_UNIT, FREQ_UNIT_MHZ);
+    }
+
+    private void toggleAutoSave() {
+        boolean enabled = !isAutoSaveEnabled();
+        prefs.edit().putBoolean(KEY_AUTO_SAVE_GPU_TABLE, enabled).apply();
+        adapter.updateItem(3, getAutoSaveStatus());
+        Toast.makeText(this, enabled ? R.string.auto_save_enabled_toast : R.string.auto_save_disabled_toast,
+                Toast.LENGTH_SHORT).show();
+    }
+
+    private boolean isAutoSaveEnabled() {
+        return prefs.getBoolean(KEY_AUTO_SAVE_GPU_TABLE, false);
     }
 
     private void saveTheme(int theme) {
@@ -381,6 +409,11 @@ public class SettingsActivity extends AppCompatActivity {
         SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
         int theme = prefs.getInt(KEY_THEME, THEME_SYSTEM);
         applyThemeMode(theme);
+    }
+
+    public static boolean isAutoSaveEnabled(Context context) {
+        SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        return prefs.getBoolean(KEY_AUTO_SAVE_GPU_TABLE, false);
     }
     
     private static void applyThemeMode(int theme) {

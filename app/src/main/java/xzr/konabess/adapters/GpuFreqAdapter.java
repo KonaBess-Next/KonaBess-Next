@@ -1,6 +1,7 @@
 package xzr.konabess.adapters;
 
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.content.res.ColorStateList;
 import android.view.LayoutInflater;
 import android.view.MotionEvent;
@@ -19,6 +20,7 @@ import java.util.Collections;
 import java.util.List;
 
 import xzr.konabess.R;
+import xzr.konabess.SettingsActivity;
 
 public class GpuFreqAdapter extends RecyclerView.Adapter<GpuFreqAdapter.ViewHolder> {
     
@@ -45,6 +47,7 @@ public class GpuFreqAdapter extends RecyclerView.Adapter<GpuFreqAdapter.ViewHold
         public String busMin;
         public String busFreq;
         public String voltageLevel;
+    public long frequencyHz = -1L;
         
         public FreqItem(String title, String subtitle, ActionType actionType) {
             this.title = title;
@@ -75,6 +78,10 @@ public class GpuFreqAdapter extends RecyclerView.Adapter<GpuFreqAdapter.ViewHold
         public boolean hasSpecs() {
             return busMax != null || busMin != null || busFreq != null || voltageLevel != null;
         }
+
+        public boolean hasFrequencyValue() {
+            return frequencyHz >= 0;
+        }
     }
     
     private List<FreqItem> items;
@@ -83,6 +90,8 @@ public class GpuFreqAdapter extends RecyclerView.Adapter<GpuFreqAdapter.ViewHold
     private OnItemLongClickListener longClickListener;
     private OnDeleteClickListener deleteClickListener;
     private OnStartDragListener dragStartListener;
+    private SharedPreferences sharedPreferences;
+    private SharedPreferences.OnSharedPreferenceChangeListener preferenceChangeListener;
     
     public interface OnItemClickListener {
         void onItemClick(int position);
@@ -144,6 +153,13 @@ public class GpuFreqAdapter extends RecyclerView.Adapter<GpuFreqAdapter.ViewHold
         holder.subtitle.setVisibility(item.subtitle == null || item.subtitle.isEmpty() ? View.GONE : View.VISIBLE);
 
         if (isLevel) {
+            if (item.hasFrequencyValue()) {
+                String formatted = SettingsActivity.formatFrequency(item.frequencyHz, context);
+                if (!formatted.equals(item.title)) {
+                    item.title = formatted;
+                }
+                holder.title.setText(formatted);
+            }
             int baseColor = MaterialColors.getColor(holder.card,
                     com.google.android.material.R.attr.colorSurface);
             int highlightColor = MaterialColors.getColor(holder.card,
@@ -275,6 +291,39 @@ public class GpuFreqAdapter extends RecyclerView.Adapter<GpuFreqAdapter.ViewHold
     @Override
     public int getItemCount() {
         return items.size();
+    }
+
+    @Override
+    public void onAttachedToRecyclerView(@NonNull RecyclerView recyclerView) {
+        super.onAttachedToRecyclerView(recyclerView);
+        sharedPreferences = context.getSharedPreferences(SettingsActivity.PREFS_NAME, Context.MODE_PRIVATE);
+        preferenceChangeListener = (prefs, key) -> {
+            if (SettingsActivity.KEY_FREQ_UNIT.equals(key)) {
+                refreshFrequencyUnits();
+            }
+        };
+        sharedPreferences.registerOnSharedPreferenceChangeListener(preferenceChangeListener);
+        refreshFrequencyUnits();
+    }
+
+    @Override
+    public void onDetachedFromRecyclerView(@NonNull RecyclerView recyclerView) {
+        super.onDetachedFromRecyclerView(recyclerView);
+        if (sharedPreferences != null && preferenceChangeListener != null) {
+            sharedPreferences.unregisterOnSharedPreferenceChangeListener(preferenceChangeListener);
+        }
+        preferenceChangeListener = null;
+        sharedPreferences = null;
+    }
+
+    private void refreshFrequencyUnits() {
+        for (int i = 0; i < items.size(); i++) {
+            FreqItem item = items.get(i);
+            if (item.hasFrequencyValue()) {
+                item.title = SettingsActivity.formatFrequency(item.frequencyHz, context);
+                notifyItemChanged(i);
+            }
+        }
     }
     
     public void onItemMove(int fromPosition, int toPosition) {

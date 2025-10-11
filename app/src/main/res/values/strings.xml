@@ -173,4 +173,27 @@
     <string name="theme_dark">Dark</string>
     <string name="theme_system">System Default</string>
     <string name="theme_description">Choose app theme</string>
+    <string name="history">History</string>
+    <string name="history_with_count">History (%1$d)</string>
+    <string name="history_title">Edit History</string>
+    <string name="history_empty">No edits yet.</string>
+    <string name="history_add_frequency">Added frequency %1$s</string>
+    <string name="history_duplicate_frequency">Duplicated frequency %1$s</string>
+    <string name="history_remove_frequency">Removed frequency %1$s</string>
+    <string name="history_reorder_frequency">Reordered GPU frequencies</string>
+    <string name="history_update_voltage_level">Updated voltage level for %1$s</string>
+    <string name="history_edit_parameter">Updated %1$s on %2$s</string>
+    <string name="history_manual_save">Saved GPU frequency table</string>
+    <string name="history_auto_saved">Auto-saved GPU frequency table</string>
+    <string name="history_undo_action">Undo performed</string>
+    <string name="history_redo_action">Redo performed</string>
+    <string name="auto_save_gpu_freq_table">Auto-save GPU freq table</string>
+    <string name="auto_save_gpu_freq_table_desc">Automatically save the GPU frequency table after each edit</string>
+    <string name="auto_save_enabled_toast">Auto-save enabled</string>
+    <string name="auto_save_disabled_toast">Auto-save disabled</string>
+    <string name="remove_frequency_message">Remove %1$s from the table?</string>
+    <string name="common_on">On</string>
+    <string name="common_off">Off</string>
+    <string name="undo">Undo</string>
+    <string name="redo">Redo</string>
 </resources>
