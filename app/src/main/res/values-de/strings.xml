@@ -75,6 +75,9 @@
     <string name="paste_here">Daten hier einfügen</string>
     <string name="please_wait">Bitte warten…</string>
     <string name="possible_dtb">Dies können die Chipsatzdaten sein, die das Gerät verwendet.</string>
+    <string name="currently_selected">Aktuell Ausgewählt</string>
+    <string name="switch_chipset_title">Chipsatz wechseln?</string>
+    <string name="switch_chipset_msg">Das Wechseln des Chipsatzes lädt die GPU-Frequenztabelle neu. Fortfahren?</string>
     <string name="prepare_import_export">Im- und Export vorbereiten</string>
     <string name="reboot_complete_msg">Gerät jetzt neu starten?</string>
     <string name="reboot_complete_title">Neustart zum Abschliessen der Aenderungen</string>
@@ -151,4 +154,24 @@
      <string name="ghz">GHz</string>
      <string name="preview_gpu_freq_table">GPU-Frequenztabelle Vorschau</string>
      <string name="freq_unit_description">Wähle, wie GPU-Frequenzen angezeigt werden</string>
+     <string name="export_filename_hint">Dateiname (optional, leer lassen für automatisch)</string>
+     <string name="export_history">Exportverlauf</string>
+     <string name="export_history_desc">Exportierte Konfigurationen anzeigen und verwalten</string>
+     <string name="no_export_history">Kein Exportverlauf</string>
+     <string name="no_export_history_desc">Ihre exportierten Konfigurationen werden hier angezeigt</string>
+     <string name="apply">Anwenden</string>
+     <string name="share">Teilen</string>
+     <string name="clear_all">Alles löschen</string>
+     <string name="confirm_clear_history">Gesamten Verlauf löschen?</string>
+     <string name="confirm_clear_history_msg">Dies löscht alle Exportverläufe und Dateien. Diese Aktion kann nicht rückgängig gemacht werden.</string>
+     <string name="confirm_delete_history">Export löschen?</string>
+     <string name="confirm_delete_history_msg">Dies löscht die Exportdatei. Diese Aktion kann nicht rückgängig gemacht werden.</string>
+     <string name="history_cleared">Verlauf gelöscht</string>
+     <string name="history_item_deleted">Export gelöscht</string>
+     <string name="share_config">Konfiguration teilen</string>
+     <string name="file_not_found">Datei nicht gefunden</string>
+     <string name="no_description">Keine Beschreibung</string>
+     <string name="confirm_apply_config">Diese Konfiguration auf Ihr Gerät anwenden?</string>
+     <string name="file_location">Dateispeicherort</string>
+     <string name="path_copied">Pfad in Zwischenablage kopiert</string>
  </resources>

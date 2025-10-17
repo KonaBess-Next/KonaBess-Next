@@ -3,6 +3,7 @@ package xzr.konabess;
 import android.app.Activity;
 import androidx.appcompat.app.AlertDialog;
 import android.content.DialogInterface;
+import android.content.Intent;
 import android.os.Environment;
 import android.widget.EditText;
 import android.widget.LinearLayout;
@@ -31,7 +32,9 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import xzr.konabess.adapters.ActionCardAdapter;
 import xzr.konabess.utils.DialogUtil;
+import xzr.konabess.utils.ExportHistoryManager;
 import xzr.konabess.utils.GzipUtils;
+import xzr.konabess.utils.RootHelper;
 
 public class TableIO {
     
@@ -140,22 +143,35 @@ public class TableIO {
     }
 
     private static abstract class ConfirmExportCallback {
-        public abstract void onConfirm(String desc);
+        public abstract void onConfirm(String desc, String filename);
     }
 
     private static void showExportDialog(Activity activity,
                                          ConfirmExportCallback confirmExportCallback) {
-        EditText editText = new EditText(activity);
-        editText.setHint(R.string.input_introduction_here);
+        // Create layout with two EditTexts
+        LinearLayout layout = new LinearLayout(activity);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(50, 20, 50, 20);
+        
+        // Description field
+        EditText descEditText = new EditText(activity);
+        descEditText.setHint(R.string.input_introduction_here);
+        layout.addView(descEditText);
+        
+        // Filename field
+        EditText filenameEditText = new EditText(activity);
+        filenameEditText.setHint(activity.getResources().getString(R.string.export_filename_hint));
+        layout.addView(filenameEditText);
 
     new com.google.android.material.dialog.MaterialAlertDialogBuilder(activity)
         .setTitle(R.string.export_data)
         .setMessage(R.string.export_data_msg)
-        .setView(editText)
+        .setView(layout)
         .setPositiveButton(R.string.confirm, (dialog, which) -> {
             if (which == DialogInterface.BUTTON_POSITIVE) {
             dialog.dismiss();
-            confirmExportCallback.onConfirm(editText.getText().toString());
+            String filename = filenameEditText.getText().toString().trim();
+            confirmExportCallback.onConfirm(descEditText.getText().toString(), filename);
             }
         })
         .setNegativeButton(R.string.cancel, null)
@@ -186,33 +202,86 @@ public class TableIO {
         Activity activity;
         boolean error;
         String desc;
+        String filename;
+        AlertDialog waiting;
 
-        public exportToFile(Activity activity, String desc) {
+        public exportToFile(Activity activity, String desc, String filename) {
             this.activity = activity;
             this.desc = desc;
+            this.filename = filename;
         }
 
         public void run() {
             error = false;
-            AlertDialog waiting = DialogUtil.getWaitDialog(activity, R.string.prepare_import_export);
-            activity.runOnUiThread(waiting::show);
-            File out = new File(Environment.getExternalStorageDirectory().getAbsolutePath() +
-                    "/konabess-" + new SimpleDateFormat("MMddHHmmss").format(new Date()) + ".txt");
+            
+            // Create and show dialog on UI thread
+            activity.runOnUiThread(() -> {
+                waiting = DialogUtil.getWaitDialog(activity, R.string.prepare_import_export);
+                waiting.show();
+            });
+            
+            // Small delay to ensure dialog is created
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+            
+            // Generate filename
+            String finalFilename;
+            if (filename != null && !filename.isEmpty()) {
+                // Use custom filename, ensure it has .txt extension
+                finalFilename = filename.endsWith(".txt") ? filename : filename + ".txt";
+            } else {
+                // Use default timestamp-based filename
+                finalFilename = "konabess-" + new SimpleDateFormat("MMddHHmmss").format(new Date()) + ".txt";
+            }
+            
+            // Use internal storage root directory
+            String destPath = Environment.getExternalStorageDirectory().getAbsolutePath() + "/" + finalFilename;
+            
             try {
                 String data = "konabess://" + getConfig(desc);
-                BufferedWriter bufferedWriter = new BufferedWriter(new FileWriter(out));
+                
+                // Write to temp file in app's private directory first
+                File tempFile = new File(activity.getFilesDir(), "temp_export.txt");
+                BufferedWriter bufferedWriter = new BufferedWriter(new FileWriter(tempFile));
                 bufferedWriter.write(data);
                 bufferedWriter.close();
+                
+                // Use root to copy file to sdcard
+                String cmd = String.format("cat '%s' > '%s' && chmod 644 '%s'", 
+                    tempFile.getAbsolutePath(), destPath, destPath);
+                
+                if (!RootHelper.execAndCheck(cmd)) {
+                    error = true;
+                }
+                
+                // Clean up temp file
+                tempFile.delete();
+                
             } catch (Exception e) {
                 error = true;
+                e.printStackTrace();
             }
+            
+            final String finalPath = destPath;
+            final String savedFilename = finalFilename;
             activity.runOnUiThread(() -> {
-                waiting.dismiss();
-                if (!error)
+                if (waiting != null && waiting.isShowing()) {
+                    waiting.dismiss();
+                }
+                if (!error) {
+                    // Save to history
+                    ExportHistoryManager historyManager = new ExportHistoryManager(activity);
+                    historyManager.addExport(savedFilename, desc, finalPath, 
+                            ChipInfo.name2chipdesc(ChipInfo.which, activity));
+                    
                     Toast.makeText(activity,
-                            activity.getResources().getString(R.string.success_export_to) + " " + out.getAbsolutePath(), Toast.LENGTH_LONG).show();
-                else
+                            activity.getResources().getString(R.string.success_export_to) + " " + finalPath, Toast.LENGTH_LONG).show();
+                } else {
                     Toast.makeText(activity, R.string.failed_export, Toast.LENGTH_SHORT).show();
+                }
             });
         }
     }
@@ -287,6 +356,11 @@ public class TableIO {
         }
     }
 
+    // Public method for importing from data string (used by history)
+    public static void importFromData(Activity activity, String data) {
+        new showDecodeDialog(activity, data).start();
+    }
+
     private static class importFromFile extends MainActivity.fileWorker {
         Activity activity;
 
@@ -329,11 +403,15 @@ public class TableIO {
         boolean canExport = KonaBessCore.isPrepared();
 
     items.add(new ActionCardAdapter.ActionItem(
-        R.drawable.ic_file_download,
+        R.drawable.ic_history_modern,
+                activity.getResources().getString(R.string.export_history),
+                activity.getResources().getString(R.string.export_history_desc)));
+    items.add(new ActionCardAdapter.ActionItem(
+        R.drawable.ic_import_modern,
                 activity.getResources().getString(R.string.import_from_file),
                 activity.getResources().getString(R.string.import_from_file_msg)));
     items.add(new ActionCardAdapter.ActionItem(
-        R.drawable.ic_file_upload,
+        R.drawable.ic_export_modern,
                 activity.getResources().getString(R.string.export_to_file),
                 activity.getResources().getString(R.string.export_to_file_msg),
                 canExport));
@@ -363,28 +441,36 @@ public class TableIO {
                     return;
                 }
                 if (position == 0) {
-                    MainActivity.runWithFilePath(activity, new importFromFile(activity));
+                    // Open history activity
+                    Intent intent = new Intent(activity, ExportHistoryActivity.class);
+                    activity.startActivity(intent);
                 } else if (position == 1) {
+                    MainActivity.runWithFilePath(activity, new importFromFile(activity));
+                } else if (position == 2) {
                     showExportDialog(activity, new ConfirmExportCallback() {
                         @Override
-                        public void onConfirm(String desc) {
-                            MainActivity.runWithStoragePermission(activity, new exportToFile(activity, desc));
+                        public void onConfirm(String desc, String filename) {
+                            MainActivity.runWithStoragePermission(activity, new exportToFile(activity, desc, filename));
                         }
                     });
-                } else if (position == 2) {
-                    import_edittext(activity);
                 } else if (position == 3) {
+                    import_edittext(activity);
+                } else if (position == 4) {
                     showExportDialog(activity, new ConfirmExportCallback() {
                         @Override
-                        public void onConfirm(String desc) {
+                        public void onConfirm(String desc, String filename) {
                             export_cpy(activity, desc);
                         }
                     });
-                } else if (position == 4) {
+                } else if (position == 5) {
                     MainActivity mainActivity = (MainActivity) activity;
+                    
+                    // Backup path is now always in internal storage root
+                    String backupPath = "/sdcard/" + KonaBessCore.boot_name + ".img";
+                    
                     new com.google.android.material.dialog.MaterialAlertDialogBuilder(mainActivity)
                             .setTitle(R.string.backup_old_image)
-                            .setMessage(activity.getResources().getString(R.string.will_backup_to) + " /sdcard/" + KonaBessCore.boot_name + ".img")
+                            .setMessage(activity.getResources().getString(R.string.will_backup_to) + " " + backupPath)
                             .setPositiveButton(R.string.ok, (dialog, which) -> {
                                 if (which == DialogInterface.BUTTON_POSITIVE) {
                                     dialog.dismiss();

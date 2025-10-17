@@ -7,6 +7,8 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Bundle;
+import android.view.LayoutInflater;
+import android.view.View;
 import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.Toast;
@@ -16,6 +18,8 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 import androidx.viewpager2.widget.ViewPager2;
 
 import com.google.android.material.appbar.MaterialToolbar;
@@ -26,6 +30,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 
+import xzr.konabess.adapters.ChipsetSelectorAdapter;
 import xzr.konabess.adapters.ParamAdapter;
 import xzr.konabess.adapters.ViewPagerAdapter;
 import xzr.konabess.fragments.GpuFrequencyFragment;
@@ -104,12 +109,32 @@ public class MainActivity extends AppCompatActivity {
 
     public static void runWithStoragePermission(Activity activity, Thread what) {
         MainActivity.permission_worker = what;
-        if (activity.checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
-            activity.requestPermissions(new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE},
-                    0);
-        } else {
+        
+        // For Android 10 and above, we need to check API level
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            // Android 11+ (API 30+): No need to request permission for app-specific directory
+            // or use MediaStore for shared storage
             what.start();
             permission_worker = null;
+        } else if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            // Android 10 (API 29): Check WRITE permission
+            if (activity.checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+                activity.requestPermissions(new String[]{
+                    Manifest.permission.WRITE_EXTERNAL_STORAGE,
+                    Manifest.permission.READ_EXTERNAL_STORAGE
+                }, 0);
+            } else {
+                what.start();
+                permission_worker = null;
+            }
+        } else {
+            // Android 9 and below: Check WRITE permission
+            if (activity.checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+                activity.requestPermissions(new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, 0);
+            } else {
+                what.start();
+                permission_worker = null;
+            }
         }
     }
 
@@ -446,77 +471,65 @@ public class MainActivity extends AppCompatActivity {
         int dtb_index;
 
         public void run() {
+            DialogUtil.ProgressDialogController progressDialog =
+                    DialogUtil.createProgressDialog(MainActivity.this);
+
+            progressDialog.show(R.string.getting_image);
             is_err = false;
-            {
-                runOnUiThread(() -> {
-                    waiting = DialogUtil.getWaitDialog(MainActivity.this, R.string.getting_image);
-                    waiting.show();
-                });
-                try {
-                    if (!cross_device_debug)
-                        KonaBessCore.getBootImage(MainActivity.this);
-                } catch (Exception e) {
-                    is_err = true;
+            try {
+                if (!cross_device_debug) {
+                    KonaBessCore.getBootImage(MainActivity.this);
                 }
-                runOnUiThread(() -> {
-                    waiting.dismiss();
-                    if (is_err)
-                        DialogUtil.showError(MainActivity.this, R.string.failed_get_boot);
-                });
-                if (is_err) {
-                    notifyPreparationFailed();
-                    return;
-                }
+            } catch (Exception e) {
+                is_err = true;
+            }
+            if (is_err) {
+                progressDialog.dismiss();
+                MainActivity.this.runOnUiThread(() ->
+                        DialogUtil.showError(MainActivity.this, R.string.failed_get_boot));
+                notifyPreparationFailed();
+                return;
             }
 
-            {
-                runOnUiThread(() -> {
-                    waiting = DialogUtil.getWaitDialog(MainActivity.this, R.string.unpacking);
-                    waiting.show();
-                });
-                try {
-                    KonaBessCore.bootImage2dts(MainActivity.this);
-                } catch (Exception e) {
-                    is_err = true;
-                    error = e.getMessage();
-                }
-                runOnUiThread(() -> {
-                    waiting.dismiss();
-                    if (is_err)
-                        DialogUtil.showDetailedError(MainActivity.this, R.string.unpack_failed,
-                                error);
-                });
-                if (is_err) {
-                    notifyPreparationFailed();
-                    return;
-                }
+            progressDialog.updateMessage(R.string.unpacking);
+            is_err = false;
+            try {
+                KonaBessCore.bootImage2dts(MainActivity.this);
+            } catch (Exception e) {
+                is_err = true;
+                error = e.getMessage();
+            }
+            if (is_err) {
+                progressDialog.dismiss();
+                final String detail = error;
+                MainActivity.this.runOnUiThread(() ->
+                        DialogUtil.showDetailedError(MainActivity.this, R.string.unpack_failed, detail));
+                notifyPreparationFailed();
+                return;
             }
 
-            {
-                runOnUiThread(() -> {
-                    waiting = DialogUtil.getWaitDialog(MainActivity.this, R.string.checking_device);
-                    waiting.show();
-                });
-                try {
-                    KonaBessCore.checkDevice(MainActivity.this);
-                    dtb_index = KonaBessCore.getDtbIndex();
-                } catch (Exception e) {
-                    is_err = true;
-                    error = e.getMessage();
-                }
-                runOnUiThread(() -> {
-                    waiting.dismiss();
-                    if (is_err)
+            progressDialog.updateMessage(R.string.checking_device);
+            is_err = false;
+            try {
+                KonaBessCore.checkDevice(MainActivity.this);
+                dtb_index = KonaBessCore.getDtbIndex();
+            } catch (Exception e) {
+                is_err = true;
+                error = e.getMessage();
+            }
+            if (is_err) {
+                progressDialog.dismiss();
+                final String detail = error;
+                MainActivity.this.runOnUiThread(() ->
                         DialogUtil.showDetailedError(MainActivity.this,
-                                R.string.failed_checking_platform, error);
-                });
-                if (is_err) {
-                    notifyPreparationFailed();
-                    return;
-                }
+                                R.string.failed_checking_platform, detail));
+                notifyPreparationFailed();
+                return;
             }
 
-            runOnUiThread(() -> {
+            progressDialog.dismiss();
+
+            MainActivity.this.runOnUiThread(() -> {
                 if (KonaBessCore.dtbs.size() == 0) {
                     DialogUtil.showError(MainActivity.this, R.string.incompatible_device);
                     notifyPreparationFailed();
@@ -527,30 +540,9 @@ public class MainActivity extends AppCompatActivity {
                     notifyPreparationSuccess();
                     return;
                 }
-                ListView listView = new ListView(MainActivity.this);
-                ArrayList<ParamAdapter.item> items = new ArrayList<>();
-                for (KonaBessCore.Dtb dtb : KonaBessCore.dtbs) {
-                    items.add(new ParamAdapter.item() {{
-                        title = dtb.id + " " + ChipInfo.name2chipdesc(dtb.type, MainActivity.this);
-                        subtitle = dtb.id == dtb_index ?
-                                MainActivity.this.getString(R.string.possible_dtb) : "";
-                    }});
-                }
-                listView.setAdapter(new ParamAdapter(items, MainActivity.this));
-
-                AlertDialog dialog = new com.google.android.material.dialog.MaterialAlertDialogBuilder(MainActivity.this)
-                        .setTitle(R.string.select_dtb_title)
-                        .setMessage(R.string.select_dtb_msg)
-                        .setView(listView)
-                        .setCancelable(false)
-                        .create();
-                dialog.show();
-
-                listView.setOnItemClickListener((parent, view, position, id) -> {
-                    KonaBessCore.chooseTarget(KonaBessCore.dtbs.get(position), MainActivity.this);
-                    dialog.dismiss();
-                    notifyPreparationSuccess();
-                });
+                
+                // Show modern chipset selector dialog
+                showChipsetSelectorDialog(dtb_index);
             });
         }
     }
@@ -579,6 +571,43 @@ public class MainActivity extends AppCompatActivity {
                 setTheme(R.style.Theme_KonaBess);
                 break;
         }
+    }
+
+    private void showChipsetSelectorDialog(int recommendedIndex) {
+        // Inflate custom dialog layout
+        View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_chipset_selector, null);
+        
+        // Setup RecyclerView
+        RecyclerView recyclerView = dialogView.findViewById(R.id.chipset_list);
+        recyclerView.setLayoutManager(new LinearLayoutManager(this));
+        recyclerView.setHasFixedSize(true);
+        
+        // Create dialog
+        AlertDialog dialog = new MaterialAlertDialogBuilder(this)
+                .setView(dialogView)
+                .setCancelable(false)
+                .create();
+        
+        // Setup adapter with click listener
+        ChipsetSelectorAdapter adapter = new ChipsetSelectorAdapter(
+                KonaBessCore.dtbs,
+                this,
+                recommendedIndex,
+                dtb -> {
+                    KonaBessCore.chooseTarget(dtb, MainActivity.this);
+                    dialog.dismiss();
+                    notifyPreparationSuccess();
+                }
+        );
+        
+        recyclerView.setAdapter(adapter);
+        
+        // Show dialog with rounded corners
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawableResource(R.drawable.dialog_background);
+        }
+        
+        dialog.show();
     }
 
     public static abstract class onBackPressedListener {

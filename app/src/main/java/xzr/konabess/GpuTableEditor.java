@@ -6,6 +6,7 @@ import android.content.DialogInterface;
 import android.content.res.ColorStateList;
 import android.text.InputType;
 import android.view.Gravity;
+import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.ArrayAdapter;
 import android.widget.EditText;
@@ -47,6 +48,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 
+import xzr.konabess.adapters.ChipsetSelectorAdapter;
 import xzr.konabess.adapters.GpuBinAdapter;
 import xzr.konabess.adapters.GpuFreqAdapter;
 import xzr.konabess.adapters.GpuParamDetailAdapter;
@@ -1690,49 +1692,56 @@ public class GpuTableEditor {
             return;
         }
         
-        ListView listView = new ListView(activity);
-        ArrayList<ParamAdapter.item> items = new ArrayList<>();
-        
-    KonaBessCore.Dtb currentDtb = KonaBessCore.getCurrentDtb();
+        KonaBessCore.Dtb currentDtb = KonaBessCore.getCurrentDtb();
         int currentDtbIndex = KonaBessCore.getDtbIndex();
         
-    for (KonaBessCore.Dtb dtb : KonaBessCore.dtbs) {
-            items.add(new ParamAdapter.item() {{
-                title = dtb.id + " " + ChipInfo.name2chipdesc(dtb.type, activity);
-                // Highlight current selected
-                subtitle = (currentDtb != null && dtb.id == currentDtb.id) ? "Currently Selected" :
-                        (dtb.id == currentDtbIndex ? "Possible DTB" : "");
-            }});
+        // Inflate custom modern dialog layout
+        View dialogView = LayoutInflater.from(activity).inflate(R.layout.dialog_chipset_selector, null);
+        
+        // Setup RecyclerView
+        RecyclerView recyclerView = dialogView.findViewById(R.id.chipset_list);
+        recyclerView.setLayoutManager(new LinearLayoutManager(activity));
+        recyclerView.setHasFixedSize(true);
+        
+        // Create dialog
+        AlertDialog dialog = new MaterialAlertDialogBuilder(activity)
+                .setView(dialogView)
+                .setNegativeButton(activity.getString(R.string.cancel), null)
+                .create();
+        
+        // Setup adapter with click listener
+        ChipsetSelectorAdapter adapter = new ChipsetSelectorAdapter(
+                KonaBessCore.dtbs,
+                activity,
+                currentDtbIndex,
+                currentDtb != null ? currentDtb.id : null,
+                selectedDtb -> {
+                    // Show confirmation if switching chipset
+                    if (currentDtb != null && selectedDtb.id != currentDtb.id) {
+                        new MaterialAlertDialogBuilder(activity)
+                                .setTitle(activity.getString(R.string.switch_chipset_title))
+                                .setMessage(activity.getString(R.string.switch_chipset_msg))
+                                .setPositiveButton(activity.getString(R.string.yes), (d, w) -> {
+                                    dialog.dismiss();
+                                    switchChipset(activity, page, selectedDtb, chipsetNameView);
+                                })
+                                .setNegativeButton(activity.getString(R.string.no), null)
+                                .create().show();
+                    } else {
+                        // Same chipset, just close dialog
+                        dialog.dismiss();
+                    }
+                }
+        );
+        
+        recyclerView.setAdapter(adapter);
+        
+        // Show dialog with rounded corners
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawableResource(R.drawable.dialog_background);
         }
         
-        listView.setAdapter(new ParamAdapter(items, activity));
-        
-        AlertDialog dialog = new com.google.android.material.dialog.MaterialAlertDialogBuilder(activity)
-                .setTitle("Select Target Chipset")
-                .setMessage("Choose the chipset configuration you want to edit")
-                .setView(listView)
-                .setNegativeButton("Cancel", null)
-                .create();
         dialog.show();
-        
-        listView.setOnItemClickListener((parent, view, position, id) -> {
-            KonaBessCore.Dtb selectedDtb = KonaBessCore.dtbs.get(position);
-            
-            // Show confirmation if switching chipset
-            if (currentDtb != null && selectedDtb.id != currentDtb.id) {
-                new com.google.android.material.dialog.MaterialAlertDialogBuilder(activity)
-                        .setTitle("Switch Chipset?")
-                        .setMessage("Switching chipset will reload the GPU frequency table. Continue?")
-                        .setPositiveButton("Yes", (d, w) -> {
-                            dialog.dismiss();
-                            switchChipset(activity, page, selectedDtb, chipsetNameView);
-                        })
-                        .setNegativeButton("No", null)
-                        .create().show();
-            } else {
-                dialog.dismiss();
-            }
-        });
     }
     
     private static void switchChipset(Activity activity, LinearLayout page, 

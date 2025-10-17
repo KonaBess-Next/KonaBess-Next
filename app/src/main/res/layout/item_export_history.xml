@@ -1,0 +1,275 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView 
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginTop="6dp"
+    android:layout_marginBottom="6dp"
+    app:cardElevation="0dp"
+    app:cardCornerRadius="20dp"
+    app:strokeWidth="1dp"
+    app:strokeColor="?attr/colorOutlineVariant"
+    app:cardBackgroundColor="?attr/colorSurfaceContainerLow"
+    style="@style/Widget.Material3.CardView.Elevated">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="20dp">
+
+        <!-- Header with icon, filename and chip -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <!-- Modern file icon with background -->
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                app:cardElevation="0dp"
+                app:cardCornerRadius="12dp"
+                app:cardBackgroundColor="?attr/colorPrimaryContainer">
+
+                <ImageView
+                    android:layout_width="28dp"
+                    android:layout_height="28dp"
+                    android:layout_gravity="center"
+                    android:src="@drawable/ic_file_download"
+                    app:tint="?attr/colorOnPrimaryContainer" />
+
+            </com.google.android.material.card.MaterialCardView>
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:layout_marginStart="16dp">
+
+                <TextView
+                    android:id="@+id/history_filename"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
+                    android:textColor="?attr/colorOnSurface"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:text="konabess-config.txt" />
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginTop="4dp">
+
+                    <ImageView
+                        android:layout_width="14dp"
+                        android:layout_height="14dp"
+                        android:src="@drawable/ic_schedule"
+                        app:tint="?attr/colorOnSurfaceVariant"
+                        android:alpha="0.7" />
+
+                    <TextView
+                        android:id="@+id/history_timestamp"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textAppearance="@style/TextAppearance.Material3.LabelSmall"
+                        android:textColor="?attr/colorOnSurfaceVariant"
+                        android:layout_marginStart="4dp"
+                        android:text="Oct 17, 2025 10:45 AM" />
+
+                </LinearLayout>
+
+            </LinearLayout>
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/history_chip_type"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:text="SD8Gen3"
+                style="@style/Widget.Material3.Chip.Assist.Elevated"
+                android:textAppearance="@style/TextAppearance.Material3.LabelSmall"
+                app:chipMinHeight="32dp"
+                app:chipIconSize="18dp"
+                app:chipIcon="@drawable/ic_chip_flat" />
+
+        </LinearLayout>
+
+        <!-- Divider -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginTop="16dp"
+            android:layout_marginBottom="12dp"
+            android:background="?attr/colorOutlineVariant"
+            android:alpha="0.5" />
+
+        <!-- Description with icon -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="start">
+
+            <ImageView
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:layout_marginTop="2dp"
+                android:src="@drawable/ic_description"
+                app:tint="?attr/colorOnSurfaceVariant"
+                android:alpha="0.7" />
+
+            <TextView
+                android:id="@+id/history_description"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="8dp"
+                android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
+                android:textColor="?attr/colorOnSurfaceVariant"
+                android:maxLines="3"
+                android:ellipsize="end"
+                android:lineSpacingExtra="2dp"
+                android:text="Custom GPU configuration for better performance" />
+
+        </LinearLayout>
+
+        <!-- File Path Section with modern Material You design -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            app:cardElevation="0dp"
+            app:cardCornerRadius="12dp"
+            app:cardBackgroundColor="?attr/colorSurfaceContainerHighest"
+            app:strokeWidth="0dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:padding="12dp"
+                android:gravity="center_vertical">
+
+                <ImageView
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:src="@drawable/ic_folder"
+                    app:tint="?attr/colorPrimary" />
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:layout_marginStart="12dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/file_location"
+                        android:textAppearance="@style/TextAppearance.Material3.LabelSmall"
+                        android:textColor="?attr/colorPrimary"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/history_file_path"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:text="/storage/emulated/0/konabess/exports/konabess-config.txt"
+                        android:textAppearance="@style/TextAppearance.Material3.BodySmall"
+                        android:textColor="?attr/colorOnSurfaceVariant"
+                        android:fontFamily="monospace"
+                        android:maxLines="2"
+                        android:ellipsize="middle" />
+
+                </LinearLayout>
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/history_btn_copy_path"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:insetLeft="0dp"
+                    android:insetTop="0dp"
+                    android:insetRight="0dp"
+                    android:insetBottom="0dp"
+                    app:icon="@drawable/ic_clipboard_export"
+                    app:iconSize="18dp"
+                    app:iconGravity="textStart"
+                    app:iconPadding="0dp"
+                    app:iconTint="?attr/colorPrimary"
+                    style="@style/Widget.Material3.Button.TextButton.Icon"
+                    app:cornerRadius="10dp"
+                    android:layout_marginStart="8dp"
+                    android:contentDescription="Copy path" />
+
+            </LinearLayout>
+
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Action buttons with modern Material You style -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="end"
+            android:layout_marginTop="16dp">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/history_btn_apply"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/apply"
+                android:textAppearance="@style/TextAppearance.Material3.LabelLarge"
+                style="@style/Widget.Material3.Button.TonalButton"
+                app:icon="@drawable/ic_apply"
+                app:iconSize="18dp"
+                app:cornerRadius="16dp"
+                android:minHeight="42dp"
+                android:paddingStart="20dp"
+                android:paddingEnd="24dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/history_btn_share"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/share"
+                android:textAppearance="@style/TextAppearance.Material3.LabelLarge"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                app:icon="@drawable/ic_share"
+                app:iconSize="18dp"
+                app:cornerRadius="16dp"
+                android:minHeight="42dp"
+                android:layout_marginStart="8dp"
+                android:paddingStart="20dp"
+                android:paddingEnd="24dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/history_btn_delete"
+                android:layout_width="42dp"
+                android:layout_height="42dp"
+                android:insetLeft="0dp"
+                android:insetTop="0dp"
+                android:insetRight="0dp"
+                android:insetBottom="0dp"
+                app:icon="@drawable/ic_delete"
+                app:iconSize="20dp"
+                app:iconGravity="textStart"
+                app:iconPadding="0dp"
+                app:iconTint="?attr/colorError"
+                style="@style/Widget.Material3.Button.TextButton.Icon"
+                app:cornerRadius="12dp"
+                android:layout_marginStart="4dp" />
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+</com.google.android.material.card.MaterialCardView>

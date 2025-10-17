@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginStart="16dp"
+    android:layout_marginEnd="16dp"
+    android:layout_marginTop="4dp"
+    android:layout_marginBottom="4dp"
+    android:clickable="true"
+    android:focusable="true"
+    android:foreground="?attr/selectableItemBackground"
+    app:cardCornerRadius="16dp"
+    app:cardElevation="0dp"
+    app:strokeWidth="1dp"
+    app:strokeColor="?attr/colorOutlineVariant"
+    app:cardBackgroundColor="?attr/colorSurfaceContainer">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="16dp"
+        android:gravity="center_vertical"
+        android:minHeight="72dp">
+
+        <!-- Chipset Icon -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginEnd="16dp"
+            app:cardCornerRadius="24dp"
+            app:cardElevation="0dp"
+            app:strokeWidth="0dp"
+            app:cardBackgroundColor="?attr/colorSecondaryContainer">
+
+            <ImageView
+                android:id="@+id/chipset_icon"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:layout_gravity="center"
+                android:src="@drawable/ic_processor_flat"
+                android:contentDescription="@string/select_dtb_title"
+                app:tint="?attr/colorOnSecondaryContainer" />
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Chipset Info -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <!-- Chipset Name -->
+            <com.google.android.material.textview.MaterialTextView
+                android:id="@+id/chipset_name"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Snapdragon 888"
+                android:textAppearance="?attr/textAppearanceBodyLarge"
+                android:textColor="?attr/colorOnSurface"
+                android:textStyle="bold"
+                android:ellipsize="end"
+                android:maxLines="1" />
+
+            <!-- Chipset Subtitle -->
+            <com.google.android.material.textview.MaterialTextView
+                android:id="@+id/chipset_subtitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:text="DTB Index: 0"
+                android:textAppearance="?attr/textAppearanceBodyMedium"
+                android:textColor="?attr/colorOnSurfaceVariant"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:visibility="visible" />
+
+            <!-- Badge Container -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:orientation="horizontal">
+
+                <!-- Recommended Badge -->
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/recommended_badge"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="6dp"
+                    android:text="@string/possible_dtb"
+                    android:textAppearance="?attr/textAppearanceBodySmall"
+                    android:textColor="?attr/colorOnTertiaryContainer"
+                    android:textStyle="bold"
+                    app:chipBackgroundColor="?attr/colorTertiaryContainer"
+                    app:chipCornerRadius="8dp"
+                    app:chipMinHeight="24dp"
+                    app:chipStartPadding="8dp"
+                    app:chipEndPadding="8dp"
+                    app:chipIconVisible="true"
+                    app:chipIcon="@drawable/ic_star_flat"
+                    app:chipIconTint="?attr/colorOnTertiaryContainer"
+                    app:chipIconSize="14dp"
+                    app:ensureMinTouchTargetSize="false"
+                    android:visibility="gone" />
+
+                <!-- Currently Selected Badge -->
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/selected_badge"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/currently_selected"
+                    android:textAppearance="?attr/textAppearanceBodySmall"
+                    android:textColor="?attr/colorOnPrimaryContainer"
+                    android:textStyle="bold"
+                    app:chipBackgroundColor="?attr/colorPrimaryContainer"
+                    app:chipCornerRadius="8dp"
+                    app:chipMinHeight="24dp"
+                    app:chipStartPadding="8dp"
+                    app:chipEndPadding="8dp"
+                    app:chipIconVisible="true"
+                    app:chipIcon="@drawable/ic_check"
+                    app:chipIconTint="?attr/colorOnPrimaryContainer"
+                    app:chipIconSize="14dp"
+                    app:ensureMinTouchTargetSize="false"
+                    android:visibility="gone" />
+
+            </LinearLayout>
+
+        </LinearLayout>
+
+        <!-- Arrow Icon -->
+        <ImageView
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_marginStart="8dp"
+            android:src="@drawable/ic_arrow_forward_flat"
+            android:contentDescription="@string/select_dtb_title"
+            app:tint="?attr/colorOnSurfaceVariant"
+            android:alpha="0.6" />
+
+    </LinearLayout>
+
+</com.google.android.material.card.MaterialCardView>

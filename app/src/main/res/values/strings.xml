@@ -117,6 +117,9 @@
     <string name="sd765g">Snapdragon 765G</string>
     <string name="sd765">Snapdragon 765</string>
     <string name="possible_dtb">This may be the chipset data your device are using.</string>
+    <string name="currently_selected">Currently Selected</string>
+    <string name="switch_chipset_title">Switch Chipset?</string>
+    <string name="switch_chipset_msg">Switching chipset will reload the GPU frequency table. Continue?</string>
     <string name="sdm888">Snapdragon 888</string>
     <string name="sdm888p">Snapdragon 888+</string>
     <string name="lagoon_series">Snapdragon 690 / 750 series</string>
@@ -160,6 +163,7 @@
     <string name="backup_image_desc">Create backup of current boot image</string>
     <string name="export_config">Export Configuration</string>
     <string name="export_config_desc">Save current GPU settings to file</string>
+    <string name="export_filename_hint">Filename (optional, leave blank for auto-generated)</string>
     <string name="import_config">Import Configuration</string>
     <string name="import_config_desc">Load GPU settings from file</string>
     <string name="gpu_prep_prompt">Start device detection to load GPU frequency tables for your chipset.</string>
@@ -202,4 +206,26 @@
     <string name="common_off">Off</string>
     <string name="undo">Undo</string>
     <string name="redo">Redo</string>
+    
+    <!-- Export History -->
+    <string name="export_history">Export History</string>
+    <string name="export_history_desc">View and manage exported configurations</string>
+    <string name="no_export_history">No Export History</string>
+    <string name="no_export_history_desc">Your exported configurations will appear here</string>
+    <string name="apply">Apply</string>
+    <string name="share">Share</string>
+    <string name="clear_all">Clear All</string>
+    <string name="confirm_clear_history">Clear All History?</string>
+    <string name="confirm_clear_history_msg">This will delete all export history and files. This action cannot be undone.</string>
+    <string name="confirm_delete_history">Delete Export?</string>
+    <string name="confirm_delete_history_msg">This will delete the export file. This action cannot be undone.</string>
+    <string name="history_cleared">History cleared</string>
+    <string name="history_item_deleted">Export deleted</string>
+    <string name="share_config">Share Configuration</string>
+    <string name="applying_config">Applying configuration...</string>
+    <string name="file_not_found">File not found</string>
+    <string name="no_description">No description</string>
+    <string name="confirm_apply_config">Apply this configuration to your device?</string>
+    <string name="file_location">File Location</string>
+    <string name="path_copied">Path copied to clipboard</string>
 </resources>

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="120dp"
+    android:height="120dp"
+    android:viewportWidth="120"
+    android:viewportHeight="120">
+    <!-- Material You Empty State Icon -->
+    <path
+        android:fillColor="@android:color/white"
+        android:fillAlpha="0.1"
+        android:pathData="M60,20c-22.09,0 -40,17.91 -40,40s17.91,40 40,40s40,-17.91 40,-40S82.09,20 60,20z"/>
+    <path
+        android:fillColor="@android:color/white"
+        android:fillAlpha="0.2"
+        android:pathData="M60,30c-16.57,0 -30,13.43 -30,30s13.43,30 30,30s30,-13.43 30,-30S76.57,30 60,30z"/>
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M60,35c-13.81,0 -25,11.19 -25,25s11.19,25 25,25s25,-11.19 25,-25S73.81,35 60,35zM60,78c-9.94,0 -18,-8.06 -18,-18s8.06,-18 18,-18s18,8.06 18,18S69.94,78 60,78z"/>
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M58,48v15l10,6l2,-3.33l-8,-4.67V48H58z"/>
+</vector>

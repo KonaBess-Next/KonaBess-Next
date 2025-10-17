@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Material You History Icon with Clock Arrow -->
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M13,3C9.23,3 5.95,5.07 4.37,8.17l1.83,1.06C7.33,6.74 9.98,5 13,5c4.41,0 8,3.59 8,8s-3.59,8 -8,8c-3.02,0 -5.67,-1.74 -6.8,-4.23L4.37,15.83C5.95,18.93 9.23,21 13,21c5.52,0 10,-4.48 10,-10S18.52,3 13,3zM12,8v5l4.25,2.52 0.77,-1.28 -3.52,-2.09V8H12z"/>
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M4.5,10.5v-3h-3v3H4.5zM3.5,14.5l-2,2l2,2l2,-2L3.5,14.5z"/>
+</vector>

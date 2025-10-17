@@ -116,6 +116,9 @@
     <string name="sd765g">骁龙765G</string>
     <string name="sd765">骁龙765</string>
     <string name="possible_dtb">这可能是您的设备正在使用的芯片组数据</string>
+    <string name="currently_selected">当前选择</string>
+    <string name="switch_chipset_title">切换芯片组？</string>
+    <string name="switch_chipset_msg">切换芯片组将重新加载GPU频率表。是否继续？</string>
     <string name="sdm888">骁龙888</string>
     <string name="sdm888p">骁龙888+</string>
     <string name="lagoon_series">骁龙690 / 750系列</string>
@@ -149,4 +152,24 @@
      <string name="ghz">GHz</string>
      <string name="preview_gpu_freq_table">预览GPU频率表</string>
      <string name="freq_unit_description">选择GPU频率的显示方式</string>
+     <string name="export_filename_hint">文件名（可选，留空为自动生成）</string>
+     <string name="export_history">导出历史</string>
+     <string name="export_history_desc">查看和管理已导出的配置</string>
+     <string name="no_export_history">无导出历史</string>
+     <string name="no_export_history_desc">已导出的配置将显示在此处</string>
+     <string name="apply">应用</string>
+     <string name="share">分享</string>
+     <string name="clear_all">全部清除</string>
+     <string name="confirm_clear_history">清除所有历史？</string>
+     <string name="confirm_clear_history_msg">这将删除所有导出历史和文件。此操作无法撤消。</string>
+     <string name="confirm_delete_history">删除导出？</string>
+     <string name="confirm_delete_history_msg">这将删除导出文件。此操作无法撤消。</string>
+     <string name="history_cleared">历史已清除</string>
+     <string name="history_item_deleted">导出已删除</string>
+     <string name="share_config">分享配置</string>
+     <string name="file_not_found">未找到文件</string>
+     <string name="no_description">无描述</string>
+     <string name="confirm_apply_config">将此配置应用到您的设备？</string>
+     <string name="file_location">文件位置</string>
+     <string name="path_copied">路径已复制到剪贴板</string>
  </resources>

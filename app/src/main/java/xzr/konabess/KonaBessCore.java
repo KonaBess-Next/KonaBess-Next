@@ -189,7 +189,15 @@ public class KonaBessCore {
 
     public static void backupBootImage(Context context) throws IOException {
         String source = filesDir + "/boot.img";
-        String dest = Environment.getExternalStorageDirectory().getAbsolutePath() + "/" + boot_name + ".img";
+        
+        // Use internal storage root directory
+        File destDir = Environment.getExternalStorageDirectory();
+        
+        if (destDir != null && !destDir.exists()) {
+            destDir.mkdirs();
+        }
+        
+        String dest = destDir.getAbsolutePath() + "/" + boot_name + ".img";
         RootHelper.execShForOutput("cp -f " + source + " " + dest);
     }
 

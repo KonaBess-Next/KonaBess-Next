@@ -117,6 +117,9 @@
     <string name="sd765g">Snapdragon 765G</string>
     <string name="sd765">Snapdragon 765</string>
     <string name="possible_dtb">Ini mungkin data chipset yang digunakan perangkat Anda.</string>
+    <string name="currently_selected">Sedang Dipilih</string>
+    <string name="switch_chipset_title">Ganti Chipset?</string>
+    <string name="switch_chipset_msg">Mengganti chipset akan memuat ulang tabel frekuensi GPU. Lanjutkan?</string>
     <string name="sdm888">Snapdragon 888</string>
     <string name="sdm888p">Snapdragon 888+</string>
     <string name="lagoon_series">Seri Snapdragon 690 / 750</string>
@@ -150,4 +153,24 @@
      <string name="ghz">GHz</string>
      <string name="preview_gpu_freq_table">Pratinjau Tabel Frekuensi GPU</string>
      <string name="freq_unit_description">Pilih cara frekuensi GPU ditampilkan</string>
+     <string name="export_filename_hint">Nama file (opsional, kosongkan untuk otomatis)</string>
+     <string name="export_history">Riwayat Ekspor</string>
+     <string name="export_history_desc">Lihat dan kelola konfigurasi yang diekspor</string>
+     <string name="no_export_history">Tidak Ada Riwayat Ekspor</string>
+     <string name="no_export_history_desc">Konfigurasi yang diekspor akan muncul di sini</string>
+     <string name="apply">Terapkan</string>
+     <string name="share">Bagikan</string>
+     <string name="clear_all">Hapus Semua</string>
+     <string name="confirm_clear_history">Hapus Semua Riwayat?</string>
+     <string name="confirm_clear_history_msg">Ini akan menghapus semua riwayat ekspor dan file. Tindakan ini tidak dapat dibatalkan.</string>
+     <string name="confirm_delete_history">Hapus Ekspor?</string>
+     <string name="confirm_delete_history_msg">Ini akan menghapus file ekspor. Tindakan ini tidak dapat dibatalkan.</string>
+     <string name="history_cleared">Riwayat dihapus</string>
+     <string name="history_item_deleted">Ekspor dihapus</string>
+     <string name="share_config">Bagikan Konfigurasi</string>
+     <string name="file_not_found">File tidak ditemukan</string>
+     <string name="no_description">Tidak ada deskripsi</string>
+     <string name="confirm_apply_config">Terapkan konfigurasi ini ke perangkat Anda?</string>
+     <string name="file_location">Lokasi File</string>
+     <string name="path_copied">Path disalin ke clipboard</string>
  </resources>

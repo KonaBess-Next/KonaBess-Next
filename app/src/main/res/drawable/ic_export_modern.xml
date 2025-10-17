@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Material You Export Icon -->
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M19,12v7H5v-7H3v7c0,1.1 0.9,2 2,2h14c1.1,0 2,-0.9 2,-2v-7H19z"/>
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M11,3v10.59l-2.29,-2.29L7.29,12.71l4.71,4.71l4.71,-4.71l-1.42,-1.42L13,13.59V3H11z"/>
+</vector>
