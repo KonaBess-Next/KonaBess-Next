@@ -48,7 +48,7 @@ public class RootHelper {
      * Execute a non-root shell command
      */
     public static Shell.Result execSh(String... commands) {
-        return Shell.sh(commands).exec();
+        return Shell.cmd(commands).exec();
     }
     
     /**
