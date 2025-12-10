@@ -229,4 +229,5 @@
     <string name="confirm_apply_config">Apply this configuration to your device?</string>
     <string name="file_location">File Location</string>
     <string name="path_copied">Path copied to clipboard</string>
+    <string name="title_select_chipset">Select Chipset</string>
 </resources>

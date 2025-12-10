@@ -60,7 +60,7 @@ public class ChipsetSelectorAdapter extends RecyclerView.Adapter<ChipsetSelector
         KonaBessCore.Dtb dtb = dtbList.get(position);
         
         // Set chipset name
-        String chipsetName = dtb.id + " " + com.ireddragonicy.konabessnext.ChipInfo.name2chipdesc(dtb.type, activity);
+        String chipsetName = dtb.id + " " + dtb.type.getDescription(activity);
         holder.chipsetName.setText(chipsetName);
         
         // Set subtitle

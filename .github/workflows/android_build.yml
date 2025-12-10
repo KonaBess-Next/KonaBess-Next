@@ -89,12 +89,13 @@ jobs:
         echo "Listing debug directory:"
         ls -R app/build/outputs/apk/debug/ || echo "Debug directory not found or empty"
         
-        # Rename Debug APK
-        if [ -f "app/build/outputs/apk/debug/app-debug.apk" ]; then
-          mv app/build/outputs/apk/debug/app-debug.apk "app/build/outputs/apk/debug/KonaBessNext-v${VERSION}-build${BUILD}-debug.apk"
-          echo "Debug APK renamed successfully"
+        # Rename Debug APK - handle both universal and split APKs
+        DEBUG_APK=$(find app/build/outputs/apk/debug -name "*.apk" ! -name "output-metadata.json" -type f | head -1)
+        if [ -n "$DEBUG_APK" ]; then
+          mv "$DEBUG_APK" "app/build/outputs/apk/debug/KonaBessNext-v${VERSION}-build${BUILD}-debug.apk"
+          echo "Debug APK renamed successfully: $DEBUG_APK -> KonaBessNext-v${VERSION}-build${BUILD}-debug.apk"
         else
-          echo "Warning: app-debug.apk not found. Debug APK will not be included."
+          echo "Warning: No debug APK found. Debug APK will not be included."
         fi
         
         # Handle Release APK
@@ -119,6 +120,29 @@ jobs:
         files: |
           app/build/outputs/apk/release/*.apk
           app/build/outputs/apk/debug/*.apk
+
+    - name: Parse VirusTotal Results
+      id: vt_parsed
+      if: github.event_name == 'push' && steps.virustotal.outputs.analysis != ''
+      run: |
+        # Parse the comma-separated analysis output into formatted list
+        ANALYSIS="${{ steps.virustotal.outputs.analysis }}"
+        echo "Raw analysis: $ANALYSIS"
+        
+        # Format as markdown bullet list
+        VT_RESULTS=""
+        IFS=',' read -ra ENTRIES <<< "$ANALYSIS"
+        for entry in "${ENTRIES[@]}"; do
+          # entry format: filename=url
+          FILENAME=$(echo "$entry" | cut -d'=' -f1 | xargs basename)
+          URL=$(echo "$entry" | cut -d'=' -f2-)
+          VT_RESULTS="${VT_RESULTS}- [${FILENAME}](${URL})\n"
+        done
+        
+        # Use delimiter for multiline output
+        echo "vt_results<<EOF" >> $GITHUB_OUTPUT
+        echo -e "$VT_RESULTS" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
         
     - name: Delete old pre-releases
       uses: dev-drprasad/delete-older-releases@v0.3.4
@@ -149,8 +173,8 @@ jobs:
           - **Debug APK**: For testing with detailed logs.
           
           ### Security Scan
-          VirusTotal Scan Results:
-          ${{ steps.virustotal.outputs.analysis_url }}
+          **VirusTotal Scan Results:**
+          ${{ steps.vt_parsed.outputs.vt_results }}
           
           ### Build Information
           This is an automated pre-release build.

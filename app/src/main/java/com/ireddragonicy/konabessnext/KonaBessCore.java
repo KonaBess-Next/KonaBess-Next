@@ -11,6 +11,8 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import com.ireddragonicy.konabessnext.utils.AssetsUtil;
@@ -18,53 +20,65 @@ import com.ireddragonicy.konabessnext.utils.RootHelper;
 
 public class KonaBessCore {
     // Constants
-    private static final String[] REQUIRED_BINARIES = {"dtc", "magiskboot"};
-    private static final byte[] DTB_MAGIC = {(byte) 0xD0, (byte) 0x0D, (byte) 0xFE, (byte) 0xED};
+    private static final String[] REQUIRED_BINARIES = { "dtc", "magiskboot" };
+    private static final byte[] DTB_MAGIC = { (byte) 0xD0, (byte) 0x0D, (byte) 0xFE, (byte) 0xED };
     private static final int DTB_HEADER_SIZE = 8;
     private static final int BYTE_MASK = 0xFF;
-    
-    // Chip mappings
-    private static final Map<String, ChipInfo.type> CHIP_MAPPINGS = new HashMap<String, ChipInfo.type>() {{
-        put("kona v2.1", ChipInfo.type.kona);
-        put("kona v2", ChipInfo.type.kona);
-        put("SM8150 v2", ChipInfo.type.msmnile);
-        put("Lahaina V2.1", ChipInfo.type.lahaina);
-        put("Lahaina v2.1", ChipInfo.type.lahaina);
-        put("Lito", ChipInfo.type.lito_v1);
-        put("Lito v2", ChipInfo.type.lito_v2);
-        put("Lagoon", ChipInfo.type.lagoon);
-        put("Shima", ChipInfo.type.shima);
-        put("Yupik", ChipInfo.type.yupik);
-        put("Waipio", ChipInfo.type.waipio_singleBin);
-        put("Waipio v2", ChipInfo.type.waipio_singleBin);
-        put("Cape", ChipInfo.type.cape_singleBin);
-        put("Kalama v2", ChipInfo.type.kalama);
-        put("KalamaP v2", ChipInfo.type.kalama);
-        put("Diwali", ChipInfo.type.diwali);
-        put("Ukee", ChipInfo.type.ukee_singleBin);
-        put("Pineapple v2", ChipInfo.type.pineapple);
-        put("PineappleP v2", ChipInfo.type.pineapple);
-        put("Cliffs SoC", ChipInfo.type.cliffs_singleBin);
-        put("Cliffs 7 SoC", ChipInfo.type.cliffs_7_singleBin);
-        put("KalamaP SG SoC", ChipInfo.type.kalama_sg_singleBin);
-        put("Sun v2 SoC", ChipInfo.type.sun);
-        put("Sun Alt. Thermal Profile v2 SoC", ChipInfo.type.sun);
-        put("SunP v2 SoC", ChipInfo.type.sun);
-        put("SunP v2 Alt. Thermal Profile SoC", ChipInfo.type.sun);
-        put("Canoe v2 SoC", ChipInfo.type.canoe);
-        put("CanoeP v2 SoC", ChipInfo.type.canoe);
-        put("Tuna 7 SoC", ChipInfo.type.tuna);
-        put("Tuna SoC", ChipInfo.type.tuna);
-    }};
-    
+
+    // Regex patterns for parsing (compiled once for performance)
+    // Relaxed pattern: captures ID and the rest of the line content for robust
+    // matching
+    private static final Pattern DTB_MODEL_PATTERN = Pattern.compile("/(\\d+)\\.dts:(.*)");
+    private static final Pattern DTB_FILE_PATTERN = Pattern.compile("/(\\d+)\\.dts");
+
+    // Chip mappings - maps model string to chip type
+    private static final Map<String, ChipInfo.type> CHIP_MAPPINGS = new HashMap<String, ChipInfo.type>() {
+        {
+            put("kona v2.1", ChipInfo.type.kona);
+            put("kona v2", ChipInfo.type.kona);
+            put("SM8150 v2", ChipInfo.type.msmnile);
+            put("Lahaina V2.1", ChipInfo.type.lahaina);
+            put("Lahaina v2.1", ChipInfo.type.lahaina);
+            put("Lito", ChipInfo.type.lito_v1);
+            put("Lito v2", ChipInfo.type.lito_v2);
+            put("Lagoon", ChipInfo.type.lagoon);
+            put("Shima", ChipInfo.type.shima);
+            put("Yupik", ChipInfo.type.yupik);
+            put("Waipio", ChipInfo.type.waipio_singleBin);
+            put("Waipio v2", ChipInfo.type.waipio_singleBin);
+            put("Cape", ChipInfo.type.cape_singleBin);
+            put("Kalama v2", ChipInfo.type.kalama);
+            put("KalamaP v2", ChipInfo.type.kalama);
+            put("Diwali", ChipInfo.type.diwali);
+            put("Ukee", ChipInfo.type.ukee_singleBin);
+            put("Pineapple v2", ChipInfo.type.pineapple);
+            put("PineappleP v2", ChipInfo.type.pineapple);
+            put("Cliffs SoC", ChipInfo.type.cliffs_singleBin);
+            put("Cliffs 7 SoC", ChipInfo.type.cliffs_7_singleBin);
+            put("KalamaP SG SoC", ChipInfo.type.kalama_sg_singleBin);
+            put("Sun v2 SoC", ChipInfo.type.sun);
+            put("Sun Alt. Thermal Profile v2 SoC", ChipInfo.type.sun);
+            put("SunP v2 SoC", ChipInfo.type.sun);
+            put("SunP v2 Alt. Thermal Profile SoC", ChipInfo.type.sun);
+            put("Canoe v2 SoC", ChipInfo.type.canoe);
+            put("CanoeP v2 SoC", ChipInfo.type.canoe);
+            put("Tuna 7 SoC", ChipInfo.type.tuna);
+            put("Tuna SoC", ChipInfo.type.tuna);
+        }
+    };
+
     // Cache for system properties
     private static final Map<String, String> PROPERTY_CACHE = new ConcurrentHashMap<>();
-    
+
+    // DTB metadata caches (populated by single batch IPC calls)
+    private static Map<Integer, String> dtbModelCache;
+    private static Set<Integer> singleBinDtbs;
+
     // State variables
     public static String dts_path;
     public static String boot_name;
     public static List<Dtb> dtbs;
-    
+
     private static int dtb_num;
     private static boolean prepared = false;
     private static DtbType dtb_type;
@@ -75,13 +89,13 @@ public class KonaBessCore {
         DTB("dtb"),
         KERNEL_DTB("kernel_dtb"),
         BOTH("both");
-        
+
         private final String filename;
-        
+
         DtbType(String filename) {
             this.filename = filename;
         }
-        
+
         public String getFilename() {
             return filename;
         }
@@ -90,7 +104,7 @@ public class KonaBessCore {
     public static class Dtb {
         public final int id;
         public final ChipInfo.type type;
-        
+
         public Dtb(int id, ChipInfo.type type) {
             this.id = id;
             this.type = type;
@@ -103,22 +117,24 @@ public class KonaBessCore {
         filesDir = context.getFilesDir().getAbsolutePath();
         RootHelper.execShForOutput("rm -rf " + filesDir + "/*");
     }
-    
+
     private static void resetState() {
         prepared = false;
         dts_path = null;
         dtbs = null;
         boot_name = null;
+        dtbModelCache = null;
+        singleBinDtbs = null;
         PROPERTY_CACHE.clear();
     }
 
     public static void setupEnv(Context context) throws IOException {
         filesDir = context.getFilesDir().getAbsolutePath();
-        
+
         for (String binary : REQUIRED_BINARIES) {
             File file = new File(filesDir, binary);
             AssetsUtil.exportFiles(context, binary, file.getAbsolutePath());
-            
+
             if (!file.setExecutable(true) || !file.canExecute()) {
                 throw new IOException("Failed to set executable: " + binary);
             }
@@ -151,6 +167,13 @@ public class KonaBessCore {
         });
     }
 
+    public static void setCurrentDtb(Dtb dtb) {
+        currentDtb = dtb;
+        if (dtb != null) {
+            ChipInfo.which = dtb.type;
+        }
+    }
+
     // Boot image operations
     public static void getBootImage(Context context) throws IOException {
         try {
@@ -165,12 +188,12 @@ public class KonaBessCore {
     private static void getBootImageByType(Context context, String type) throws IOException {
         String bootImgPath = filesDir + "/boot.img";
         String partition = "/dev/block/bootdevice/by-name/" + type + getCurrent("slot");
-        
+
         if (!RootHelper.execAndCheck(
                 String.format("dd if=%s of=%s && chmod 644 %s", partition, bootImgPath, bootImgPath))) {
             throw new IOException("Failed to get " + type + " image");
         }
-        
+
         File target = new File(bootImgPath);
         if (!target.exists() || !target.canRead()) {
             target.delete();
@@ -181,7 +204,7 @@ public class KonaBessCore {
     public static void writeBootImage(Context context) throws IOException {
         String newBootPath = filesDir + "/boot_new.img";
         String partition = "/dev/block/bootdevice/by-name/" + boot_name + getCurrent("slot");
-        
+
         if (!RootHelper.execAndCheck(String.format("dd if=%s of=%s", newBootPath, partition))) {
             throw new IOException("Failed to write boot image");
         }
@@ -189,76 +212,106 @@ public class KonaBessCore {
 
     public static void backupBootImage(Context context) throws IOException {
         String source = filesDir + "/boot.img";
-        
+
         // Use internal storage root directory
         File destDir = Environment.getExternalStorageDirectory();
-        
+
         if (destDir != null && !destDir.exists()) {
             destDir.mkdirs();
         }
-        
+
         String dest = destDir.getAbsolutePath() + "/" + boot_name + ".img";
         RootHelper.execShForOutput("cp -f " + source + " " + dest);
     }
 
-    // Device detection
+    // ========================================================================
+    // Device Detection (OPTIMIZED: NATIVE JAVA I/O)
+    // ========================================================================
+
+    private static final Pattern MODEL_PROPERTY = Pattern.compile("model\\s*=\\s*\"([^\"]+)\"");
+
     public static void checkDevice(Context context) throws IOException {
+        setupEnv(context);
         dtbs = new ArrayList<>();
-        
+
+        // OPTIMIZATION: Grant read permissions once so Java can read files directly
+        // This is significantly faster than executing 'grep' via shell 100+ times
+        RootHelper.execShForOutput("chmod 644 " + filesDir + "/*.dts");
+
         for (int i = 0; i < dtb_num; i++) {
-            ChipInfo.type chipType = detectChipType(context, i);
+            File dtsFile = new File(filesDir, i + ".dts");
+            if (!dtsFile.exists())
+                continue;
+
+            String content = readFileToString(dtsFile);
+            ChipInfo.type chipType = detectChipType(content, i);
+
             if (chipType != ChipInfo.type.unknown) {
                 dtbs.add(new Dtb(i, chipType));
             }
         }
     }
 
-    private static ChipInfo.type detectChipType(Context context, int index) throws IOException {
-        // Special case for OP4A79 device
-        if ("OP4A79".equals(getCurrent("device")) && checkChip(context, index, "kona v2")) {
-            return determineChipVariant(context, index, ChipInfo.type.kona_singleBin, ChipInfo.type.kona);
+    private static ChipInfo.type detectChipType(String content, int index) {
+        // Extract "model" property using Regex
+        Matcher m = MODEL_PROPERTY.matcher(content);
+        String modelContent = "";
+        if (m.find()) {
+            modelContent = m.group(1);
         }
-        
+
+        // Special case for OP4A79 device
+        if ("OP4A79".equals(getCurrent("device")) && modelContent.contains("kona v2")) {
+            return isSingleBin(content) ? ChipInfo.type.kona_singleBin : ChipInfo.type.kona;
+        }
+
+        // Match against chip mappings
         for (Map.Entry<String, ChipInfo.type> entry : CHIP_MAPPINGS.entrySet()) {
-            if (checkChip(context, index, entry.getKey())) {
+            if (modelContent.contains(entry.getKey())) {
                 ChipInfo.type baseType = entry.getValue();
-                
+
                 // Check if it needs single bin variant
-                if (baseType == ChipInfo.type.kona || baseType == ChipInfo.type.msmnile || 
-                    baseType == ChipInfo.type.lahaina) {
-                    return determineChipVariant(context, index, 
-                        ChipInfo.type.valueOf(baseType.name() + "_singleBin"), baseType);
+                if (baseType == ChipInfo.type.kona || baseType == ChipInfo.type.msmnile ||
+                        baseType == ChipInfo.type.lahaina) {
+                    return determineChipVariant(index, baseType, content);
                 }
-                
+
                 return baseType;
             }
         }
-        
+
         return ChipInfo.type.unknown;
     }
 
-    private static ChipInfo.type determineChipVariant(Context context, int index, 
-                                                      ChipInfo.type singleBin, ChipInfo.type regular) throws IOException {
-        return checkSingleBin(context, index) ? singleBin : regular;
+    private static boolean isSingleBin(String content) {
+        return content.contains("qcom,gpu-pwrlevels {");
     }
 
-    private static boolean checkSingleBin(Context context, int index) throws IOException {
-        return !RootHelper.execShForOutput(
-            String.format("grep 'qcom,gpu-pwrlevels {' %s/%d.dts", filesDir, index)
-        ).isEmpty();
+    private static ChipInfo.type determineChipVariant(int index, ChipInfo.type regular, String content) {
+        try {
+            ChipInfo.type singleBin = ChipInfo.type.valueOf(regular.name() + "_singleBin");
+            return isSingleBin(content) ? singleBin : regular;
+        } catch (IllegalArgumentException e) {
+            return regular;
+        }
     }
 
-    private static boolean checkChip(Context context, int index, String chip) throws IOException {
-        return !RootHelper.execShForOutput(
-            String.format("grep model %s/%d.dts | grep '%s'", filesDir, index, chip)
-        ).isEmpty();
+    private static String readFileToString(File file) throws IOException {
+        StringBuilder sb = new StringBuilder();
+        try (BufferedReader br = new BufferedReader(new FileReader(file))) {
+            String line;
+            while ((line = br.readLine()) != null) {
+                sb.append(line).append("\n");
+            }
+        }
+        return sb.toString();
     }
 
     // DTB/DTS conversion
     public static void bootImage2dts(Context context) throws IOException {
         unpackBootImage(context);
         dtb_num = dtbSplit(context);
-        
+
         for (int i = 0; i < dtb_num; i++) {
             convertDtbToDts(context, i);
         }
@@ -266,16 +319,15 @@ public class KonaBessCore {
 
     private static void unpackBootImage(Context context) throws IOException {
         RootHelper.execShForOutput(
-            String.format("cd %s && ./magiskboot unpack boot.img", filesDir)
-        );
-        
+                String.format("cd %s && ./magiskboot unpack boot.img", filesDir));
+
         determineDtbType();
     }
 
     private static void determineDtbType() throws IOException {
         boolean hasKernelDtb = new File(filesDir, "kernel_dtb").exists();
         boolean hasDtb = new File(filesDir, "dtb").exists();
-        
+
         if (hasKernelDtb && hasDtb) {
             dtb_type = DtbType.BOTH;
         } else if (hasKernelDtb) {
@@ -289,30 +341,31 @@ public class KonaBessCore {
 
     private static int dtbSplit(Context context) throws IOException {
         File dtbFile = getDtbFile();
-        
+
         if (dtb_type == DtbType.BOTH) {
             new File(filesDir, "kernel_dtb").delete();
         }
-        
+
         byte[] dtbBytes = Files.readAllBytes(dtbFile.toPath());
         List<Integer> offsets = findDtbOffsets(dtbBytes);
-        
+
         writeDtbChunks(dtbBytes, offsets);
         dtbFile.delete();
-        
+
         return offsets.size();
     }
 
     private static File getDtbFile() throws IOException {
-        String filename = (dtb_type == DtbType.DTB || dtb_type == DtbType.BOTH) 
-            ? "dtb" : "kernel_dtb";
+        String filename = (dtb_type == DtbType.DTB || dtb_type == DtbType.BOTH)
+                ? "dtb"
+                : "kernel_dtb";
         return new File(filesDir, filename);
     }
 
     private static List<Integer> findDtbOffsets(byte[] data) {
         List<Integer> offsets = new ArrayList<>();
         int i = 0;
-        
+
         while (i + DTB_HEADER_SIZE < data.length) {
             if (isDtbMagic(data, i)) {
                 offsets.add(i);
@@ -322,7 +375,7 @@ public class KonaBessCore {
                 i++;
             }
         }
-        
+
         return offsets;
     }
 
@@ -332,43 +385,39 @@ public class KonaBessCore {
 
     private static int readDtbSize(byte[] data, int offset) {
         return ((data[offset] & BYTE_MASK) << 24) |
-               ((data[offset + 1] & BYTE_MASK) << 16) |
-               ((data[offset + 2] & BYTE_MASK) << 8) |
-               (data[offset + 3] & BYTE_MASK);
+                ((data[offset + 1] & BYTE_MASK) << 16) |
+                ((data[offset + 2] & BYTE_MASK) << 8) |
+                (data[offset + 3] & BYTE_MASK);
     }
 
     private static void writeDtbChunks(byte[] data, List<Integer> offsets) throws IOException {
         for (int i = 0; i < offsets.size(); i++) {
             int start = offsets.get(i);
             int end = (i + 1 < offsets.size()) ? offsets.get(i + 1) : data.length;
-            
+
             Files.write(
-                Paths.get(filesDir, i + ".dtb"),
-                Arrays.copyOfRange(data, start, end)
-            );
+                    Paths.get(filesDir, i + ".dtb"),
+                    Arrays.copyOfRange(data, start, end));
         }
     }
 
     private static void convertDtbToDts(Context context, int index) throws IOException {
         executeConversion(
-            String.format("./dtc -I dtb -O dts %d.dtb -o %d.dts && rm -f %d.dtb", 
-                         index, index, index),
-            index + ".dts"
-        );
+                String.format("./dtc -I dtb -O dts %d.dtb -o %d.dts && rm -f %d.dtb",
+                        index, index, index),
+                index + ".dts");
     }
 
     private static void convertDtsToDtb(Context context, int index) throws IOException {
         executeConversion(
-            String.format("./dtc -I dts -O dtb %d.dts -o %d.dtb", index, index),
-            index + ".dtb"
-        );
+                String.format("./dtc -I dts -O dtb %d.dts -o %d.dtb", index, index),
+                index + ".dtb");
     }
 
     private static void executeConversion(String command, String outputFile) throws IOException {
         List<String> output = RootHelper.execShForOutput(
-            String.format("cd %s && %s", filesDir, command)
-        );
-        
+                String.format("cd %s && %s", filesDir, command));
+
         if (!new File(filesDir, outputFile).exists()) {
             throw new IOException("Conversion failed: " + String.join("\n", output));
         }
@@ -378,15 +427,15 @@ public class KonaBessCore {
         for (int i = 0; i < dtb_num; i++) {
             convertDtsToDtb(context, i);
         }
-        
+
         linkDtbs(context);
         repackBootImage(context);
     }
 
     private static void linkDtbs(Context context) throws IOException {
-        File outputFile = new File(filesDir, 
-            dtb_type == DtbType.KERNEL_DTB ? "kernel_dtb" : "dtb");
-        
+        File outputFile = new File(filesDir,
+                dtb_type == DtbType.KERNEL_DTB ? "kernel_dtb" : "dtb");
+
         try (FileOutputStream out = new FileOutputStream(outputFile)) {
             for (int i = 0; i < dtb_num; i++) {
                 Files.copy(Paths.get(filesDir, i + ".dtb"), out);
@@ -397,15 +446,15 @@ public class KonaBessCore {
     private static void repackBootImage(Context context) throws IOException {
         List<String> commands = new ArrayList<>();
         commands.add("cd " + filesDir);
-        
+
         if (dtb_type == DtbType.BOTH) {
             commands.add("cp dtb kernel_dtb");
         }
-        
+
         commands.add("./magiskboot repack boot.img boot_new.img");
-        
+
         List<String> output = RootHelper.execShForOutput(commands.toArray(new String[0]));
-        
+
         if (!new File(filesDir, "boot_new.img").exists()) {
             throw new IOException("Repack failed: " + String.join("\n", output));
         }
@@ -421,10 +470,10 @@ public class KonaBessCore {
     }
 
     public static boolean isPrepared() {
-        return prepared && 
-               dts_path != null && 
-               new File(dts_path).exists() &&
-               ChipInfo.which != ChipInfo.type.unknown;
+        return prepared &&
+                dts_path != null &&
+                new File(dts_path).exists() &&
+                ChipInfo.which != ChipInfo.type.unknown;
     }
 
     public static Dtb getCurrentDtb() {

@@ -50,7 +50,7 @@ public class MainActivity extends AppCompatActivity {
     private final Object preparationLock = new Object();
     private final ArrayList<DevicePreparationListener> preparationListeners = new ArrayList<>();
     private boolean isPreparingDevice = false;
-    
+
     private ViewPager2 viewPager;
     private BottomNavigationView bottomNav;
     private MaterialToolbar toolbar;
@@ -109,19 +109,21 @@ public class MainActivity extends AppCompatActivity {
 
     public static void runWithStoragePermission(Activity activity, Thread what) {
         MainActivity.permission_worker = what;
-        
+
         // For Android 10 and above, we need to check API level
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-            // Android 11+ (API 30+): No need to request permission for app-specific directory
+            // Android 11+ (API 30+): No need to request permission for app-specific
+            // directory
             // or use MediaStore for shared storage
             what.start();
             permission_worker = null;
         } else if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
             // Android 10 (API 29): Check WRITE permission
-            if (activity.checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
-                activity.requestPermissions(new String[]{
-                    Manifest.permission.WRITE_EXTERNAL_STORAGE,
-                    Manifest.permission.READ_EXTERNAL_STORAGE
+            if (activity.checkSelfPermission(
+                    Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+                activity.requestPermissions(new String[] {
+                        Manifest.permission.WRITE_EXTERNAL_STORAGE,
+                        Manifest.permission.READ_EXTERNAL_STORAGE
                 }, 0);
             } else {
                 what.start();
@@ -129,8 +131,9 @@ public class MainActivity extends AppCompatActivity {
             }
         } else {
             // Android 9 and below: Check WRITE permission
-            if (activity.checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
-                activity.requestPermissions(new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, 0);
+            if (activity.checkSelfPermission(
+                    Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+                activity.requestPermissions(new String[] { Manifest.permission.WRITE_EXTERNAL_STORAGE }, 0);
             } else {
                 what.start();
                 permission_worker = null;
@@ -166,7 +169,7 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions,
-                                           int[] grantResults) {
+            int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
             if (permission_worker != null) {
@@ -204,10 +207,9 @@ public class MainActivity extends AppCompatActivity {
         gpuFrequencyFragment = new GpuFrequencyFragment();
 
         ArrayList<Fragment> fragments = new ArrayList<>(Arrays.asList(
-            gpuFrequencyFragment,
-            new ImportExportFragment(),
-            new SettingsFragment()
-        ));
+                gpuFrequencyFragment,
+                new ImportExportFragment(),
+                new SettingsFragment()));
 
         ViewPagerAdapter adapter = new ViewPagerAdapter(this, fragments);
         viewPager.setAdapter(adapter);
@@ -310,6 +312,8 @@ public class MainActivity extends AppCompatActivity {
         void onPrepared();
 
         void onFailed();
+
+        void onSelectionRequired(int recommendedIndex);
     }
 
     public void ensureDevicePrepared(DevicePreparationListener listener) {
@@ -342,7 +346,7 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void notifyPreparationSuccess() {
+    public void notifyPreparationSuccess() {
         ArrayList<DevicePreparationListener> listeners;
         synchronized (preparationLock) {
             listeners = new ArrayList<>(preparationListeners);
@@ -366,6 +370,27 @@ public class MainActivity extends AppCompatActivity {
         for (DevicePreparationListener listener : listeners) {
             if (listener != null) {
                 runOnUiThread(listener::onFailed);
+            }
+        }
+    }
+
+    private void notifyPreparationSelection(int recommendedIndex) {
+        ArrayList<DevicePreparationListener> listeners;
+        // Don't clear listeners yet, as selection will proceed to prepared/failed later
+        // synchronized (preparationLock) {
+        // listeners = new ArrayList<>(preparationListeners);
+        // }
+        // Actually we should keep them?
+        // Logic: Selection -> Selection UI -> User Click -> chooseTarget ->
+        // notifySuccess.
+        // So listeners must remain attached!
+        synchronized (preparationLock) {
+            listeners = new ArrayList<>(preparationListeners);
+        }
+
+        for (DevicePreparationListener listener : listeners) {
+            if (listener != null) {
+                runOnUiThread(() -> listener.onSelectionRequired(recommendedIndex));
             }
         }
     }
@@ -400,7 +425,6 @@ public class MainActivity extends AppCompatActivity {
 
         }
     }
-
 
     public class repackLogic extends Thread {
         boolean is_err;
@@ -471,10 +495,11 @@ public class MainActivity extends AppCompatActivity {
         int dtb_index;
 
         public void run() {
-            DialogUtil.ProgressDialogController progressDialog =
-                    DialogUtil.createProgressDialog(MainActivity.this);
+            // REMOVED: ProgressDialog usage
+            // DialogUtil.ProgressDialogController progressDialog =
+            // DialogUtil.createProgressDialog(MainActivity.this);
+            // progressDialog.show(R.string.getting_image);
 
-            progressDialog.show(R.string.getting_image);
             is_err = false;
             try {
                 if (!cross_device_debug) {
@@ -484,14 +509,14 @@ public class MainActivity extends AppCompatActivity {
                 is_err = true;
             }
             if (is_err) {
-                progressDialog.dismiss();
-                MainActivity.this.runOnUiThread(() ->
-                        DialogUtil.showError(MainActivity.this, R.string.failed_get_boot));
+                // progressDialog.dismiss();
+                MainActivity.this
+                        .runOnUiThread(() -> DialogUtil.showError(MainActivity.this, R.string.failed_get_boot));
                 notifyPreparationFailed();
                 return;
             }
 
-            progressDialog.updateMessage(R.string.unpacking);
+            // progressDialog.updateMessage(R.string.unpacking);
             is_err = false;
             try {
                 KonaBessCore.bootImage2dts(MainActivity.this);
@@ -500,15 +525,15 @@ public class MainActivity extends AppCompatActivity {
                 error = e.getMessage();
             }
             if (is_err) {
-                progressDialog.dismiss();
+                // progressDialog.dismiss();
                 final String detail = error;
-                MainActivity.this.runOnUiThread(() ->
-                        DialogUtil.showDetailedError(MainActivity.this, R.string.unpack_failed, detail));
+                MainActivity.this.runOnUiThread(
+                        () -> DialogUtil.showDetailedError(MainActivity.this, R.string.unpack_failed, detail));
                 notifyPreparationFailed();
                 return;
             }
 
-            progressDialog.updateMessage(R.string.checking_device);
+            // progressDialog.updateMessage(R.string.checking_device);
             is_err = false;
             try {
                 KonaBessCore.checkDevice(MainActivity.this);
@@ -518,20 +543,19 @@ public class MainActivity extends AppCompatActivity {
                 error = e.getMessage();
             }
             if (is_err) {
-                progressDialog.dismiss();
+                // progressDialog.dismiss();
                 final String detail = error;
-                MainActivity.this.runOnUiThread(() ->
-                        DialogUtil.showDetailedError(MainActivity.this,
-                                R.string.failed_checking_platform, detail));
+                MainActivity.this.runOnUiThread(() -> DialogUtil.showDetailedError(MainActivity.this,
+                        R.string.failed_checking_platform, detail));
                 notifyPreparationFailed();
                 return;
             }
 
-            progressDialog.dismiss();
+            // progressDialog.dismiss();
 
             MainActivity.this.runOnUiThread(() -> {
                 if (KonaBessCore.dtbs.size() == 0) {
-                    DialogUtil.showError(MainActivity.this, R.string.incompatible_device);
+                    // DialogUtil.showError(MainActivity.this, R.string.incompatible_device);
                     notifyPreparationFailed();
                     return;
                 }
@@ -540,9 +564,9 @@ public class MainActivity extends AppCompatActivity {
                     notifyPreparationSuccess();
                     return;
                 }
-                
-                // Show modern chipset selector dialog
-                showChipsetSelectorDialog(dtb_index);
+
+                // Show modern chipset selector INLINE via fragment
+                notifyPreparationSelection(dtb_index);
             });
         }
     }
@@ -550,7 +574,7 @@ public class MainActivity extends AppCompatActivity {
     private void applyColorPalette() {
         android.content.SharedPreferences prefs = getSharedPreferences("KonaBessSettings", Context.MODE_PRIVATE);
         int palette = prefs.getInt("color_palette", 0);
-        
+
         switch (palette) {
             case 1: // Purple & Teal
                 setTheme(R.style.Theme_KonaBess_Purple);
@@ -571,43 +595,6 @@ public class MainActivity extends AppCompatActivity {
                 setTheme(R.style.Theme_KonaBess);
                 break;
         }
-    }
-
-    private void showChipsetSelectorDialog(int recommendedIndex) {
-        // Inflate custom dialog layout
-        View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_chipset_selector, null);
-        
-        // Setup RecyclerView
-        RecyclerView recyclerView = dialogView.findViewById(R.id.chipset_list);
-        recyclerView.setLayoutManager(new LinearLayoutManager(this));
-        recyclerView.setHasFixedSize(true);
-        
-        // Create dialog
-        AlertDialog dialog = new MaterialAlertDialogBuilder(this)
-                .setView(dialogView)
-                .setCancelable(false)
-                .create();
-        
-        // Setup adapter with click listener
-        ChipsetSelectorAdapter adapter = new ChipsetSelectorAdapter(
-                KonaBessCore.dtbs,
-                this,
-                recommendedIndex,
-                dtb -> {
-                    KonaBessCore.chooseTarget(dtb, MainActivity.this);
-                    dialog.dismiss();
-                    notifyPreparationSuccess();
-                }
-        );
-        
-        recyclerView.setAdapter(adapter);
-        
-        // Show dialog with rounded corners
-        if (dialog.getWindow() != null) {
-            dialog.getWindow().setBackgroundDrawableResource(R.drawable.dialog_background);
-        }
-        
-        dialog.show();
     }
 
     public static abstract class onBackPressedListener {

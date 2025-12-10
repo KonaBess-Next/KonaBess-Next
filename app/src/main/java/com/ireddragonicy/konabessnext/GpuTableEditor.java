@@ -1207,35 +1207,19 @@ public class GpuTableEditor {
     }
 
     public static boolean canAddNewLevel(int binID, Context context) throws Exception {
-        int max_levels = ChipInfo.getMaxTableLevels(ChipInfo.which) - min_level_chip_offset();
+        int max_levels = ChipInfo.which.maxTableLevels - ChipInfo.which.minLevelOffset;
         if (bins.get(binID).levels.size() <= max_levels)
             return true;
         Toast.makeText(context, R.string.unable_add_more, Toast.LENGTH_SHORT).show();
         return false;
     }
 
+    /**
+     * @deprecated Use ChipInfo.which.minLevelOffset directly
+     */
+    @Deprecated
     public static int min_level_chip_offset() throws Exception {
-        if (ChipInfo.which == ChipInfo.type.lahaina || ChipInfo.which == ChipInfo.type.lahaina_singleBin
-                || ChipInfo.which == ChipInfo.type.shima || ChipInfo.which == ChipInfo.type.yupik
-                || ChipInfo.which == ChipInfo.type.waipio_singleBin
-                || ChipInfo.which == ChipInfo.type.cape_singleBin
-                || ChipInfo.which == ChipInfo.type.kalama
-                || ChipInfo.which == ChipInfo.type.diwali
-                || ChipInfo.which == ChipInfo.type.ukee_singleBin
-                || ChipInfo.which == ChipInfo.type.pineapple
-                || ChipInfo.which == ChipInfo.type.cliffs_singleBin
-                || ChipInfo.which == ChipInfo.type.cliffs_7_singleBin
-                || ChipInfo.which == ChipInfo.type.kalama_sg_singleBin
-                || ChipInfo.which == ChipInfo.type.sun
-                || ChipInfo.which == ChipInfo.type.canoe
-                || ChipInfo.which == ChipInfo.type.tuna)
-            return 1;
-        if (ChipInfo.which == ChipInfo.type.kona || ChipInfo.which == ChipInfo.type.kona_singleBin
-                || ChipInfo.which == ChipInfo.type.msmnile || ChipInfo.which == ChipInfo.type.msmnile_singleBin
-                || ChipInfo.which == ChipInfo.type.lito_v1 || ChipInfo.which == ChipInfo.type.lito_v2
-                || ChipInfo.which == ChipInfo.type.lagoon)
-            return 2;
-        throw new Exception();
+        return ChipInfo.which.minLevelOffset;
     }
 
     private static void generateLevels(Activity activity, int id, LinearLayout page) throws Exception {
@@ -1584,7 +1568,7 @@ public class GpuTableEditor {
         KonaBessCore.Dtb currentDtb = KonaBessCore.getCurrentDtb();
         if (currentDtb != null) {
             chipsetName.setText(currentDtb.id + " " +
-                    ChipInfo.name2chipdesc(currentDtb.type, activity));
+                    currentDtb.type.getDescription(activity));
         } else {
             chipsetName.setText("Unknown");
         }
@@ -1704,7 +1688,7 @@ public class GpuTableEditor {
 
                     // Update chipset name in card
                     chipsetNameView.setText(newDtb.id + " " +
-                            ChipInfo.name2chipdesc(newDtb.type, activity));
+                            newDtb.type.getDescription(activity));
 
                     // Regenerate bins view
                     try {
@@ -1880,7 +1864,7 @@ public class GpuTableEditor {
         secondRowParams.setMargins(0, chipSpacing, 0, 0);
         secondRow.setLayoutParams(secondRowParams);
 
-        if (activity instanceof MainActivity && !ChipInfo.shouldIgnoreVoltTable(ChipInfo.which)) {
+        if (activity instanceof MainActivity && !ChipInfo.which.ignoreVoltTable) {
             MaterialButton voltButton = createCompactChip(activity, R.string.edit_gpu_volt_table,
                     R.drawable.ic_voltage);
             voltButton.setOnClickListener(new View.OnClickListener() {

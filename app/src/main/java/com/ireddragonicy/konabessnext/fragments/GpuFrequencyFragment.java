@@ -18,6 +18,9 @@ import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.Lifecycle;
 
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.card.MaterialCardView;
 
@@ -25,6 +28,7 @@ import com.ireddragonicy.konabessnext.GpuTableEditor;
 import com.ireddragonicy.konabessnext.KonaBessCore;
 import com.ireddragonicy.konabessnext.MainActivity;
 import com.ireddragonicy.konabessnext.R;
+import com.ireddragonicy.konabessnext.adapters.ChipsetSelectorAdapter;
 
 public class GpuFrequencyFragment extends Fragment {
     private LinearLayout contentContainer;
@@ -33,7 +37,8 @@ public class GpuFrequencyFragment extends Fragment {
 
     @Nullable
     @Override
-    public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
+    public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container,
+            @Nullable Bundle savedInstanceState) {
         contentContainer = new LinearLayout(requireContext());
         contentContainer.setOrientation(LinearLayout.VERTICAL);
         contentContainer.setPadding(16, 16, 16, 16);
@@ -106,11 +111,11 @@ public class GpuFrequencyFragment extends Fragment {
         card.setRadius(28);
         int cardPadding = 56;
         card.setContentPadding(cardPadding, cardPadding, cardPadding, cardPadding);
-        
+
         // Get theme color for card background
         TypedValue typedValue = new TypedValue();
         requireContext().getTheme().resolveAttribute(
-            com.google.android.material.R.attr.colorPrimaryContainer, typedValue, true);
+                com.google.android.material.R.attr.colorPrimaryContainer, typedValue, true);
         card.setCardBackgroundColor(typedValue.data);
 
         LinearLayout cardContent = new LinearLayout(requireContext());
@@ -121,7 +126,7 @@ public class GpuFrequencyFragment extends Fragment {
         ImageView icon = new ImageView(requireContext());
         icon.setImageResource(R.drawable.ic_developer_board);
         requireContext().getTheme().resolveAttribute(
-            com.google.android.material.R.attr.colorPrimary, typedValue, true);
+                com.google.android.material.R.attr.colorPrimary, typedValue, true);
         icon.setColorFilter(typedValue.data);
         LinearLayout.LayoutParams iconParams = new LinearLayout.LayoutParams(
                 140, 140);
@@ -135,7 +140,7 @@ public class GpuFrequencyFragment extends Fragment {
         title.setTextAlignment(View.TEXT_ALIGNMENT_CENTER);
         title.setTypeface(null, android.graphics.Typeface.BOLD);
         requireContext().getTheme().resolveAttribute(
-            com.google.android.material.R.attr.colorOnPrimaryContainer, typedValue, true);
+                com.google.android.material.R.attr.colorOnPrimaryContainer, typedValue, true);
         title.setTextColor(typedValue.data);
         LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -150,7 +155,7 @@ public class GpuFrequencyFragment extends Fragment {
         message.setTextAlignment(View.TEXT_ALIGNMENT_CENTER);
         message.setAlpha(0.85f);
         requireContext().getTheme().resolveAttribute(
-            com.google.android.material.R.attr.colorOnPrimaryContainer, typedValue, true);
+                com.google.android.material.R.attr.colorOnPrimaryContainer, typedValue, true);
         message.setTextColor(typedValue.data);
         LinearLayout.LayoutParams messageParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -209,11 +214,11 @@ public class GpuFrequencyFragment extends Fragment {
         card.setRadius(28);
         int cardPadding = 56;
         card.setContentPadding(cardPadding, cardPadding, cardPadding, cardPadding);
-        
+
         // Get theme color for error card background
         TypedValue typedValue = new TypedValue();
         requireContext().getTheme().resolveAttribute(
-            com.google.android.material.R.attr.colorErrorContainer, typedValue, true);
+                com.google.android.material.R.attr.colorErrorContainer, typedValue, true);
         card.setCardBackgroundColor(typedValue.data);
 
         LinearLayout cardContent = new LinearLayout(requireContext());
@@ -224,7 +229,7 @@ public class GpuFrequencyFragment extends Fragment {
         ImageView icon = new ImageView(requireContext());
         icon.setImageResource(android.R.drawable.ic_dialog_alert);
         requireContext().getTheme().resolveAttribute(
-            com.google.android.material.R.attr.colorError, typedValue, true);
+                com.google.android.material.R.attr.colorError, typedValue, true);
         icon.setColorFilter(typedValue.data);
         LinearLayout.LayoutParams iconParams = new LinearLayout.LayoutParams(
                 140, 140);
@@ -238,7 +243,7 @@ public class GpuFrequencyFragment extends Fragment {
         title.setTextAlignment(View.TEXT_ALIGNMENT_CENTER);
         title.setTypeface(null, android.graphics.Typeface.BOLD);
         requireContext().getTheme().resolveAttribute(
-            com.google.android.material.R.attr.colorOnErrorContainer, typedValue, true);
+                com.google.android.material.R.attr.colorOnErrorContainer, typedValue, true);
         title.setTextColor(typedValue.data);
         LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -253,7 +258,7 @@ public class GpuFrequencyFragment extends Fragment {
         message.setTextAlignment(View.TEXT_ALIGNMENT_CENTER);
         message.setAlpha(0.85f);
         requireContext().getTheme().resolveAttribute(
-            com.google.android.material.R.attr.colorOnErrorContainer, typedValue, true);
+                com.google.android.material.R.attr.colorOnErrorContainer, typedValue, true);
         message.setTextColor(typedValue.data);
         LinearLayout.LayoutParams messageParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -320,9 +325,133 @@ public class GpuFrequencyFragment extends Fragment {
                     showErrorState(activity);
                 }
             }
+
+            @Override
+            public void onSelectionRequired(int recommendedIndex) {
+                // Keep listener attached? No, we will re-attach or use a callback in adapter?
+                // Actually Selection State is intermediate. Listener likely needs to stay
+                // attached
+                // IF we expect "onPrepared" to fire later.
+                // The new flow: onSelectionRequired -> show UI -> User Click ->
+                // KonaBessCore.chooseTarget -> MainActivity.notifyPreparationSuccess ->
+                // onPrepared.
+                // So YES, we want onPrepared to fire.
+                // But MainActivity.notifyPreparationSuccess iterates listeners and clears them.
+                // Wait.
+                // If I clear listener in onSelectionRequired, I won't get onPrepared.
+                // But `MainActivity` clears listeners before calling callbacks?
+                // Step 441 changes:
+                // notifyPreparationSelection DOES NOT CLEAR listeners.
+                // notifyPreparationSuccess DOES CLEAR.
+                // So listener needs to persist.
+
+                // So do NOT set preparationListener = null here.
+
+                if (!isAdded()) {
+                    return;
+                }
+                MainActivity activity = (MainActivity) getActivity();
+                if (activity != null) {
+                    showSelectionState(activity, recommendedIndex);
+                }
+            }
         };
 
         activity.ensureDevicePrepared(preparationListener);
+    }
+
+    private void showSelectionState(MainActivity activity, int recommendedIndex) {
+        contentContainer.removeAllViews();
+        contentContainer.setGravity(Gravity.CENTER);
+
+        // Create a modern Material You card
+        MaterialCardView card = new MaterialCardView(requireContext());
+        card.setCardElevation(12);
+        card.setRadius(28);
+        int cardPadding = 56;
+        card.setContentPadding(cardPadding, cardPadding, cardPadding, cardPadding);
+
+        // Get theme color for card background
+        TypedValue typedValue = new TypedValue();
+        requireContext().getTheme().resolveAttribute(
+                com.google.android.material.R.attr.colorPrimaryContainer, typedValue, true);
+        card.setCardBackgroundColor(typedValue.data);
+
+        LinearLayout cardContent = new LinearLayout(requireContext());
+        cardContent.setOrientation(LinearLayout.VERTICAL);
+        cardContent.setGravity(Gravity.CENTER);
+
+        // Add icon
+        ImageView icon = new ImageView(requireContext());
+        icon.setImageResource(R.drawable.ic_developer_board);
+        requireContext().getTheme().resolveAttribute(
+                com.google.android.material.R.attr.colorPrimary, typedValue, true);
+        icon.setColorFilter(typedValue.data);
+        LinearLayout.LayoutParams iconParams = new LinearLayout.LayoutParams(
+                140, 140);
+        iconParams.setMargins(0, 0, 0, 40);
+        cardContent.addView(icon, iconParams);
+
+        // Add title
+        TextView title = new TextView(requireContext());
+        title.setText(R.string.title_select_chipset);
+        title.setTextSize(24);
+        title.setTextAlignment(View.TEXT_ALIGNMENT_CENTER);
+        title.setTypeface(null, android.graphics.Typeface.BOLD);
+        requireContext().getTheme().resolveAttribute(
+                com.google.android.material.R.attr.colorOnPrimaryContainer, typedValue, true);
+        title.setTextColor(typedValue.data);
+        LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT);
+        titleParams.setMargins(0, 0, 0, 20);
+        cardContent.addView(title, titleParams);
+
+        // Add description message
+        TextView message = new TextView(requireContext());
+        message.setText("Multiple chipsets found. Please select one.");
+        message.setTextSize(14);
+        message.setTextAlignment(View.TEXT_ALIGNMENT_CENTER);
+        message.setAlpha(0.85f);
+        requireContext().getTheme().resolveAttribute(
+                com.google.android.material.R.attr.colorOnPrimaryContainer, typedValue, true);
+        message.setTextColor(typedValue.data);
+        LinearLayout.LayoutParams messageParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT);
+        messageParams.setMargins(0, 0, 0, 40);
+        cardContent.addView(message, messageParams);
+
+        // Add RecyclerView for list
+        RecyclerView recyclerView = new RecyclerView(requireContext());
+        recyclerView.setLayoutManager(new LinearLayoutManager(requireContext()));
+        recyclerView.setOverScrollMode(View.OVER_SCROLL_NEVER);
+
+        ChipsetSelectorAdapter adapter = new ChipsetSelectorAdapter(
+                KonaBessCore.dtbs,
+                activity,
+                recommendedIndex,
+                dtb -> {
+                    KonaBessCore.chooseTarget(dtb, activity);
+                    activity.notifyPreparationSuccess();
+                });
+        recyclerView.setAdapter(adapter);
+
+        LinearLayout.LayoutParams recyclerParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT);
+        // Limit height if needed? Or let it expand content container is vertical.
+        // But Card is inside contentContainer.
+        cardContent.addView(recyclerView, recyclerParams);
+
+        card.addView(cardContent);
+
+        // Add card to container with margin
+        LinearLayout.LayoutParams cardParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT);
+        cardParams.setMargins(40, 0, 40, 0);
+        contentContainer.addView(card, cardParams);
     }
 
     private void reloadIfNeeded() {
@@ -336,4 +465,3 @@ public class GpuFrequencyFragment extends Fragment {
         loadContent();
     }
 }
-
