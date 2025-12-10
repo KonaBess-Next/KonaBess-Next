@@ -1,14 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Material You Dynamic Colors - Light Theme -->
-    <color name="md_theme_light_primary">#6750A4</color>
+    <!-- Agency Premium Palette (Deep Space & Electric Violet) -->
+    
+    <!-- Light Theme -->
+    <color name="md_theme_light_primary">#4F378B</color> <!-- Deep Indigo -->
     <color name="md_theme_light_onPrimary">#FFFFFF</color>
     <color name="md_theme_light_primaryContainer">#EADDFF</color>
     <color name="md_theme_light_onPrimaryContainer">#21005D</color>
     
-    <color name="md_theme_light_secondary">#625B71</color>
+    <color name="md_theme_light_secondary">#5F5C71</color> <!-- Slate -->
     <color name="md_theme_light_onSecondary">#FFFFFF</color>
-    <color name="md_theme_light_secondaryContainer">#E8DEF8</color>
+    <color name="md_theme_light_secondaryContainer">#E5DFF9</color>
     <color name="md_theme_light_onSecondaryContainer">#1D192B</color>
     
     <color name="md_theme_light_tertiary">#7D5260</color>
@@ -21,17 +23,24 @@
     <color name="md_theme_light_errorContainer">#F9DEDC</color>
     <color name="md_theme_light_onErrorContainer">#410E0B</color>
     
-    <color name="md_theme_light_background">#FFFBFE</color>
-    <color name="md_theme_light_onBackground">#1C1B1F</color>
-    <color name="md_theme_light_surface">#FFFBFE</color>
-    <color name="md_theme_light_onSurface">#1C1B1F</color>
+    <color name="md_theme_light_background">#FEF7FF</color>
+    <color name="md_theme_light_onBackground">#1D1B20</color>
+    
+    <!-- Surface Tones for "Flat" Design -->
+    <color name="md_theme_light_surface">#FEF7FF</color>
+    <color name="md_theme_light_onSurface">#1D1B20</color>
     <color name="md_theme_light_surfaceVariant">#E7E0EC</color>
     <color name="md_theme_light_onSurfaceVariant">#49454F</color>
-    
     <color name="md_theme_light_outline">#79747E</color>
     
-    <!-- Material You Dynamic Colors - Dark Theme -->
-    <color name="md_theme_dark_primary">#D0BCFF</color>
+    <!-- Surface Containers (High/Low for cards) -->
+    <color name="md_theme_light_surfaceContainerLow">#F7F2FA</color>
+    <color name="md_theme_light_surfaceContainer">#F3EDF7</color>
+    <color name="md_theme_light_surfaceContainerHigh">#ECE6F0</color>
+    
+    
+    <!-- Dark Theme (Rich Charcoal, NOT just black/grey) -->
+    <color name="md_theme_dark_primary">#D0BCFF</color> <!-- Electric Lavender -->
     <color name="md_theme_dark_onPrimary">#381E72</color>
     <color name="md_theme_dark_primaryContainer">#4F378B</color>
     <color name="md_theme_dark_onPrimaryContainer">#EADDFF</color>
@@ -51,14 +60,20 @@
     <color name="md_theme_dark_errorContainer">#8C1D18</color>
     <color name="md_theme_dark_onErrorContainer">#F9DEDC</color>
     
-    <color name="md_theme_dark_background">#1C1B1F</color>
+    <color name="md_theme_dark_background">#141218</color> <!-- Deep Charcoal -->
     <color name="md_theme_dark_onBackground">#E6E1E5</color>
-    <color name="md_theme_dark_surface">#1C1B1F</color>
+
+    <!-- Surface Tones for Dark Mode -->
+    <color name="md_theme_dark_surface">#141218</color>
     <color name="md_theme_dark_onSurface">#E6E1E5</color>
     <color name="md_theme_dark_surfaceVariant">#49454F</color>
     <color name="md_theme_dark_onSurfaceVariant">#CAC4D0</color>
-    
     <color name="md_theme_dark_outline">#938F99</color>
+    
+    <!-- Surface Containers (Crucial for flat cards in dark mode) -->
+    <color name="md_theme_dark_surfaceContainerLow">#1D1B20</color>
+    <color name="md_theme_dark_surfaceContainer">#211F26</color>
+    <color name="md_theme_dark_surfaceContainerHigh">#2B2930</color>
     
     <color name="icon_background">#FFFFFFFF</color>
 </resources>

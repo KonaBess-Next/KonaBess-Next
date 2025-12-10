@@ -6,10 +6,12 @@
     android:layout_height="wrap_content"
     android:layout_marginHorizontal="16dp"
     android:layout_marginTop="8dp"
+    android:layout_marginBottom="8dp"
     android:clickable="true"
     android:focusable="true"
-    app:cardCornerRadius="20dp"
-    app:cardElevation="2dp"
+    app:cardCornerRadius="24dp"
+    app:cardElevation="0dp"
+    app:cardBackgroundColor="?attr/colorSurfaceContainerHigh"
     app:strokeWidth="0dp">
 
     <LinearLayout
@@ -24,7 +26,7 @@
             android:id="@+id/icon_background"
             android:layout_width="56dp"
             android:layout_height="56dp"
-            app:cardCornerRadius="16dp"
+            app:cardCornerRadius="18dp"
             app:cardElevation="0dp"
             app:cardBackgroundColor="?attr/colorPrimaryContainer">
 
@@ -32,7 +34,7 @@
                 android:id="@+id/icon"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
-                android:padding="12dp"
+                android:padding="14dp"
                 android:tint="?attr/colorOnPrimaryContainer"
                 android:contentDescription="@string/settings" />
 
@@ -44,13 +46,13 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:orientation="vertical"
-            android:layout_marginStart="16dp">
+            android:layout_marginStart="20dp">
 
             <TextView
                 android:id="@+id/title"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
+                android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
                 android:textStyle="bold"
                 android:textColor="?attr/colorOnSurface" />
 
@@ -58,10 +60,10 @@
                 android:id="@+id/description"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:textAppearance="@style/TextAppearance.Material3.BodySmall"
+                android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
                 android:textColor="?attr/colorOnSurfaceVariant"
                 android:layout_marginTop="2dp"
-                android:alpha="0.8" />
+                android:alpha="0.85" />
 
             <TextView
                 android:id="@+id/value"
@@ -74,6 +76,14 @@
 
         </LinearLayout>
 
+        <!-- Switch (Hidden by default) -->
+        <com.google.android.material.materialswitch.MaterialSwitch
+            android:id="@+id/switch_widget"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:visibility="gone"
+            android:layout_marginStart="12dp"/>
+
         <!-- Chevron -->
         <ImageView
             android:id="@+id/chevron"
@@ -83,7 +93,7 @@
             android:contentDescription="@string/details"
             android:layout_marginStart="12dp"
             android:tint="?attr/colorOnSurfaceVariant"
-            android:alpha="0.5" />
+            android:alpha="0.4" />
 
     </LinearLayout>
 

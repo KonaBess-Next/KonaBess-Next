@@ -5,25 +5,27 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:layout_marginHorizontal="16dp"
-    android:layout_marginTop="12dp"
+    android:layout_marginTop="8dp"
+    android:layout_marginBottom="8dp"
     android:clickable="true"
     android:focusable="true"
-    app:cardCornerRadius="18dp"
-    app:cardElevation="2dp"
+    app:cardCornerRadius="24dp"
+    app:cardElevation="0dp"
+    app:cardBackgroundColor="?attr/colorSurfaceContainerHigh"
     app:strokeWidth="0dp">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:padding="18dp"
+        android:padding="20dp"
         android:gravity="center_vertical">
 
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/icon_background"
-            android:layout_width="52dp"
-            android:layout_height="52dp"
-            app:cardCornerRadius="14dp"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            app:cardCornerRadius="18dp"
             app:cardElevation="0dp"
             app:cardBackgroundColor="?attr/colorPrimaryContainer">
 
@@ -31,7 +33,7 @@
                 android:id="@+id/icon"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
-                android:padding="12dp"
+                android:padding="14dp"
                 android:tint="?attr/colorOnPrimaryContainer"
                 android:contentDescription="@string/app_name" />
 
@@ -42,13 +44,13 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:orientation="vertical"
-            android:layout_marginStart="16dp">
+            android:layout_marginStart="20dp">
 
             <TextView
                 android:id="@+id/title"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
+                android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
                 android:textStyle="bold"
                 android:textColor="?attr/colorOnSurface"
                 android:maxLines="2"
@@ -58,7 +60,7 @@
                 android:id="@+id/description"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:textAppearance="@style/TextAppearance.Material3.BodySmall"
+                android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
                 android:textColor="?attr/colorOnSurfaceVariant"
                 android:layout_marginTop="4dp"
                 android:alpha="0.85"
@@ -69,12 +71,12 @@
 
         <ImageView
             android:id="@+id/chevron"
-            android:layout_width="22dp"
-            android:layout_height="22dp"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
             android:layout_marginStart="12dp"
             android:src="@drawable/ic_chevron_right"
             android:tint="?attr/colorOnSurfaceVariant"
-            android:alpha="0.55"
+            android:alpha="0.4"
             android:contentDescription="@string/details" />
 
     </LinearLayout>

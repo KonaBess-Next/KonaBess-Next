@@ -572,29 +572,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void applyColorPalette() {
-        android.content.SharedPreferences prefs = getSharedPreferences("KonaBessSettings", Context.MODE_PRIVATE);
-        int palette = prefs.getInt("color_palette", 0);
-
-        switch (palette) {
-            case 1: // Purple & Teal
-                setTheme(R.style.Theme_KonaBess_Purple);
-                break;
-            case 2: // Blue & Orange
-                setTheme(R.style.Theme_KonaBess_Blue);
-                break;
-            case 3: // Green & Red
-                setTheme(R.style.Theme_KonaBess_Green);
-                break;
-            case 4: // Pink & Cyan
-                setTheme(R.style.Theme_KonaBess_Pink);
-                break;
-            case 5: // Pure AMOLED
-                setTheme(R.style.Theme_KonaBess_AMOLED);
-                break;
-            default: // Dynamic (Material You)
-                setTheme(R.style.Theme_KonaBess);
-                break;
-        }
+        SettingsActivity.applyThemeFromSettings(this);
     }
 
     public static abstract class onBackPressedListener {
