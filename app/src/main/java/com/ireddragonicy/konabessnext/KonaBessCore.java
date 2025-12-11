@@ -309,13 +309,34 @@ public class KonaBessCore {
         return sb.toString();
     }
 
-    // DTB/DTS conversion
+    // ========================================================================
+    // DTB/DTS Conversion (OPTIMIZED: BATCHED SHELL EXECUTION)
+    // ========================================================================
+    // On devices with 100+ DTBs, executing shell commands in a loop causes
+    // significant latency (10-50ms overhead per fork). These methods batch
+    // all commands into a single shell execution for optimal performance.
+
     public static void bootImage2dts(Context context) throws IOException {
         unpackBootImage(context);
         dtb_num = dtbSplit(context);
 
+        // OPTIMIZATION: Batch all DTB->DTS conversions into single shell execution
+        // Instead of: for (i) { execShForOutput("./dtc ...") } which forks 100+ times
+        // We now: execShForOutput("cd dir && ./dtc 0 && ./dtc 1 && ... && ./dtc N")
+        StringBuilder batchCmd = new StringBuilder();
+        batchCmd.append("cd ").append(filesDir);
+
         for (int i = 0; i < dtb_num; i++) {
-            convertDtbToDts(context, i);
+            batchCmd.append(" && ./dtc -I dtb -O dts ")
+                    .append(i).append(".dtb -o ").append(i).append(".dts")
+                    .append(" && rm -f ").append(i).append(".dtb");
+        }
+
+        List<String> output = RootHelper.execShForOutput(batchCmd.toString());
+
+        // Verify at least the last DTS file was created (batch succeeded)
+        if (dtb_num > 0 && !new File(filesDir, (dtb_num - 1) + ".dts").exists()) {
+            throw new IOException("DTB to DTS batch conversion failed: " + String.join("\n", output));
         }
     }
 
@@ -403,62 +424,41 @@ public class KonaBessCore {
         }
     }
 
-    private static void convertDtbToDts(Context context, int index) throws IOException {
-        executeConversion(
-                String.format("./dtc -I dtb -O dts %d.dtb -o %d.dts && rm -f %d.dtb",
-                        index, index, index),
-                index + ".dts");
-    }
-
-    private static void convertDtsToDtb(Context context, int index) throws IOException {
-        executeConversion(
-                String.format("./dtc -I dts -O dtb %d.dts -o %d.dtb", index, index),
-                index + ".dtb");
-    }
-
-    private static void executeConversion(String command, String outputFile) throws IOException {
-        List<String> output = RootHelper.execShForOutput(
-                String.format("cd %s && %s", filesDir, command));
-
-        if (!new File(filesDir, outputFile).exists()) {
-            throw new IOException("Conversion failed: " + String.join("\n", output));
-        }
-    }
-
     public static void dts2bootImage(Context context) throws IOException {
+        // OPTIMIZATION: Batch DTS->DTB conversion, cat, copy, and repack into single
+        // shell execution
+        // This reduces 100+ process forks to exactly 1, eliminating shell context
+        // initialization overhead
+        StringBuilder batchCmd = new StringBuilder();
+        batchCmd.append("cd ").append(filesDir);
+
+        // Step 1: Convert all DTS files to DTB (batched)
         for (int i = 0; i < dtb_num; i++) {
-            convertDtsToDtb(context, i);
+            batchCmd.append(" && ./dtc -I dts -O dtb ")
+                    .append(i).append(".dts -o ").append(i).append(".dtb");
         }
 
-        linkDtbs(context);
-        repackBootImage(context);
-    }
-
-    private static void linkDtbs(Context context) throws IOException {
-        File outputFile = new File(filesDir,
-                dtb_type == DtbType.KERNEL_DTB ? "kernel_dtb" : "dtb");
-
-        try (FileOutputStream out = new FileOutputStream(outputFile)) {
-            for (int i = 0; i < dtb_num; i++) {
-                Files.copy(Paths.get(filesDir, i + ".dtb"), out);
-            }
+        // Step 2: Concatenate all DTB files into single output file
+        String outputFilename = (dtb_type == DtbType.KERNEL_DTB) ? "kernel_dtb" : "dtb";
+        batchCmd.append(" && cat");
+        for (int i = 0; i < dtb_num; i++) {
+            batchCmd.append(" ").append(i).append(".dtb");
         }
-    }
+        batchCmd.append(" > ").append(outputFilename);
 
-    private static void repackBootImage(Context context) throws IOException {
-        List<String> commands = new ArrayList<>();
-        commands.add("cd " + filesDir);
-
+        // Step 3: Copy dtb to kernel_dtb if DtbType.BOTH
         if (dtb_type == DtbType.BOTH) {
-            commands.add("cp dtb kernel_dtb");
+            batchCmd.append(" && cp dtb kernel_dtb");
         }
 
-        commands.add("./magiskboot repack boot.img boot_new.img");
+        // Step 4: Repack boot image
+        batchCmd.append(" && ./magiskboot repack boot.img boot_new.img");
 
-        List<String> output = RootHelper.execShForOutput(commands.toArray(new String[0]));
+        List<String> output = RootHelper.execShForOutput(batchCmd.toString());
 
+        // Verify boot_new.img was created
         if (!new File(filesDir, "boot_new.img").exists()) {
-            throw new IOException("Repack failed: " + String.join("\n", output));
+            throw new IOException("DTS to boot image conversion failed: " + String.join("\n", output));
         }
     }
 
