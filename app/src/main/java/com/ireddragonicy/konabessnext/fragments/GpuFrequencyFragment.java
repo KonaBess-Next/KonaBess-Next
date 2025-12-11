@@ -87,12 +87,68 @@ public class GpuFrequencyFragment extends Fragment {
             return;
         }
 
+        // Try to auto-restore last chipset if DTS file still exists
+        if (KonaBessCore.tryRestoreLastChipset(activity)) {
+            showGpuEditor(activity);
+            return;
+        }
+
+        // If there's a saved chipset preference, auto-start preparation
+        if (KonaBessCore.hasLastChipset(activity) && !activity.isDevicePreparationRunning()) {
+            // Auto-trigger device preparation to restore previous state
+            autoStartPreparation(activity);
+            return;
+        }
+
         if (activity.isDevicePreparationRunning()) {
             showLoadingState();
             attachPreparationListener(activity);
         } else {
             showPromptState(activity);
         }
+    }
+
+    private void autoStartPreparation(MainActivity activity) {
+        // Show loading and attach listener for auto-selection
+        showLoadingState();
+
+        // Use existing ensureDevicePrepared method
+        activity.ensureDevicePrepared(new MainActivity.DevicePreparationListener() {
+            @Override
+            public void onPrepared() {
+                if (!isAdded())
+                    return;
+                activity.runOnUiThread(() -> showGpuEditor(activity));
+            }
+
+            @Override
+            public void onFailed() {
+                if (!isAdded())
+                    return;
+                // Clear saved preference since preparation failed
+                KonaBessCore.clearLastChipset(activity);
+                activity.runOnUiThread(() -> showErrorState(activity));
+            }
+
+            @Override
+            public void onSelectionRequired(int recommendedIndex) {
+                if (!isAdded())
+                    return;
+                // Auto-select saved chipset
+                int savedDtbId = KonaBessCore.getLastDtbId(activity);
+                if (savedDtbId >= 0 && KonaBessCore.dtbs != null) {
+                    for (KonaBessCore.Dtb dtb : KonaBessCore.dtbs) {
+                        if (dtb.id == savedDtbId) {
+                            KonaBessCore.chooseTarget(dtb, activity);
+                            activity.notifyPreparationSuccess();
+                            return;
+                        }
+                    }
+                }
+                // Fallback: show selection UI
+                activity.runOnUiThread(() -> showSelectionState(activity, recommendedIndex));
+            }
+        });
     }
 
     private void showGpuEditor(MainActivity activity) {

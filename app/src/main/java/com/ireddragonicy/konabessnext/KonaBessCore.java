@@ -18,6 +18,8 @@ import java.util.stream.Collectors;
 import com.ireddragonicy.konabessnext.utils.AssetsUtil;
 import com.ireddragonicy.konabessnext.utils.RootHelper;
 
+import android.content.SharedPreferences;
+
 public class KonaBessCore {
     // Constants
     private static final String[] REQUIRED_BINARIES = { "dtc", "magiskboot" };
@@ -467,6 +469,78 @@ public class KonaBessCore {
         ChipInfo.which = dtb.type;
         currentDtb = dtb;
         prepared = true;
+
+        // Save selected chipset for auto-load on next app launch
+        saveLastChipset(activity, dtb.id, dtb.type.name());
+    }
+
+    // ========================================================================
+    // Chipset Preference Management (for auto-load feature)
+    // ========================================================================
+
+    private static final String PREFS_NAME = "KonaBessChipset";
+    private static final String KEY_LAST_DTB_ID = "last_dtb_id";
+    private static final String KEY_LAST_CHIP_TYPE = "last_chip_type";
+
+    private static void saveLastChipset(Activity activity, int dtbId, String chipType) {
+        SharedPreferences prefs = activity.getSharedPreferences(PREFS_NAME, Activity.MODE_PRIVATE);
+        prefs.edit()
+                .putInt(KEY_LAST_DTB_ID, dtbId)
+                .putString(KEY_LAST_CHIP_TYPE, chipType)
+                .apply();
+    }
+
+    public static boolean hasLastChipset(android.content.Context context) {
+        SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, android.content.Context.MODE_PRIVATE);
+        return prefs.contains(KEY_LAST_DTB_ID) && prefs.contains(KEY_LAST_CHIP_TYPE);
+    }
+
+    public static int getLastDtbId(android.content.Context context) {
+        SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, android.content.Context.MODE_PRIVATE);
+        return prefs.getInt(KEY_LAST_DTB_ID, -1);
+    }
+
+    public static String getLastChipType(android.content.Context context) {
+        SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, android.content.Context.MODE_PRIVATE);
+        return prefs.getString(KEY_LAST_CHIP_TYPE, null);
+    }
+
+    public static void clearLastChipset(android.content.Context context) {
+        SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, android.content.Context.MODE_PRIVATE);
+        prefs.edit().clear().apply();
+    }
+
+    // Try to restore last chipset automatically (called on app launch)
+    public static boolean tryRestoreLastChipset(Activity activity) {
+        if (!hasLastChipset(activity)) {
+            return false;
+        }
+
+        int dtbId = getLastDtbId(activity);
+        String chipTypeName = getLastChipType(activity);
+
+        if (dtbId < 0 || chipTypeName == null) {
+            return false;
+        }
+
+        try {
+            ChipInfo.type chipType = ChipInfo.type.valueOf(chipTypeName);
+            filesDir = activity.getFilesDir().getAbsolutePath();
+            String dtsFile = filesDir + "/" + dtbId + ".dts";
+
+            // Check if DTS file exists (device was previously prepared)
+            if (new java.io.File(dtsFile).exists()) {
+                dts_path = dtsFile;
+                ChipInfo.which = chipType;
+                currentDtb = new Dtb(dtbId, chipType);
+                prepared = true;
+                return true;
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        return false;
     }
 
     public static boolean isPrepared() {
