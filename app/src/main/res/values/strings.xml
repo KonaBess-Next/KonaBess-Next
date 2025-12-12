@@ -258,4 +258,9 @@
     <string name="saving_file">Saving file…</string>
     <string name="copy_all">Copy All</string>
     <string name="text_copied_to_clipboard">Text copied to clipboard</string>
+    <string name="search_previous">Previous match</string>
+    <string name="search_next">Next match</string>
+    <string name="close">Close</string>
+    <string name="search_result_format">%1$d of %2$d</string>
+    <string name="not_found">Not found</string>
 </resources>

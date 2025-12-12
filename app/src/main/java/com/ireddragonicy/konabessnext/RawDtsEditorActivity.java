@@ -6,11 +6,13 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.text.Editable;
-import android.text.InputType;
 import android.text.TextWatcher;
 import android.view.MenuItem;
 import android.view.View;
+import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
+import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -31,11 +33,9 @@ import java.io.FileReader;
 import java.io.FileWriter;
 
 import com.ireddragonicy.konabessnext.utils.LocaleUtil;
-import com.ireddragonicy.konabessnext.utils.TextEditorStateManager;
 
 /**
- * Raw DTS text editor with natural multi-line text selection.
- * Uses single EditText for code-editor-like selection behavior.
+ * Raw DTS text editor with syntax highlighting and search navigation.
  */
 public class RawDtsEditorActivity extends AppCompatActivity {
 
@@ -44,13 +44,18 @@ public class RawDtsEditorActivity extends AppCompatActivity {
     private TextView lineCountText;
     private MaterialToolbar toolbar;
 
-    // Removed local stateManager - using editor's internal one
+    // Search bar views
+    private LinearLayout searchBar;
+    private EditText searchInput;
+    private TextView searchResultCount;
+    private ImageButton btnSearchPrev;
+    private ImageButton btnSearchNext;
+    private ImageButton btnSearchClose;
+
     private boolean hasUnsavedChanges = false;
-    private boolean isUpdatingLineNumbers = false;
 
     // Search state
-    private String lastSearchQuery = "";
-    private int lastSearchPosition = -1;
+    private String currentSearchQuery = "";
 
     @Override
     protected void attachBaseContext(android.content.Context newBase) {
@@ -72,12 +77,23 @@ public class RawDtsEditorActivity extends AppCompatActivity {
         loadingState = findViewById(R.id.editor_loading_state);
         lineCountText = findViewById(R.id.line_count_text);
 
+        // Initialize search bar views
+        searchBar = findViewById(R.id.search_bar);
+        searchInput = findViewById(R.id.search_input);
+        searchResultCount = findViewById(R.id.search_result_count);
+        btnSearchPrev = findViewById(R.id.btn_search_prev);
+        btnSearchNext = findViewById(R.id.btn_search_next);
+        btnSearchClose = findViewById(R.id.btn_search_close);
+
         // Setup toolbar
         toolbar.setNavigationOnClickListener(v -> handleBackPress());
         toolbar.setOnMenuItemClickListener(this::onMenuItemClick);
 
         // Setup editor
         setupEditor();
+
+        // Setup search bar
+        setupSearchBar();
 
         // Setup back press handler
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
@@ -95,8 +111,109 @@ public class RawDtsEditorActivity extends AppCompatActivity {
         editorContent.setOnTextChangedListener(() -> {
             hasUnsavedChanges = true;
             updateLineCount();
-            updateMenuState(); // Update undo/redo buttons
+            updateMenuState();
         });
+    }
+
+    private void setupSearchBar() {
+        // Search text change listener - search as you type
+        searchInput.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {
+                currentSearchQuery = s.toString();
+                if (!currentSearchQuery.isEmpty()) {
+                    // Reset search position and find first match
+                    editorContent.clearSearch();
+                    boolean found = editorContent.searchAndSelect(currentSearchQuery);
+                    updateSearchResultDisplay(found);
+                } else {
+                    editorContent.clearSearch();
+                    searchResultCount.setVisibility(View.GONE);
+                }
+            }
+        });
+
+        // Handle Enter key in search input
+        searchInput.setOnEditorActionListener((v, actionId, event) -> {
+            if (actionId == EditorInfo.IME_ACTION_SEARCH) {
+                searchNext();
+                return true;
+            }
+            return false;
+        });
+
+        // Search previous button
+        btnSearchPrev.setOnClickListener(v -> searchPrevious());
+
+        // Search next button
+        btnSearchNext.setOnClickListener(v -> searchNext());
+
+        // Close search bar
+        btnSearchClose.setOnClickListener(v -> hideSearchBar());
+    }
+
+    private void showSearchBar() {
+        searchBar.setVisibility(View.VISIBLE);
+        searchInput.requestFocus();
+
+        // Show keyboard
+        InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+        if (imm != null) {
+            imm.showSoftInput(searchInput, InputMethodManager.SHOW_IMPLICIT);
+        }
+
+        // Pre-fill with previous search query
+        if (!currentSearchQuery.isEmpty()) {
+            searchInput.setText(currentSearchQuery);
+            searchInput.selectAll();
+        }
+    }
+
+    private void hideSearchBar() {
+        searchBar.setVisibility(View.GONE);
+        editorContent.clearSearch();
+        searchResultCount.setVisibility(View.GONE);
+
+        // Hide keyboard
+        InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+        if (imm != null) {
+            imm.hideSoftInputFromWindow(searchInput.getWindowToken(), 0);
+        }
+
+        // Return focus to editor
+        editorContent.requestFocus();
+    }
+
+    private void searchNext() {
+        if (!currentSearchQuery.isEmpty()) {
+            boolean found = editorContent.searchAndSelect(currentSearchQuery);
+            updateSearchResultDisplay(found);
+        }
+    }
+
+    private void searchPrevious() {
+        if (!currentSearchQuery.isEmpty()) {
+            boolean found = editorContent.searchPrevious(currentSearchQuery);
+            updateSearchResultDisplay(found);
+        }
+    }
+
+    private void updateSearchResultDisplay(boolean found) {
+        searchResultCount.setVisibility(View.VISIBLE);
+        if (found) {
+            searchResultCount.setText(null); // Clear - we don't have total count
+            searchResultCount.setVisibility(View.GONE);
+        } else {
+            searchResultCount.setText(R.string.not_found);
+        }
     }
 
     private void loadFile() {
@@ -121,8 +238,6 @@ public class RawDtsEditorActivity extends AppCompatActivity {
 
                 runOnUiThread(() -> {
                     editorContent.setText(finalContent);
-
-                    // Internal state manager automatically handles initial state
 
                     updateLineCount();
                     updateMenuState();
@@ -180,8 +295,6 @@ public class RawDtsEditorActivity extends AppCompatActivity {
         }).start();
     }
 
-    // Line numbers are handled in SimpleEditorView
-
     private void updateLineCount() {
         int lineCount = editorContent.getLines().size();
         lineCountText.setText(getString(R.string.line_count, lineCount));
@@ -200,7 +313,7 @@ public class RawDtsEditorActivity extends AppCompatActivity {
             performRedo();
             return true;
         } else if (id == R.id.action_search) {
-            showSearchDialog();
+            showSearchBar();
             return true;
         } else if (id == R.id.action_copy_all) {
             copyAllToClipboard();
@@ -221,34 +334,6 @@ public class RawDtsEditorActivity extends AppCompatActivity {
         if (editorContent.canRedo()) {
             editorContent.redo();
             updateMenuState();
-        }
-    }
-
-    private void showSearchDialog() {
-        EditText searchInput = new EditText(this);
-        searchInput.setHint(R.string.search_hint);
-        searchInput.setInputType(InputType.TYPE_CLASS_TEXT);
-        searchInput.setText(lastSearchQuery);
-        searchInput.setPadding(48, 32, 48, 32);
-
-        new MaterialAlertDialogBuilder(this)
-                .setTitle(R.string.search)
-                .setView(searchInput)
-                .setPositiveButton(R.string.search, (dialog, which) -> {
-                    String query = searchInput.getText().toString();
-                    if (!query.isEmpty()) {
-                        performSearch(query);
-                    }
-                })
-                .setNegativeButton(R.string.cancel, null)
-                .show();
-    }
-
-    private void performSearch(String query) {
-        lastSearchQuery = query;
-        boolean found = editorContent.searchAndSelect(query);
-        if (!found) {
-            Toast.makeText(this, "Text not found", Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -284,6 +369,12 @@ public class RawDtsEditorActivity extends AppCompatActivity {
     }
 
     private void handleBackPress() {
+        // Close search bar first if visible
+        if (searchBar.getVisibility() == View.VISIBLE) {
+            hideSearchBar();
+            return;
+        }
+
         if (hasUnsavedChanges) {
             new MaterialAlertDialogBuilder(this)
                     .setTitle(R.string.unsaved_changes_title)

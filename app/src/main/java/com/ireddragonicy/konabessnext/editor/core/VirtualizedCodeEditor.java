@@ -31,6 +31,10 @@ import android.os.Build;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.ireddragonicy.konabessnext.editor.highlight.DtsHighlighter;
+import com.ireddragonicy.konabessnext.editor.highlight.EditorColorScheme;
+import com.ireddragonicy.konabessnext.editor.highlight.Span;
+
 /**
  * High-performance virtualized code editor.
  * Only renders visible lines for smooth scrolling with large files.
@@ -66,6 +70,10 @@ public class VirtualizedCodeEditor extends View {
     private Paint selectionPaint;
     private Paint currentLinePaint;
     private Paint separatorPaint;
+
+    // Syntax highlighter
+    private DtsHighlighter highlighter;
+    private EditorColorScheme colorScheme;
 
     // Cached values for performance
     private float textBaseline;
@@ -237,6 +245,10 @@ public class VirtualizedCodeEditor extends View {
         // Separator paint
         separatorPaint = new Paint();
         separatorPaint.setColor(0xFF2A2A2A);
+
+        // Initialize syntax highlighter
+        colorScheme = EditorColorScheme.getDefault();
+        highlighter = new DtsHighlighter(colorScheme);
         separatorPaint.setStrokeWidth(1);
 
         // Scroller for fling
@@ -433,19 +445,36 @@ public class VirtualizedCodeEditor extends View {
             drawHandles(canvas, firstVisibleLine, lastVisibleLine);
         }
 
-        // Draw visible text lines
+        // Draw visible text lines with syntax highlighting
         for (int i = firstVisibleLine; i <= lastVisibleLine; i++) {
             if (i < lineCount) {
                 int y = i * lineHeight - scrollY;
                 StringBuilder line = document.getLine(i);
-                // Draw Text - use cached textBaseline
-                canvas.drawText(line, 0, line.length(), lineNumberWidth + TEXT_PADDING_LEFT - scrollX, y + textBaseline,
-                        textPaint);
+                float baseX = lineNumberWidth + TEXT_PADDING_LEFT - scrollX;
+                float textY = y + textBaseline;
+
+                // Get syntax highlighting spans for this line
+                List<Span> spans = highlighter.tokenize(line);
+
+                if (spans.isEmpty()) {
+                    // No spans - draw plain text
+                    textPaint.setColor(colorScheme.textColor);
+                    canvas.drawText(line, 0, line.length(), baseX, textY, textPaint);
+                } else {
+                    // Draw each span with its color
+                    for (Span span : spans) {
+                        if (span.end > span.start && span.end <= line.length()) {
+                            textPaint.setColor(span.color);
+                            float spanX = baseX + span.start * charWidth;
+                            canvas.drawText(line, span.start, span.end, spanX, textY, textPaint);
+                        }
+                    }
+                }
 
                 // Draw Cursor
                 if (cursorVisible && !hasSelection) {
                     if (i == cursorLine) {
-                        float cursorX = lineNumberWidth + TEXT_PADDING_LEFT - scrollX + (cursorColumn * charWidth);
+                        float cursorX = baseX + (cursorColumn * charWidth);
                         canvas.drawLine(cursorX, y, cursorX, y + lineHeight, cursorPaint);
                     }
                 }
@@ -1316,6 +1345,66 @@ public class VirtualizedCodeEditor extends View {
 
         lastSearchIndex = -1;
         return false;
+    }
+
+    /**
+     * Search for the previous occurrence of the query and select it.
+     * Wraps around to the end when reaching the beginning.
+     */
+    public boolean searchPrevious(String query) {
+        if (query == null || query.isEmpty())
+            return false;
+
+        String fullText = getText().toString();
+        int searchEnd = lastSearchIndex - 1;
+        if (searchEnd < 0)
+            searchEnd = fullText.length() - 1;
+
+        int index = fullText.lastIndexOf(query, searchEnd);
+        if (index == -1 && searchEnd < fullText.length() - 1) {
+            // Wrap around to end
+            index = fullText.lastIndexOf(query, fullText.length() - 1);
+        }
+
+        if (index != -1) {
+            lastSearchIndex = index;
+
+            int line = 0, col = 0, pos = 0;
+            int count = document.getLineCount();
+            for (int i = 0; i < count && pos <= index; i++) {
+                int lineLen = document.getLine(i).length() + 1;
+                if (pos + lineLen > index) {
+                    line = i;
+                    col = index - pos;
+                    break;
+                }
+                pos += lineLen;
+            }
+
+            // Select the found text
+            hasSelection = true;
+            selStartLine = line;
+            selStartCol = col;
+            selEndLine = line;
+            selEndCol = col + query.length();
+            cursorLine = line;
+            cursorColumn = col + query.length();
+
+            ensureCursorVisible();
+            normalizeSelection();
+            invalidate();
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Clear any search highlighting.
+     */
+    public void clearSearch() {
+        lastSearchIndex = -1;
+        clearSelection();
     }
 
     private void calculateSelection(float x, float y) {
