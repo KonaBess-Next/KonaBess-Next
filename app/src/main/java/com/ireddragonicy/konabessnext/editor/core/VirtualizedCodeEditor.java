@@ -49,14 +49,8 @@ public class VirtualizedCodeEditor extends View {
     // Undo/Redo Manager
     private final com.ireddragonicy.konabessnext.utils.TextEditorStateManager stateManager = new com.ireddragonicy.konabessnext.utils.TextEditorStateManager();
 
-    // Undo/Redo Batching
-    private enum ActionType {
-        NONE, INSERT, DELETE, COMPLEX
-    }
-
-    private ActionType lastUndoAction = ActionType.NONE;
-    private long lastUndoTime = 0;
-    private static final long UNDO_BATCH_WINDOW_MS = 1000;
+    // Undo/Redo Batching - REMOVED, now always snapshot before each edit
+    // StateManager handles deduplication automatically
 
     // Path for handle drawing reuse
     private final Path handlePath = new Path();
@@ -687,11 +681,6 @@ public class VirtualizedCodeEditor extends View {
         if (!isEnabled())
             return false;
 
-        // Reset undo batch on touch (cursor move)
-        if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
-            resetUndoBatch();
-        }
-
         if (gestureDetector.onTouchEvent(event)) {
             return true;
         }
@@ -1018,45 +1007,17 @@ public class VirtualizedCodeEditor extends View {
         invalidate();
     }
 
-    // Helper to snapshot current state with batching logic
-    private void snapshot(ActionType type) {
-        long now = System.currentTimeMillis();
-        boolean shouldSnapshot = false;
-
-        if (type == ActionType.COMPLEX) {
-            shouldSnapshot = true;
-        } else if (type != lastUndoAction) {
-            shouldSnapshot = true;
-        } else if (now - lastUndoTime > UNDO_BATCH_WINDOW_MS) {
-            shouldSnapshot = true;
-        }
-
-        if (shouldSnapshot) {
-            stateManager.snapshot(document.getLines());
-            lastUndoAction = type;
-        }
-
-        lastUndoTime = now;
-    }
-
-    private void resetUndoBatch() {
-        lastUndoAction = ActionType.NONE;
-    }
-
+    /**
+     * Take a snapshot of the current state for undo.
+     * StateManager automatically handles deduplication.
+     */
     private void snapshot() {
-        snapshot(ActionType.COMPLEX);
+        stateManager.snapshot(document.getLines());
     }
 
     private void insertText(String text) {
-        // Determine type
-        ActionType type = ActionType.INSERT;
-        if (text.length() > 1) {
-            type = ActionType.COMPLEX;
-        } else if (text.equals("\n")) {
-            type = ActionType.COMPLEX; // Newline always breaks batch
-        }
-
-        snapshot(type);
+        // Always snapshot before any edit
+        snapshot();
 
         document.insert(cursorLine, cursorColumn, text);
 
@@ -1079,8 +1040,8 @@ public class VirtualizedCodeEditor extends View {
         if (cursorLine >= document.getLineCount())
             return;
 
-        // Snapshot with DELETE type
-        snapshot(ActionType.DELETE);
+        // Always snapshot before any edit
+        snapshot();
 
         if (cursorColumn > 0) {
             document.deleteChar(cursorLine, cursorColumn);
@@ -1227,6 +1188,11 @@ public class VirtualizedCodeEditor extends View {
         scrollY = 0;
         clearSelection();
         updateLineNumberWidth();
+
+        // Reset undo/redo state and save initial state as baseline
+        stateManager.clear();
+        stateManager.snapshot(document.getLines());
+
         invalidate();
     }
 
@@ -1482,7 +1448,6 @@ public class VirtualizedCodeEditor extends View {
     }
 
     public void undo() {
-        resetUndoBatch(); // Reset batch on explicit undo
         List<String> oldState = stateManager.undo(document.getLines());
         if (oldState != null) {
             document.setLines(oldState);
@@ -1495,7 +1460,6 @@ public class VirtualizedCodeEditor extends View {
     }
 
     public void redo() {
-        resetUndoBatch(); // Reset batch on explicit redo
         List<String> newState = stateManager.redo(document.getLines());
         if (newState != null) {
             document.setLines(newState);
