@@ -280,18 +280,35 @@ public class RawDtsEditorActivity extends AppCompatActivity {
 
         new Thread(() -> {
             boolean success = false;
+            File tempFile = null;
             try {
-                File file = new File(KonaBessCore.dts_path);
-                BufferedWriter writer = new BufferedWriter(new FileWriter(file));
+                // Create a temporary file in the app's cache directory
+                tempFile = new File(getCacheDir(), "dts_edit_temp_" + System.currentTimeMillis());
+                BufferedWriter writer = new BufferedWriter(new FileWriter(tempFile));
 
                 String content = editorContent.getText().toString();
                 writer.write(content);
-
                 writer.close();
-                success = true;
+
+                // Use RootHelper to copy the temp file to the destination
+                // relying on the shell to handle permissions
+                String cmd = String.format("cat '%s' > '%s'", tempFile.getAbsolutePath(), KonaBessCore.dts_path);
+
+                // Also ensure 644 permissions
+                String chmodCmd = String.format("chmod 644 '%s'", KonaBessCore.dts_path);
+
+                if (com.ireddragonicy.konabessnext.utils.RootHelper.execAndCheck(cmd) &&
+                        com.ireddragonicy.konabessnext.utils.RootHelper.execAndCheck(chmodCmd)) {
+                    success = true;
+                }
 
             } catch (Exception e) {
                 e.printStackTrace();
+            } finally {
+                // Clean up temp file
+                if (tempFile != null && tempFile.exists()) {
+                    tempFile.delete();
+                }
             }
 
             final boolean finalSuccess = success;

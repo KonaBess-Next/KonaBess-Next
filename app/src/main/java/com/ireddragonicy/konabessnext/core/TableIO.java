@@ -578,7 +578,12 @@ public class TableIO {
 
         public void run() {
             activity.runOnUiThread(() -> {
-                waiting_import = DialogUtil.getWaitDialog(activity, R.string.wait_importing);
+                if (waiting_import == null || waiting_import.getContext() != activity) {
+                    if (waiting_import != null && waiting_import.isShowing()) {
+                        waiting_import.dismiss();
+                    }
+                    waiting_import = DialogUtil.getWaitDialog(activity, R.string.wait_importing);
+                }
                 showedView.removeAllViews();
                 page = new LinearLayout(activity);
                 page.setOrientation(LinearLayout.VERTICAL);

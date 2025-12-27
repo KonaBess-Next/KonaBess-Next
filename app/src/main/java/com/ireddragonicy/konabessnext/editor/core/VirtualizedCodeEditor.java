@@ -62,6 +62,7 @@ public class VirtualizedCodeEditor extends View {
     private Paint lineNumberBgPaint;
     private Paint cursorPaint;
     private Paint selectionPaint;
+    private Paint searchPaint;
     private Paint currentLinePaint;
     private Paint separatorPaint;
 
@@ -113,6 +114,13 @@ public class VirtualizedCodeEditor extends View {
     private int selEndCol = -1;
     private boolean isSelecting = false;
     private boolean longPressTriggered = false;
+
+    // Search Highlight
+    private boolean hasSearchHighlight = false;
+    private int searchStartLine = -1;
+    private int searchStartCol = -1;
+    private int searchEndLine = -1;
+    private int searchEndCol = -1;
 
     // Selection Handles
     private static final int HANDLE_SIZE = 40; // dp
@@ -221,6 +229,10 @@ public class VirtualizedCodeEditor extends View {
         // Selection paint
         selectionPaint = new Paint();
         selectionPaint.setColor(0x50448AFF);
+
+        // Search highlight paint (distinct color, e.g., orange/gold tint)
+        searchPaint = new Paint();
+        searchPaint.setColor(0x60FFB300);
 
         // Current line highlight
         currentLinePaint = new Paint();
@@ -429,9 +441,16 @@ public class VirtualizedCodeEditor extends View {
             canvas.drawRect(lineNumberWidth, cursorY, width, cursorY + lineHeight, currentLinePaint);
         }
 
+        // Draw search highlight
+        if (hasSearchHighlight) {
+            drawRangeHighlight(canvas, firstVisibleLine, lastVisibleLine,
+                    searchStartLine, searchStartCol, searchEndLine, searchEndCol, searchPaint);
+        }
+
         // Draw selection background
         if (hasSelection) {
-            drawSelection(canvas, firstVisibleLine, lastVisibleLine);
+            drawRangeHighlight(canvas, firstVisibleLine, lastVisibleLine,
+                    selStartLine, selStartCol, selEndLine, selEndCol, selectionPaint);
         }
 
         // Draw Handles
@@ -503,22 +522,41 @@ public class VirtualizedCodeEditor extends View {
      * - Early exit for non-overlapping visible range
      * - Inlined calculations for maximum performance
      */
-    private void drawSelection(Canvas canvas, int firstVisibleLine, int lastVisibleLine) {
+    /**
+     * Expert-level virtualized range highlight (used for Selection and Search).
+     * Optimizations applied:
+     * - Pre-computed normalized selection bounds (inline)
+     * - Local variable caching to avoid field lookups
+     * - Direct rectangle drawing without intermediate object allocation
+     * - Early exit for non-overlapping visible range
+     * - Inlined calculations for maximum performance
+     */
+    private void drawRangeHighlight(Canvas canvas, int firstVisibleLine, int lastVisibleLine,
+            int startLine, int startCol, int endLine, int endCol, Paint paint) {
         // Local copies to avoid repeated field access
-        final int sStartLine = selStartLine;
-        final int sStartCol = selStartCol;
-        final int sEndLine = selEndLine;
-        final int sEndCol = selEndCol;
+        final int sStartLine = startLine;
+        final int sStartCol = startCol;
+        final int sEndLine = endLine;
+        final int sEndCol = endCol;
 
         // Early exit if selection is invalid
         if (sStartLine < 0 || sEndLine < 0)
             return;
 
-        // Use pre-computed normalized bounds
-        final int normStartLine = nStartLine;
-        final int normStartCol = nStartCol;
-        final int normEndLine = nEndLine;
-        final int normEndCol = nEndCol;
+        // Normalize bounds locally
+        int normStartLine = sStartLine;
+        int normStartCol = sStartCol;
+        int normEndLine = sEndLine;
+        int normEndCol = sEndCol;
+
+        if (normStartLine > normEndLine || (normStartLine == normEndLine && normStartCol > normEndCol)) {
+            int tL = normStartLine;
+            int tC = normStartCol;
+            normStartLine = normEndLine;
+            normStartCol = normEndCol;
+            normEndLine = tL;
+            normEndCol = tC;
+        }
 
         // Early exit if selection doesn't overlap visible area
         if (normEndLine < firstVisibleLine || normStartLine > lastVisibleLine)
@@ -534,7 +572,6 @@ public class VirtualizedCodeEditor extends View {
         final float localCharWidth = charWidth;
         final float baseX = lineNumberWidth + TEXT_PADDING_LEFT - scrollX;
         final int linesCount = document.getLineCount();
-        final Paint paint = selectionPaint;
         final float minWidth = localCharWidth * 0.5f;
 
         // Batch drawing - iterate only visible selected lines
@@ -648,6 +685,11 @@ public class VirtualizedCodeEditor extends View {
     }
 
     private void handleTap(float x, float y) {
+        // Clear search on tap if desired, or just let cursor move
+        if (hasSearchHighlight) {
+            clearSearch();
+        }
+
         int[] pos = getPositionFromPoint(x, y);
         cursorLine = pos[0];
         cursorColumn = pos[1];
@@ -1293,18 +1335,20 @@ public class VirtualizedCodeEditor extends View {
                 pos += lineLen;
             }
 
-            // Select the found text
-            hasSelection = true;
-            selStartLine = line;
-            selStartCol = col;
-            selEndLine = line;
-            selEndCol = col + query.length();
+            // Highlight the found text (Search Highlight, NOT Selection)
+            hasSearchHighlight = true;
+            searchStartLine = line;
+            searchStartCol = col;
+            searchEndLine = line;
+            searchEndCol = col + query.length();
+
+            // Move cursor to end of search result for visibility
             cursorLine = line;
             cursorColumn = col + query.length();
 
             ensureCursorVisible();
-            normalizeSelection();
-            showActionMode(); // Show menu
+            // normalizeSelection(); // Not needed for search highlight
+            // showActionMode(); // Do NOT show menu
             invalidate();
             return true;
         }
@@ -1347,17 +1391,17 @@ public class VirtualizedCodeEditor extends View {
                 pos += lineLen;
             }
 
-            // Select the found text
-            hasSelection = true;
-            selStartLine = line;
-            selStartCol = col;
-            selEndLine = line;
-            selEndCol = col + query.length();
+            // Highlight the found text (Search Highlight)
+            hasSearchHighlight = true;
+            searchStartLine = line;
+            searchStartCol = col;
+            searchEndLine = line;
+            searchEndCol = col + query.length();
+
             cursorLine = line;
             cursorColumn = col + query.length();
 
             ensureCursorVisible();
-            normalizeSelection();
             invalidate();
             return true;
         }
@@ -1370,7 +1414,12 @@ public class VirtualizedCodeEditor extends View {
      */
     public void clearSearch() {
         lastSearchIndex = -1;
-        clearSelection();
+        hasSearchHighlight = false;
+        searchStartLine = -1;
+        searchStartCol = -1;
+        searchEndLine = -1;
+        searchEndCol = -1;
+        invalidate();
     }
 
     private void calculateSelection(float x, float y) {
@@ -1640,6 +1689,3 @@ public class VirtualizedCodeEditor extends View {
         hideActionMode();
     }
 }
-
-
-
