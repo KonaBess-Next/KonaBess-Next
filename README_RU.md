@@ -4,13 +4,13 @@
 
 <div align="center">
 
-[![GitHub stars](https://img.shields.io/github/stars/ireddragonicy/KonaBess?style=for-the-badge&color=FAB005)](https://github.com/ireddragonicy/KonaBess/stargazers)
-[![GitHub forks](https://img.shields.io/github/forks/ireddragonicy/KonaBess?style=for-the-badge&color=42BE65)](https://github.com/ireddragonicy/KonaBess/network/members)
-[![GitHub issues](https://img.shields.io/github/issues/ireddragonicy/KonaBess?style=for-the-badge&color=FA5252)](https://github.com/ireddragonicy/KonaBess/issues)
+[![GitHub stars](https://img.shields.io/github/stars/KonaBess-Next/KonaBess-Next?style=for-the-badge&color=FAB005)](https://github.com/KonaBess-Next/KonaBess-Next/stargazers)
+[![GitHub forks](https://img.shields.io/github/forks/KonaBess-Next/KonaBess-Next?style=for-the-badge&color=42BE65)](https://github.com/KonaBess-Next/KonaBess-Next/network/members)
+[![GitHub issues](https://img.shields.io/github/issues/KonaBess-Next/KonaBess-Next?style=for-the-badge&color=FA5252)](https://github.com/KonaBess-Next/KonaBess-Next/issues)
 [![Android](https://img.shields.io/badge/Platform-Android-3DDC84?style=for-the-badge&logo=android)](https://www.android.com)
 [![Java](https://img.shields.io/badge/Language-Java-007396?style=for-the-badge&logo=java&logoColor=white)](https://www.java.com)
 [![Root Required](https://img.shields.io/badge/Root-Required-critical?style=for-the-badge)](https://github.com/topjohnwu/Magisk)
-[![License](https://img.shields.io/github/license/ireddragonicy/KonaBess?style=for-the-badge&color=228BE6)](LICENSE)
+[![License](https://img.shields.io/github/license/KonaBess-Next/KonaBess-Next?style=for-the-badge&color=228BE6)](LICENSE)
 
 **[English](README.md)** | **[Indonesia](README_ID.md)** | **[中文](README_zh-CN.md)** | **[日本語](README_JP.md)** | **Русский**
 
