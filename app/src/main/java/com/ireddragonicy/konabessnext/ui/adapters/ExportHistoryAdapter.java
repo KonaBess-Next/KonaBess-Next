@@ -29,6 +29,7 @@ import com.ireddragonicy.konabessnext.R;
 import com.ireddragonicy.konabessnext.core.TableIO;
 import com.ireddragonicy.konabessnext.model.ExportHistoryItem;
 import com.ireddragonicy.konabessnext.utils.ExportHistoryManager;
+import com.ireddragonicy.konabessnext.utils.RootHelper;
 
 public class ExportHistoryAdapter extends RecyclerView.Adapter<ExportHistoryAdapter.ViewHolder> {
 
@@ -173,16 +174,49 @@ public class ExportHistoryAdapter extends RecyclerView.Adapter<ExportHistoryAdap
         }
 
         try {
+            // Robust Sharing: Copy to internal cache first to ensure FileProvider works
+            // flawlessly
+            // regardless of the source location (Scoped Storage workaround)
+            File cachePath = new File(activity.getCacheDir(), "shared_exports");
+            if (!cachePath.exists()) {
+                cachePath.mkdirs();
+            }
+            // Use original filename to preserve extension for receiving app
+            File newFile = new File(cachePath, file.getName());
+
+            // Direct Root Copy (User Intent: Efficiency & No Redundancy)
+            String cmd = String.format("cat '%s' > '%s' && chmod 666 '%s'",
+                    file.getAbsolutePath(), newFile.getAbsolutePath(), newFile.getAbsolutePath());
+
+            if (!RootHelper.execAndCheck(cmd)) {
+                Toast.makeText(activity, "Failed to copy file with Root.", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
             android.net.Uri uri = FileProvider.getUriForFile(activity,
-                    activity.getPackageName() + ".fileprovider", file);
+                    activity.getPackageName() + ".fileprovider", newFile);
 
             Intent shareIntent = new Intent(Intent.ACTION_SEND);
-            shareIntent.setType("text/plain");
+
+            // Determine MIME type based on extension
+            String mimeType = "*/*";
+            String filename = file.getName().toLowerCase();
+            if (filename.endsWith(".txt") || filename.endsWith(".dts")) {
+                mimeType = "text/plain";
+            } else if (filename.endsWith(".img") || filename.endsWith(".bin")) {
+                mimeType = "application/octet-stream";
+            }
+
+            shareIntent.setType(mimeType);
             shareIntent.putExtra(Intent.EXTRA_STREAM, uri);
             shareIntent.putExtra(Intent.EXTRA_SUBJECT, item.getFilename());
             shareIntent.putExtra(Intent.EXTRA_TEXT,
                     "KonaBess GPU Config: " + item.getDescription());
+
+            // Critical for Android 10+: Add ClipData to ensure permissions are granted
+            shareIntent.setClipData(android.content.ClipData.newRawUri(null, uri));
             shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            shareIntent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
 
             activity.startActivity(Intent.createChooser(shareIntent,
                     activity.getString(R.string.share_config)));
@@ -302,7 +336,3 @@ public class ExportHistoryAdapter extends RecyclerView.Adapter<ExportHistoryAdap
         }
     }
 }
-
-
-
-

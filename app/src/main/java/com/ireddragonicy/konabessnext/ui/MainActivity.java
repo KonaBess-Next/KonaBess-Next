@@ -459,8 +459,27 @@ public class MainActivity extends AppCompatActivity {
                 waiting.dismiss();
                 if (is_err)
                     DialogUtil.showError(activity, R.string.failed_backup);
-                else
+                else {
+                    // Add to Export History
+                    try {
+                        String destPath = android.os.Environment.getExternalStorageDirectory().getAbsolutePath() + "/"
+                                + KonaBessCore.boot_name + ".img";
+                        com.ireddragonicy.konabessnext.utils.ExportHistoryManager historyManager = new com.ireddragonicy.konabessnext.utils.ExportHistoryManager(
+                                activity);
+
+                        String chipType = "Unknown";
+                        if (ChipInfo.which != ChipInfo.type.unknown) {
+                            chipType = ChipInfo.which.name();
+                        }
+
+                        historyManager.addExport(KonaBessCore.boot_name + ".img", "Boot Image Backup", destPath,
+                                chipType);
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+
                     Toast.makeText(activity, R.string.backup_success, Toast.LENGTH_SHORT).show();
+                }
             });
 
         }
