@@ -140,6 +140,10 @@ public class DtsTreeHelper {
      */
     public static String generate(DtsNode root) {
         StringBuilder sb = new StringBuilder();
+
+        // Always add the DTS version header
+        sb.append("/dts-v1/;\n\n");
+
         // Root usually has children which are the top-level nodes of the file.
         // If root itself is "root" (our dummy), we iterate its children.
 
