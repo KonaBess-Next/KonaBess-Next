@@ -36,8 +36,9 @@ jobs:
       
     - name: Build Release APK
       run: |
-        # Use secrets if available, otherwise just build (which might fail signing if strict)
+        # Use secrets if available, otherwise use debug signing
         if [ ! -z "${{ secrets.SIGNING_KEY }}" ]; then
+          echo "🔐 Building with release keystore from secrets"
           ./gradlew assembleRelease \
             -Pandroid.injected.signing.store.file=${{ github.workspace }}/keystore.jks \
             -Pandroid.injected.signing.store.password=${{ secrets.KEY_STORE_PASSWORD }} \
@@ -45,8 +46,14 @@ jobs:
             -Pandroid.injected.signing.key.password=${{ secrets.KEY_PASSWORD }} \
             --stacktrace
         else
-           echo "⚠️ Building without signing injection"
-           ./gradlew assembleRelease --stacktrace
+          echo "⚠️ No SIGNING_KEY secret found. Using debug signing for release build."
+          # Use debug keystore for signing - this ensures APK is always signed
+          ./gradlew assembleRelease \
+            -Pandroid.injected.signing.store.file=$HOME/.android/debug.keystore \
+            -Pandroid.injected.signing.store.password=android \
+            -Pandroid.injected.signing.key.alias=androiddebugkey \
+            -Pandroid.injected.signing.key.password=android \
+            --stacktrace
         fi
         echo "✅ Release APK built"
 
