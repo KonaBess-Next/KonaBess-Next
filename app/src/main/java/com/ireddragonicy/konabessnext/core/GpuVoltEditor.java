@@ -1,10 +1,6 @@
 package com.ireddragonicy.konabessnext.core;
 
-import com.ireddragonicy.konabessnext.R;
-import com.ireddragonicy.konabessnext.ui.SettingsActivity;
-
 import android.app.Activity;
-import androidx.appcompat.app.AlertDialog;
 import android.text.InputType;
 import android.view.View;
 import android.widget.ArrayAdapter;
@@ -16,7 +12,14 @@ import android.widget.ListView;
 import android.widget.Spinner;
 import android.widget.Toast;
 
+import androidx.appcompat.app.AlertDialog;
+
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+import com.ireddragonicy.konabessnext.R;
+import com.ireddragonicy.konabessnext.ui.SettingsActivity;
+import com.ireddragonicy.konabessnext.ui.adapters.ParamAdapter;
+import com.ireddragonicy.konabessnext.utils.DialogUtil;
+import com.ireddragonicy.konabessnext.utils.DtsHelper;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -25,70 +28,100 @@ import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
-import com.ireddragonicy.konabessnext.ui.adapters.ParamAdapter;
-import com.ireddragonicy.konabessnext.utils.DialogUtil;
-import com.ireddragonicy.konabessnext.utils.DtsHelper;
-
 public class GpuVoltEditor {
-    private static class opp {
-        public long frequency;
-        public long volt;
+
+    private static class Opp {
+        long frequency;
+        long volt;
     }
 
     public static int levelint2int(long level) throws Exception {
-        for (int i = 0; i < ChipInfo.rpmh_levels.levels().length; i++) {
-            if (ChipInfo.rpmh_levels.levels()[i] == level)
+        int[] levels = ChipInfo.rpmh_levels.levels();
+        for (int i = 0; i < levels.length; i++) {
+            if (levels[i] == level)
                 return i;
         }
-        throw new Exception();
+        throw new Exception("Level not found");
     }
 
-    public static String levelint2str(long level) throws Exception {
-        return ChipInfo.rpmh_levels.level_str()[levelint2int(level)];
+    public static String levelint2str(long level) {
+        try {
+            return ChipInfo.rpmh_levels.level_str()[levelint2int(level)];
+        } catch (Exception e) {
+            return String.valueOf(level);
+        }
     }
 
-    private static ArrayList<opp> opps;
-    private static ArrayList<String> lines_in_dts;
-    private static int opp_position;
+    private static List<Opp> opps = new ArrayList<>();
+    private static List<String> linesInDts = new ArrayList<>();
+    private static int oppPosition = -1;
 
     public static void init() throws IOException {
-        // Clear all static data to avoid conflicts when switching chipsets
-        if (lines_in_dts != null) {
-            lines_in_dts.clear();
-        } else {
-            lines_in_dts = new ArrayList<>();
-        }
+        linesInDts.clear();
+        opps.clear();
+        oppPosition = -1;
 
-        if (opps != null) {
-            opps.clear();
-        } else {
-            opps = new ArrayList<>();
-        }
-
-        opp_position = -1;
-
-        BufferedReader bufferedReader = null;
-        try {
-            bufferedReader = new BufferedReader(new FileReader(new File(KonaBessCore.dts_path)));
-            String s;
-            while ((s = bufferedReader.readLine()) != null) {
-                lines_in_dts.add(s);
-            }
-        } finally {
-            if (bufferedReader != null) {
-                try {
-                    bufferedReader.close();
-                } catch (IOException e) {
-                    // Ignore close errors
-                }
+        File file = new File(KonaBessCore.dts_path);
+        try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                linesInDts.add(line);
             }
         }
     }
 
-    private static opp decode_opp(List<String> lines) throws Exception {
-        opp opp = new opp();
+    public static void decode() throws Exception {
+        String pattern = ChipInfo.which.voltTablePattern;
+        if (pattern == null)
+            return; // Should not happen if ignoreVoltTable is false
+
+        int i = -1;
+        boolean isInGpuTable = false;
+        int bracket = 0;
+        int start = -1;
+
+        while (++i < linesInDts.size()) {
+            String line = linesInDts.get(i).trim();
+            if (line.isEmpty())
+                continue;
+
+            if (line.contains(pattern) && line.contains("{")) {
+                isInGpuTable = true;
+                bracket++;
+                continue;
+            }
+
+            if (!isInGpuTable)
+                continue;
+
+            if (line.contains("opp-") && line.contains("{")) {
+                start = i;
+                if (oppPosition < 0)
+                    oppPosition = i;
+                bracket++;
+                continue;
+            }
+
+            if (line.contains("}")) {
+                bracket--;
+                if (bracket == 0)
+                    break; // End of table
+                if (bracket != 1)
+                    throw new Exception("Structure error");
+
+                // End of an opp block
+                opps.add(decodeOpp(linesInDts.subList(start, i + 1)));
+                linesInDts.subList(start, i + 1).clear();
+                i = start - 1; // logical rollback since we removed lines
+            }
+        }
+    }
+
+    private static Opp decodeOpp(List<String> lines) throws Exception {
+        Opp opp = new Opp();
         for (String line : lines) {
             if (line.contains("opp-hz"))
                 opp.frequency = DtsHelper.decode_int_line_hz(line).value;
@@ -98,66 +131,9 @@ public class GpuVoltEditor {
         return opp;
     }
 
-    public static void decode() throws Exception {
-        int i = -1;
-        boolean isInGpuTable = false;
-        int bracket = 0;
-        int start = -1;
-        int end;
-        while (++i < lines_in_dts.size()) {
-            String line = lines_in_dts.get(i).trim();
-            if (line.equals(""))
-                continue;
-
-            if (ChipInfo.which == ChipInfo.type.kona || ChipInfo.which == ChipInfo.type.kona_singleBin) {
-                if (line.contains("gpu-opp-table_v2") && line.contains("{")) {
-                    isInGpuTable = true;
-                    bracket++;
-                    continue;
-                }
-            } else if (ChipInfo.which == ChipInfo.type.msmnile || ChipInfo.which == ChipInfo.type.msmnile_singleBin) {
-                if (line.contains("gpu_opp_table_v2") && line.contains("{")) {
-                    isInGpuTable = true;
-                    bracket++;
-                    continue;
-                }
-            } else if (ChipInfo.which == ChipInfo.type.lito_v1 || ChipInfo.which == ChipInfo.type.lito_v2
-                    || ChipInfo.which == ChipInfo.type.lagoon) {
-                if (line.contains("gpu-opp-table {")) {
-                    isInGpuTable = true;
-                    bracket++;
-                    continue;
-                }
-            }
-
-            if (!isInGpuTable)
-                continue;
-
-            if (line.contains("opp-") && line.contains("{")) {
-                start = i;
-                if (opp_position < 0)
-                    opp_position = i;
-                bracket++;
-                continue;
-            }
-
-            if (line.contains("}")) {
-                bracket--;
-                if (bracket == 0)
-                    break;
-                if (bracket != 1)
-                    throw new Exception();
-                end = i;
-                opps.add(decode_opp(lines_in_dts.subList(start, end + 1)));
-                lines_in_dts.subList(start, end + 1).clear();
-                i = start - 1;
-            }
-        }
-    }
-
     public static List<String> genTable() {
-        ArrayList<String> table = new ArrayList<>();
-        for (opp opp : opps) {
+        List<String> table = new ArrayList<>();
+        for (Opp opp : opps) {
             table.add("opp-" + opp.frequency + " {");
             table.add("opp-hz = <0x0 " + opp.frequency + ">;");
             table.add("opp-microvolt = <" + opp.volt + ">;");
@@ -167,251 +143,47 @@ public class GpuVoltEditor {
     }
 
     public static List<String> genBack(List<String> table) {
-        ArrayList<String> ret = new ArrayList<>(lines_in_dts);
-        ret.addAll(opp_position, table);
-        return ret;
+        List<String> result = new ArrayList<>(linesInDts);
+        if (oppPosition >= 0 && oppPosition <= result.size()) {
+            result.addAll(oppPosition, table);
+        }
+        return result;
     }
 
-    public static void writeOut(List<String> new_dts) throws IOException {
+    public static void writeOut(List<String> newDts) throws IOException {
         File file = new File(KonaBessCore.dts_path);
-
-        // If file exists, delete it first to avoid permission issues
         if (file.exists()) {
-            if (!file.delete()) {
-                // If can't delete, try to set writable first
-                file.setWritable(true);
-                file.delete();
+            if (!file.delete() && !file.setWritable(true) && !file.delete()) {
+                // Try best effort
             }
         }
-
-        // Create new file
-        if (!file.createNewFile()) {
+        if (!file.createNewFile())
             throw new IOException("Failed to create file: " + file.getAbsolutePath());
-        }
 
-        // Set proper permissions
         file.setReadable(true, false);
         file.setWritable(true, false);
 
-        BufferedWriter bufferedWriter = null;
-        try {
-            bufferedWriter = new BufferedWriter(new FileWriter(file));
-            for (String s : new_dts) {
-                bufferedWriter.write(s);
-                bufferedWriter.newLine();
-            }
-        } finally {
-            if (bufferedWriter != null) {
-                try {
-                    bufferedWriter.close();
-                } catch (IOException e) {
-                    // Ignore close errors
-                }
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(file))) {
+            for (String s : newDts) {
+                writer.write(s);
+                writer.newLine();
             }
         }
     }
 
-    private static View generateToolBar(Activity activity) {
-        LinearLayout toolbar = new LinearLayout(activity);
-        HorizontalScrollView horizontalScrollView = new HorizontalScrollView(activity);
-        horizontalScrollView.addView(toolbar);
-
-        {
-            Button button = new Button(activity);
-            button.setText(R.string.save_volt_table);
-            toolbar.addView(button);
-            button.setOnClickListener(v -> {
-                try {
-                    writeOut(genBack(genTable()));
-                    Toast.makeText(activity, R.string.save_success, Toast.LENGTH_SHORT).show();
-                } catch (Exception e) {
-                    DialogUtil.showError(activity, R.string.save_failed);
-                }
-            });
-        }
-        return horizontalScrollView;
-    }
-
-    private static void generateAVolt(Activity activity, LinearLayout page, int voltn) throws Exception {
-        // Back navigation handled by OnBackPressedDispatcher in MainActivity
-        // No custom callback needed - system back works correctly
-
-        ListView listView = new ListView(activity);
-        ArrayList<ParamAdapter.item> items = new ArrayList<>();
-
-        items.add(new ParamAdapter.item() {
-            {
-                title = activity.getResources().getString(R.string.back);
-                subtitle = "";
-            }
-        });
-
-        items.add(new ParamAdapter.item() {
-            {
-                title = activity.getResources().getString(R.string.freq);
-                subtitle = opps.get(voltn).frequency + "";
-            }
-        });
-
-        items.add(new ParamAdapter.item() {
-            {
-                title = activity.getResources().getString(R.string.volt);
-                subtitle = levelint2str(opps.get(voltn).volt);
-            }
-        });
-
-        listView.setAdapter(new ParamAdapter(items, activity));
-        listView.setOnItemClickListener((parent, view, position, idd) -> {
-            if (position == 0)
-                generateVolts(activity, page);
-            if (position == 1) {
-                EditText editText = new EditText(activity);
-                editText.setText(opps.get(voltn).frequency + "");
-                editText.setInputType(InputType.TYPE_CLASS_NUMBER);
-                new com.google.android.material.dialog.MaterialAlertDialogBuilder(activity)
-                        .setTitle(R.string.edit)
-                        .setMessage(R.string.volt_freq_msg)
-                        .setView(editText)
-                        .setPositiveButton(R.string.save, (dialog, which) -> {
-                            try {
-                                opps.get(voltn).frequency = Long.parseLong(editText.getText().toString());
-                                generateAVolt(activity, page, voltn);
-                            } catch (Exception e) {
-                                DialogUtil.showError(activity, R.string.save_failed);
-                            }
-                        })
-                        .setNegativeButton(R.string.cancel, null)
-                        .create().show();
-            }
-            if (position == 2) {
-                try {
-                    Spinner spinner = new Spinner(activity);
-                    spinner.setAdapter(new ArrayAdapter(activity,
-                            android.R.layout.simple_dropdown_item_1line,
-                            ChipInfo.rpmh_levels.level_str()));
-                    spinner.setSelection(levelint2int(opps.get(voltn).volt));
-
-                    new com.google.android.material.dialog.MaterialAlertDialogBuilder(activity)
-                            .setTitle(R.string.edit)
-                            .setView(spinner)
-                            .setMessage(R.string.editvolt_msg)
-                            .setPositiveButton(R.string.save, (dialog, which) -> {
-                                opps.get(voltn).volt = ChipInfo.rpmh_levels.levels()[spinner.getSelectedItemPosition()];
-                                try {
-                                    generateAVolt(activity, page, voltn);
-                                } catch (Exception e) {
-                                    DialogUtil.showError(activity, R.string.save_failed);
-                                }
-                            })
-                            .setNegativeButton(R.string.cancel, null)
-                            .create().show();
-
-                } catch (Exception e) {
-                    DialogUtil.showError(activity, R.string.error_occur);
-                }
-            }
-        });
-
-        page.removeAllViews();
-        page.addView(listView);
-    }
-
-    private static void generateVolts(Activity activity, LinearLayout page) {
-        // Back navigation handled by OnBackPressedDispatcher in MainActivity
-        // No custom callback needed - system back works correctly
-
-        ListView listView = new ListView(activity);
-        ArrayList<ParamAdapter.item> items = new ArrayList<>();
-
-        items.add(new ParamAdapter.item() {
-            {
-                title = activity.getResources().getString(R.string.new_item);
-                subtitle = activity.getResources().getString(R.string.new_desc_volt);
-            }
-        });
-
-        for (opp opp : opps) {
-            items.add(new ParamAdapter.item() {
-                {
-                    title = SettingsActivity.formatFrequency(opp.frequency, activity);
-                    subtitle = "";
-                }
-            });
-        }
-
-        items.add(new ParamAdapter.item() {
-            {
-                title = activity.getResources().getString(R.string.new_item);
-                subtitle = activity.getResources().getString(R.string.new_desc_volt);
-            }
-        });
-
-        listView.setAdapter(new ParamAdapter(items, activity));
-        listView.setOnItemClickListener((parent, view, position, id) -> {
-            if (position == opps.size() + 1) {
-                opp new_opp = new opp() {
-                    {
-                        frequency = opps.get(opps.size() - 1).frequency;
-                        volt = opps.get(opps.size() - 1).volt;
-                    }
-                };
-                opps.add(opps.size() - 1, new_opp);
-                generateVolts(activity, page);
-                return;
-            }
-            if (position == 0) {
-                opp new_opp = new opp() {
-                    {
-                        frequency = opps.get(0).frequency;
-                        volt = opps.get(0).volt;
-                    }
-                };
-                opps.add(0, new_opp);
-                generateVolts(activity, page);
-                return;
-            }
-            position--;
-            try {
-                generateAVolt(activity, page, position);
-            } catch (Exception e) {
-                DialogUtil.showError(activity, R.string.error_occur);
-            }
-        });
-        listView.setOnItemLongClickListener((parent, view, position, id) -> {
-            if (position == opps.size() + 1)
-                return true;
-            if (position == 0)
-                return true;
-            position--;
-            int finalPosition = position;
-            new com.google.android.material.dialog.MaterialAlertDialogBuilder(activity)
-                    .setTitle(R.string.remove)
-                    .setMessage("Are you sure to remove the voltage level of "
-                            + SettingsActivity.formatFrequency(opps.get(position).frequency, activity) + "?")
-                    .setPositiveButton(R.string.yes, (dialog, which) -> {
-                        opps.remove(finalPosition);
-                        generateVolts(activity, page);
-                    })
-                    .setNegativeButton(R.string.no, null)
-                    .create().show();
-            return true;
-        });
-
-        page.removeAllViews();
-        page.addView(listView);
-    }
+    // UI Logic ----------------------------------------------------------------
 
     public static class gpuVoltLogic extends Thread {
-        Activity activity;
-        AlertDialog waiting;
-        LinearLayout showedView;
-        LinearLayout page;
+        private final Activity activity;
+        private final LinearLayout showedView;
+        private AlertDialog waiting;
 
         public gpuVoltLogic(Activity activity, LinearLayout showedView) {
             this.activity = activity;
             this.showedView = showedView;
         }
 
+        @Override
         public void run() {
             activity.runOnUiThread(() -> {
                 waiting = DialogUtil.getWaitDialog(activity, R.string.getting_volt);
@@ -422,20 +194,180 @@ public class GpuVoltEditor {
                 init();
                 decode();
             } catch (Exception e) {
-                activity.runOnUiThread(() -> DialogUtil.showError(activity,
-                        R.string.getting_volt_failed));
+                activity.runOnUiThread(() -> DialogUtil.showError(activity, R.string.getting_volt_failed));
+                return;
             }
 
             activity.runOnUiThread(() -> {
                 waiting.dismiss();
                 showedView.removeAllViews();
                 showedView.addView(generateToolBar(activity));
-                page = new LinearLayout(activity);
+                LinearLayout page = new LinearLayout(activity);
                 page.setOrientation(LinearLayout.VERTICAL);
                 generateVolts(activity, page);
                 showedView.addView(page);
             });
-
         }
+    }
+
+    private static View generateToolBar(Activity activity) {
+        LinearLayout toolbar = new LinearLayout(activity);
+        HorizontalScrollView scrollView = new HorizontalScrollView(activity);
+        scrollView.addView(toolbar);
+
+        Button saveParamsBtn = new Button(activity);
+        saveParamsBtn.setText(R.string.save_volt_table);
+        saveParamsBtn.setOnClickListener(v -> {
+            try {
+                writeOut(genBack(genTable()));
+                Toast.makeText(activity, R.string.save_success, Toast.LENGTH_SHORT).show();
+            } catch (Exception e) {
+                DialogUtil.showError(activity, R.string.save_failed);
+            }
+        });
+        toolbar.addView(saveParamsBtn);
+
+        return scrollView;
+    }
+
+    private static void generateVolts(Activity activity, LinearLayout page) {
+        ListView listView = new ListView(activity);
+        ArrayList<ParamAdapter.item> items = new ArrayList<>();
+
+        items.add(createItem(activity.getString(R.string.new_item), activity.getString(R.string.new_desc_volt)));
+
+        for (Opp opp : opps) {
+            items.add(createItem(SettingsActivity.formatFrequency(opp.frequency, activity), ""));
+        }
+
+        items.add(createItem(activity.getString(R.string.new_item), activity.getString(R.string.new_desc_volt))); // Add
+                                                                                                                  // at
+                                                                                                                  // bottom
+                                                                                                                  // too
+
+        listView.setAdapter(new ParamAdapter(items, activity));
+        listView.setOnItemClickListener((parent, view, position, id) -> {
+            if (position == 0 || position == items.size() - 1) { // New Item (Top or Bottom)
+                if (opps.isEmpty()) {
+                    Opp newOpp = new Opp();
+                    newOpp.frequency = 300000000;
+                    newOpp.volt = ChipInfo.rpmh_levels.levels()[0];
+                    opps.add(newOpp);
+                } else {
+                    // Clone nearby item
+                    int baseIdx = (position == 0) ? 0 : opps.size() - 1;
+                    Opp base = opps.get(baseIdx);
+                    Opp newOpp = new Opp();
+                    newOpp.frequency = base.frequency;
+                    newOpp.volt = base.volt;
+                    opps.add((position == 0) ? 0 : opps.size(), newOpp);
+                }
+                generateVolts(activity, page);
+                return;
+            }
+
+            // Edit existing
+            try {
+                generateAVolt(activity, page, position - 1);
+            } catch (Exception e) {
+                DialogUtil.showError(activity, R.string.error_occur);
+            }
+        });
+
+        listView.setOnItemLongClickListener((parent, view, position, id) -> {
+            if (position == 0 || position == items.size() - 1)
+                return true;
+
+            int oppIdx = position - 1;
+            new MaterialAlertDialogBuilder(activity)
+                    .setTitle(R.string.remove)
+                    .setMessage("Remove voltage level "
+                            + SettingsActivity.formatFrequency(opps.get(oppIdx).frequency, activity) + "?")
+                    .setPositiveButton(R.string.yes, (dialog, which) -> {
+                        opps.remove(oppIdx);
+                        generateVolts(activity, page);
+                    })
+                    .setNegativeButton(R.string.no, null)
+                    .show();
+            return true;
+        });
+
+        page.removeAllViews();
+        page.addView(listView);
+    }
+
+    private static void generateAVolt(Activity activity, LinearLayout page, int index) {
+        ListView listView = new ListView(activity);
+        ArrayList<ParamAdapter.item> items = new ArrayList<>();
+        Opp opp = opps.get(index);
+
+        items.add(createItem(activity.getString(R.string.back), ""));
+        items.add(createItem(activity.getString(R.string.freq), opp.frequency + ""));
+        items.add(createItem(activity.getString(R.string.volt), getLevelStr(opp.volt)));
+
+        listView.setAdapter(new ParamAdapter(items, activity));
+        listView.setOnItemClickListener((parent, view, position, id) -> {
+            if (position == 0) {
+                generateVolts(activity, page);
+            } else if (position == 1) { // Edit Freq
+                EditText input = new EditText(activity);
+                input.setText(String.valueOf(opp.frequency));
+                input.setInputType(InputType.TYPE_CLASS_NUMBER);
+                new MaterialAlertDialogBuilder(activity)
+                        .setTitle(R.string.edit)
+                        .setMessage(R.string.volt_freq_msg)
+                        .setView(input)
+                        .setPositiveButton(R.string.save, (dialog, which) -> {
+                            try {
+                                opp.frequency = Long.parseLong(input.getText().toString());
+                                generateAVolt(activity, page, index);
+                            } catch (Exception e) {
+                                DialogUtil.showError(activity, R.string.save_failed);
+                            }
+                        })
+                        .setNegativeButton(R.string.cancel, null)
+                        .show();
+            } else if (position == 2) { // Edit Volt
+                Spinner spinner = new Spinner(activity);
+                spinner.setAdapter(new ArrayAdapter<>(activity, android.R.layout.simple_dropdown_item_1line,
+                        ChipInfo.rpmh_levels.level_str()));
+                spinner.setSelection(getLevelIndex(opp.volt));
+
+                new MaterialAlertDialogBuilder(activity)
+                        .setTitle(R.string.edit)
+                        .setView(spinner)
+                        .setMessage(R.string.editvolt_msg)
+                        .setPositiveButton(R.string.save, (dp, w) -> {
+                            opp.volt = ChipInfo.rpmh_levels.levels()[spinner.getSelectedItemPosition()];
+                            generateAVolt(activity, page, index);
+                        })
+                        .setNegativeButton(R.string.cancel, null)
+                        .show();
+            }
+        });
+
+        page.removeAllViews();
+        page.addView(listView);
+    }
+
+    private static ParamAdapter.item createItem(String title, String subtitle) {
+        ParamAdapter.item item = new ParamAdapter.item();
+        item.title = title;
+        item.subtitle = subtitle;
+        return item;
+    }
+
+    private static int getLevelIndex(long level) {
+        int[] levels = ChipInfo.rpmh_levels.levels();
+        for (int i = 0; i < levels.length; i++) {
+            if (levels[i] == level)
+                return i;
+        }
+        return 0; // Default
+    }
+
+    private static String getLevelStr(long level) {
+        int idx = getLevelIndex(level);
+        return ChipInfo.rpmh_levels.level_str()[idx];
     }
 }

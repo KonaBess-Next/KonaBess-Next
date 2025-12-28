@@ -86,6 +86,10 @@ public class GpuActionToolbar extends LinearLayout implements GpuTableEditor.OnH
         firstRow.addView(btnRedo);
         firstRow.addView(btnHistory);
 
+        // Register buttons with GpuTableEditor so it can update them (colors, enabled
+        // state)
+        GpuTableEditor.registerToolbarButtons(btnSave, btnUndo, btnRedo, btnHistory);
+
         addView(firstRow);
 
         // Second Row: Volt & Repack
@@ -203,7 +207,3 @@ public class GpuActionToolbar extends LinearLayout implements GpuTableEditor.OnH
         }
     }
 }
-
-
-
-

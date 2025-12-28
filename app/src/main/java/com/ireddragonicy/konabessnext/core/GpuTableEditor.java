@@ -61,6 +61,7 @@ import com.ireddragonicy.konabessnext.ui.adapters.ParamAdapter;
 import com.ireddragonicy.konabessnext.utils.DialogUtil;
 import com.ireddragonicy.konabessnext.utils.DtsHelper;
 import com.ireddragonicy.konabessnext.utils.ItemTouchHelperCallback;
+import com.ireddragonicy.konabessnext.core.strategy.ChipArchitecture;
 
 // MVVM Architecture imports
 import com.ireddragonicy.konabessnext.viewmodel.GpuFrequencyViewModel;
@@ -139,6 +140,26 @@ public class GpuTableEditor {
         return viewModelRef;
     }
 
+    /**
+     * Registers toolbar buttons to allow GpuTableEditor to update their state
+     * directly.
+     * This fixes issues where the buttons wouldn't update (e.g. Save button color).
+     */
+    public static void registerToolbarButtons(MaterialButton save, MaterialButton undo,
+            MaterialButton redo, MaterialButton history) {
+        saveButtonRef = save;
+        undoButtonRef = undo;
+        redoButtonRef = redo;
+        historyButtonRef = history;
+
+        // Immediate update to reflect current state
+        runOnMainThread(() -> {
+            updateSaveButtonAppearance();
+            updateUndoRedoButtons();
+            updateHistoryButtonLabel();
+        });
+    }
+
     private static class EditorSession {
         ArrayList<String> linesInDts;
         ArrayList<Bin> binsSnapshot;
@@ -185,237 +206,33 @@ public class GpuTableEditor {
 
     public static void decode() throws Exception {
         int i = -1;
-        String this_line;
-        int start = -1;
-        int end;
-        int bracket = 0;
         while (++i < lines_in_dts.size()) {
-            this_line = lines_in_dts.get(i).trim();
-
-            if ((ChipInfo.which == ChipInfo.type.kona_singleBin
-                    || ChipInfo.which == ChipInfo.type.msmnile_singleBin
-                    || ChipInfo.which == ChipInfo.type.lahaina_singleBin
-                    || ChipInfo.which == ChipInfo.type.waipio_singleBin
-                    || ChipInfo.which == ChipInfo.type.cape_singleBin
-                    || ChipInfo.which == ChipInfo.type.ukee_singleBin
-                    || ChipInfo.which == ChipInfo.type.cliffs_singleBin
-                    || ChipInfo.which == ChipInfo.type.cliffs_7_singleBin
-                    || ChipInfo.which == ChipInfo.type.kalama_sg_singleBin)
-                    && this_line.equals("qcom,gpu-pwrlevels {")) {
-                start = i;
-                if (bin_position < 0)
-                    bin_position = i;
-                bracket++;
-                continue;
-            }
-            if (ChipInfo.which == ChipInfo.type.tuna
-                    && this_line.contains("qcom,gpu-pwrlevels-")
-                    && !this_line.contains("compatible = ")
-                    && !this_line.contains("qcom,gpu-pwrlevel-bins")) {
-                start = i;
-                if (bin_position < 0)
-                    bin_position = i;
-                if (bracket != 0)
-                    throw new Exception();
-                bracket++;
-                continue;
-            }
-            if ((ChipInfo.which == ChipInfo.type.kona
-                    || ChipInfo.which == ChipInfo.type.msmnile
-                    || ChipInfo.which == ChipInfo.type.lahaina
-                    || ChipInfo.which == ChipInfo.type.lito_v1 || ChipInfo.which == ChipInfo.type.lito_v2
-                    || ChipInfo.which == ChipInfo.type.lagoon
-                    || ChipInfo.which == ChipInfo.type.shima
-                    || ChipInfo.which == ChipInfo.type.yupik
-                    || ChipInfo.which == ChipInfo.type.kalama
-                    || ChipInfo.which == ChipInfo.type.diwali
-                    || ChipInfo.which == ChipInfo.type.pineapple
-                    || ChipInfo.which == ChipInfo.type.sun
-                    || ChipInfo.which == ChipInfo.type.canoe)
-                    && this_line.contains("qcom,gpu-pwrlevels-")
-                    && !this_line.contains("compatible = ")) {
-                start = i;
-                if (bin_position < 0)
-                    bin_position = i;
-                if (bracket != 0)
-                    throw new Exception();
-                bracket++;
-                continue;
-            }
-
-            if (this_line.contains("{") && start >= 0)
-                bracket++;
-            if (this_line.contains("}") && start >= 0)
-                bracket--;
-
-            if (bracket == 0 && start >= 0
-                    && (ChipInfo.which == ChipInfo.type.kona
-                            || ChipInfo.which == ChipInfo.type.msmnile
-                            || ChipInfo.which == ChipInfo.type.lahaina
-                            || ChipInfo.which == ChipInfo.type.lito_v1 || ChipInfo.which == ChipInfo.type.lito_v2
-                            || ChipInfo.which == ChipInfo.type.lagoon
-                            || ChipInfo.which == ChipInfo.type.shima
-                            || ChipInfo.which == ChipInfo.type.yupik
-                            || ChipInfo.which == ChipInfo.type.kalama
-                            || ChipInfo.which == ChipInfo.type.diwali
-                            || ChipInfo.which == ChipInfo.type.pineapple
-                            || ChipInfo.which == ChipInfo.type.sun
-                            || ChipInfo.which == ChipInfo.type.canoe
-                            || ChipInfo.which == ChipInfo.type.tuna)) {
-                end = i;
-                if (end >= start) {
-                    try {
-                        decode_bin(lines_in_dts.subList(start, end + 1));
-                        int removedLines = end - start + 1;
-                        lines_in_dts.subList(start, end + 1).clear();
-                        i = i - removedLines; // Adjust index after removing lines
-                    } catch (Exception e) {
-                        throw e;
-                    }
-                } else {
-                    throw new Exception();
+            String this_line = lines_in_dts.get(i).trim();
+            try {
+                if (ChipInfo.which.architecture.isStartLine(this_line)) {
+                    if (bin_position < 0)
+                        bin_position = i;
+                    ChipInfo.which.architecture.decode(lines_in_dts, bins, i);
+                    // Since decode removes lines from lines_in_dts, we need to adjust index
+                    // decode removes lines [i, end]. The next line is now at index i.
+                    // The loop does ++i, so we need to decrement i to process the current index
+                    // again.
+                    i--;
                 }
-                start = -1;
-                continue;
-            }
-
-            if (bracket == 0 && start >= 0 && (ChipInfo.which == ChipInfo.type.kona_singleBin
-                    || ChipInfo.which == ChipInfo.type.msmnile_singleBin
-                    || ChipInfo.which == ChipInfo.type.lahaina_singleBin
-                    || ChipInfo.which == ChipInfo.type.waipio_singleBin
-                    || ChipInfo.which == ChipInfo.type.cape_singleBin
-                    || ChipInfo.which == ChipInfo.type.ukee_singleBin
-                    || ChipInfo.which == ChipInfo.type.cliffs_singleBin
-                    || ChipInfo.which == ChipInfo.type.cliffs_7_singleBin
-                    || ChipInfo.which == ChipInfo.type.kalama_sg_singleBin)) {
-                end = i;
-                if (end >= start) {
-                    decode_bin(lines_in_dts.subList(start, end + 1));
-                    lines_in_dts.subList(start, end + 1).clear();
-                } else {
-                    throw new Exception();
-                }
-                break;
+            } catch (Exception e) {
+                // Ignore parsing errors for blocks we don't care about, or rethrow if critical
+                // But GpuTableEditor logic mostly ignored "bracket!=0" exceptions in some
+                // paths.
+                // However, BaseChipArchitecture throws Exception on failure.
+                // We should probably allow the loop to continue or fail?
+                // Original code threw Exception in some cases.
+                throw e;
             }
         }
-    }
-
-    private static int getBinID(String line, int prev_id) {
-        line = line.trim();
-        line = line.replace(" {", "")
-                .replace("-", "");
-        try {
-            for (int i = line.length() - 1; i >= 0; i--) {
-                prev_id = Integer.parseInt(line.substring(i));
-            }
-        } catch (Exception ignored) {
-        }
-        return prev_id;
-    }
-
-    private static void decode_bin(List<String> lines) throws Exception {
-        Bin gpuBin = new Bin();
-        gpuBin.header = new ArrayList<>();
-        gpuBin.levels = new ArrayList<>();
-        gpuBin.id = bins.size();
-        int i = 0;
-        int bracket = 0;
-        int start = 0;
-        int end;
-        gpuBin.id = getBinID(lines.get(0), gpuBin.id);
-        while (++i < lines.size() && bracket >= 0) {
-            String line = lines.get(i);
-
-            line = line.trim();
-            if (line.equals(""))
-                continue;
-
-            if (line.contains("{")) {
-                if (bracket != 0)
-                    throw new Exception();
-                start = i;
-                bracket++;
-                continue;
-            }
-
-            if (line.contains("}")) {
-                if (--bracket < 0)
-                    continue;
-                end = i;
-                if (end >= start)
-                    gpuBin.levels.add(decode_level(lines.subList(start, end + 1)));
-                continue;
-            }
-
-            if (bracket == 0) {
-                gpuBin.header.add(line);
-            }
-        }
-        bins.add(gpuBin);
-    }
-
-    private static Level decode_level(List<String> lines) {
-        Level lvl = new Level();
-        lvl.lines = new ArrayList<>();
-
-        for (String line : lines) {
-            line = line.trim();
-            if (line.contains("{") || line.contains("}"))
-                continue;
-            if (line.contains("reg"))
-                continue;
-            lvl.lines.add(line);
-        }
-
-        return lvl;
     }
 
     public static List<String> genTable() {
-        ArrayList<String> lines = new ArrayList<>();
-        if (ChipInfo.which == ChipInfo.type.kona
-                || ChipInfo.which == ChipInfo.type.msmnile
-                || ChipInfo.which == ChipInfo.type.lahaina
-                || ChipInfo.which == ChipInfo.type.lito_v1 || ChipInfo.which == ChipInfo.type.lito_v2
-                || ChipInfo.which == ChipInfo.type.lagoon
-                || ChipInfo.which == ChipInfo.type.shima
-                || ChipInfo.which == ChipInfo.type.yupik
-                || ChipInfo.which == ChipInfo.type.kalama
-                || ChipInfo.which == ChipInfo.type.diwali
-                || ChipInfo.which == ChipInfo.type.pineapple
-                || ChipInfo.which == ChipInfo.type.sun
-                || ChipInfo.which == ChipInfo.type.canoe
-                || ChipInfo.which == ChipInfo.type.tuna) {
-            for (int bin_id = 0; bin_id < bins.size(); bin_id++) {
-                lines.add("qcom,gpu-pwrlevels-" + bins.get(bin_id).id + " {");
-                lines.addAll(bins.get(bin_id).header);
-                for (int pwr_level_id = 0; pwr_level_id < bins.get(bin_id).levels.size(); pwr_level_id++) {
-                    lines.add("qcom,gpu-pwrlevel@" + pwr_level_id + " {");
-                    lines.add("reg = <" + pwr_level_id + ">;");
-                    lines.addAll(bins.get(bin_id).levels.get(pwr_level_id).lines);
-                    lines.add("};");
-                }
-                lines.add("};");
-            }
-        } else if (ChipInfo.which == ChipInfo.type.kona_singleBin
-                || ChipInfo.which == ChipInfo.type.msmnile_singleBin
-                || ChipInfo.which == ChipInfo.type.lahaina_singleBin
-                || ChipInfo.which == ChipInfo.type.waipio_singleBin
-                || ChipInfo.which == ChipInfo.type.cape_singleBin
-                || ChipInfo.which == ChipInfo.type.ukee_singleBin
-                || ChipInfo.which == ChipInfo.type.cliffs_singleBin
-                || ChipInfo.which == ChipInfo.type.cliffs_7_singleBin
-                || ChipInfo.which == ChipInfo.type.kalama_sg_singleBin) {
-            lines.add("qcom,gpu-pwrlevels {");
-            lines.addAll(bins.get(0).header);
-            for (int pwr_level_id = 0; pwr_level_id < bins.get(0).levels.size(); pwr_level_id++) {
-                lines.add("qcom,gpu-pwrlevel@" + pwr_level_id + " {");
-                lines.add("reg = <" + pwr_level_id + ">;");
-                lines.addAll(bins.get(0).levels.get(pwr_level_id).lines);
-                lines.add("};");
-            }
-            lines.add("};");
-        }
-        return lines;
+        return ChipInfo.which.architecture.generateTable(bins);
     }
 
     public static List<String> genBack(List<String> table) {
@@ -1434,59 +1251,17 @@ public class GpuTableEditor {
         return next;
     }
 
-    private static void offset_initial_level_old(int offset) throws Exception {
-        boolean started = false;
-        int bracket = 0;
-        for (int i = 0; i < lines_in_dts.size(); i++) {
-            String line = lines_in_dts.get(i);
-
-            if (line.contains("qcom,kgsl-3d0") && line.contains("{")) {
-                started = true;
-                bracket++;
-                continue;
-            }
-
-            if (line.contains("{")) {
-                bracket++;
-                continue;
-            }
-
-            if (line.contains("}")) {
-                bracket--;
-                if (bracket == 0)
-                    break;
-                continue;
-            }
-
-            if (!started)
-                continue;
-
-            if (line.contains("qcom,initial-pwrlevel")) {
-                lines_in_dts.set(i,
-                        DtsHelper.encodeIntOrHexLine(DtsHelper.decode_int_line(line).name,
-                                DtsHelper.decode_int_line(line).value + offset + ""));
-            }
-
-        }
-    }
-
     private static void offset_initial_level(int bin_id, int offset) throws Exception {
-        if (ChipInfo.which == ChipInfo.type.kona_singleBin
-                || ChipInfo.which == ChipInfo.type.msmnile_singleBin
-                || ChipInfo.which == ChipInfo.type.lahaina_singleBin
-                || ChipInfo.which == ChipInfo.type.waipio_singleBin
-                || ChipInfo.which == ChipInfo.type.cape_singleBin
-                || ChipInfo.which == ChipInfo.type.ukee_singleBin
-                || ChipInfo.which == ChipInfo.type.cliffs_singleBin
-                || ChipInfo.which == ChipInfo.type.cliffs_7_singleBin
-                || ChipInfo.which == ChipInfo.type.kalama_sg_singleBin) {
-            offset_initial_level_old(offset);
+        if (bins == null || bins.isEmpty())
             return;
-        }
-        for (int i = 0; i < bins.get(bin_id).header.size(); i++) {
-            String line = bins.get(bin_id).header.get(i);
+        // Safety: ensure bin_id is valid. For single bin chips, we use bin 0.
+        int targetBinId = (bin_id >= 0 && bin_id < bins.size()) ? bin_id : 0;
+        Bin bin = bins.get(targetBinId);
+
+        for (int i = 0; i < bin.header.size(); i++) {
+            String line = bin.header.get(i);
             if (line.contains("qcom,initial-pwrlevel")) {
-                bins.get(bin_id).header.set(i,
+                bin.header.set(i,
                         DtsHelper.encodeIntOrHexLine(
                                 DtsHelper.decode_int_line(line).name,
                                 DtsHelper.decode_int_line(line).value + offset + ""));
@@ -1508,60 +1283,15 @@ public class GpuTableEditor {
         }
     }
 
-    private static void patch_throttle_level_old() throws Exception {
-        boolean started = false;
-        int bracket = 0;
-        for (int i = 0; i < lines_in_dts.size(); i++) {
-            String line = lines_in_dts.get(i);
-
-            if (line.contains("qcom,kgsl-3d0") && line.contains("{")) {
-                started = true;
-                bracket++;
-                continue;
-            }
-
-            if (line.contains("{")) {
-                bracket++;
-                continue;
-            }
-
-            if (line.contains("}")) {
-                bracket--;
-                if (bracket == 0)
-                    break;
-                continue;
-            }
-
-            if (!started)
-                continue;
-
-            if (line.contains("qcom,throttle-pwrlevel")) {
-                lines_in_dts.set(i,
-                        DtsHelper.encodeIntOrHexLine(DtsHelper.decode_int_line(line).name,
-                                "0"));
-            }
-
-        }
-    }
-
     private static void patch_throttle_level() throws Exception {
-        if (ChipInfo.which == ChipInfo.type.kona_singleBin
-                || ChipInfo.which == ChipInfo.type.msmnile_singleBin
-                || ChipInfo.which == ChipInfo.type.lahaina_singleBin
-                || ChipInfo.which == ChipInfo.type.waipio_singleBin
-                || ChipInfo.which == ChipInfo.type.cape_singleBin
-                || ChipInfo.which == ChipInfo.type.ukee_singleBin
-                || ChipInfo.which == ChipInfo.type.cliffs_singleBin
-                || ChipInfo.which == ChipInfo.type.cliffs_7_singleBin
-                || ChipInfo.which == ChipInfo.type.kalama_sg_singleBin) {
-            patch_throttle_level_old();
+        if (bins == null)
             return;
-        }
-        for (int bin_id = 0; bin_id < bins.size(); bin_id++) {
-            for (int i = 0; i < bins.get(bin_id).header.size(); i++) {
-                String line = bins.get(bin_id).header.get(i);
+
+        for (Bin bin : bins) {
+            for (int i = 0; i < bin.header.size(); i++) {
+                String line = bin.header.get(i);
                 if (line.contains("qcom,throttle-pwrlevel")) {
-                    bins.get(bin_id).header.set(i,
+                    bin.header.set(i,
                             DtsHelper.encodeIntOrHexLine(
                                     DtsHelper.decode_int_line(line).name, "0"));
                     break;
