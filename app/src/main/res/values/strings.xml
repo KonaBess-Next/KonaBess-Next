@@ -264,4 +264,7 @@
     <string name="close">Close</string>
     <string name="search_result_format">%1$d of %2$d</string>
     <string name="not_found">Not found</string>
+    <string name="expand_collapse">Expand/Collapse</string>
+    <string name="visual_view">Visual View</string>
+    <string name="text_view">Text View</string>
 </resources>

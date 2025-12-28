@@ -37,8 +37,15 @@ import com.ireddragonicy.konabessnext.viewmodel.RawDtsEditorViewModel;
 
 import com.ireddragonicy.konabessnext.R;
 import com.ireddragonicy.konabessnext.core.KonaBessCore;
+import com.ireddragonicy.konabessnext.model.dts.DtsNode;
+import com.ireddragonicy.konabessnext.ui.adapters.DtsTreeAdapter;
+import com.ireddragonicy.konabessnext.utils.DtsTreeHelper;
+import com.ireddragonicy.konabessnext.utils.LocaleUtil;
+import com.ireddragonicy.konabessnext.viewmodel.RawDtsEditorViewModel;
 
 import androidx.lifecycle.ViewModelProvider;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 
 /**
  * Raw DTS text editor with syntax highlighting and search navigation.
@@ -60,6 +67,12 @@ public class RawDtsEditorActivity extends AppCompatActivity {
     private ImageButton btnSearchPrev;
     private ImageButton btnSearchNext;
     private ImageButton btnSearchClose;
+
+    // Visual Editor
+    private RecyclerView visualRecycler;
+    private DtsTreeAdapter visualAdapter;
+    private boolean isVisualMode = false;
+    private DtsNode currentRootNode;
 
     private boolean hasUnsavedChanges = false;
 
@@ -88,6 +101,15 @@ public class RawDtsEditorActivity extends AppCompatActivity {
         editorContent = findViewById(R.id.editor_content);
         loadingState = findViewById(R.id.editor_loading_state);
         lineCountText = findViewById(R.id.line_count_text);
+
+        // Initialize Visual Editor
+        visualRecycler = findViewById(R.id.visual_editor_recycler);
+        visualRecycler.setLayoutManager(new LinearLayoutManager(this));
+        visualAdapter = new DtsTreeAdapter();
+        visualRecycler.setAdapter(visualAdapter);
+        com.ireddragonicy.konabessnext.ui.adapters.StickyHeaderItemDecoration stickHeaderDecoration = new com.ireddragonicy.konabessnext.ui.adapters.StickyHeaderItemDecoration(
+                visualAdapter);
+        stickHeaderDecoration.attachToRecyclerView(visualRecycler);
 
         // Initialize search bar views
         searchBar = findViewById(R.id.search_bar);
@@ -143,11 +165,20 @@ public class RawDtsEditorActivity extends AppCompatActivity {
                 currentSearchQuery = s.toString();
                 if (!currentSearchQuery.isEmpty()) {
                     // Reset search position and find first match
-                    editorContent.clearSearch();
-                    boolean found = editorContent.searchAndSelect(currentSearchQuery);
+                    boolean found = false;
+                    if (isVisualMode) {
+                        found = visualAdapter.search(currentSearchQuery);
+                    } else {
+                        editorContent.clearSearch();
+                        found = editorContent.searchAndSelect(currentSearchQuery);
+                    }
                     updateSearchResultDisplay(found);
                 } else {
-                    editorContent.clearSearch();
+                    if (isVisualMode) {
+                        visualAdapter.clearSearch();
+                    } else {
+                        editorContent.clearSearch();
+                    }
                     searchResultCount.setVisibility(View.GONE);
                 }
             }
@@ -192,6 +223,9 @@ public class RawDtsEditorActivity extends AppCompatActivity {
     private void hideSearchBar() {
         searchBar.setVisibility(View.GONE);
         editorContent.clearSearch();
+        if (visualAdapter != null) {
+            visualAdapter.clearSearch();
+        }
         searchResultCount.setVisibility(View.GONE);
 
         // Hide keyboard
@@ -206,14 +240,24 @@ public class RawDtsEditorActivity extends AppCompatActivity {
 
     private void searchNext() {
         if (!currentSearchQuery.isEmpty()) {
-            boolean found = editorContent.searchAndSelect(currentSearchQuery);
+            boolean found = false;
+            if (isVisualMode) {
+                found = visualAdapter.nextSearchResult();
+            } else {
+                found = editorContent.searchAndSelect(currentSearchQuery);
+            }
             updateSearchResultDisplay(found);
         }
     }
 
     private void searchPrevious() {
         if (!currentSearchQuery.isEmpty()) {
-            boolean found = editorContent.searchPrevious(currentSearchQuery);
+            boolean found = false;
+            if (isVisualMode) {
+                found = visualAdapter.previousSearchResult();
+            } else {
+                found = editorContent.searchPrevious(currentSearchQuery);
+            }
             updateSearchResultDisplay(found);
         }
     }
@@ -272,6 +316,11 @@ public class RawDtsEditorActivity extends AppCompatActivity {
     }
 
     private void saveFile() {
+        // Sync visual changes to text before saving
+        if (isVisualMode) {
+            syncVisualToText();
+        }
+
         AlertDialog waitingDialog = new MaterialAlertDialogBuilder(this)
                 .setMessage(R.string.saving_file)
                 .setCancelable(false)
@@ -324,6 +373,73 @@ public class RawDtsEditorActivity extends AppCompatActivity {
         }).start();
     }
 
+    private void handleExport() {
+        if (isVisualMode) {
+            syncVisualToText();
+        }
+
+        final EditText input = new EditText(this);
+        input.setSingleLine(true);
+        input.setText("export_" + System.currentTimeMillis() + ".dts");
+        input.selectAll();
+
+        new MaterialAlertDialogBuilder(this)
+                .setTitle("Export Raw DTS")
+                .setMessage("Enter filename for export:")
+                .setView(input)
+                .setPositiveButton("Export", (dialog, which) -> {
+                    String filename = input.getText().toString().trim();
+                    if (!filename.isEmpty()) {
+                        performExport(filename);
+                    }
+                })
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
+    }
+
+    private void performExport(String filename) {
+        if (!filename.endsWith(".dts")) {
+            filename += ".dts";
+        }
+
+        final String finalFilename = filename;
+        final String content = editorContent.getText().toString();
+
+        new Thread(() -> {
+            try {
+                // Ensure export directory exists
+                File exportDir = new File(getFilesDir(), "konabess_exports");
+                if (!exportDir.exists()) {
+                    exportDir.mkdirs();
+                }
+
+                File exportFile = new File(exportDir, finalFilename);
+                BufferedWriter writer = new BufferedWriter(new FileWriter(exportFile));
+                writer.write(content);
+                writer.close();
+
+                // Add to history
+                // We use ChipInfo.which.name() if available, or "Unknown"
+                String chipType = "Unknown";
+                if (com.ireddragonicy.konabessnext.core.ChipInfo.which != com.ireddragonicy.konabessnext.core.ChipInfo.type.unknown) {
+                    chipType = com.ireddragonicy.konabessnext.core.ChipInfo.which.name();
+                }
+
+                com.ireddragonicy.konabessnext.utils.ExportHistoryManager historyManager = new com.ireddragonicy.konabessnext.utils.ExportHistoryManager(
+                        this);
+                historyManager.addExport(finalFilename, "Raw DTS Export", exportFile.getAbsolutePath(), chipType);
+
+                runOnUiThread(
+                        () -> Toast.makeText(this, "Exported to " + exportFile.getName(), Toast.LENGTH_LONG).show());
+
+            } catch (Exception e) {
+                e.printStackTrace();
+                runOnUiThread(
+                        () -> Toast.makeText(this, "Export failed: " + e.getMessage(), Toast.LENGTH_SHORT).show());
+            }
+        }).start();
+    }
+
     private void updateLineCount() {
         int lineCount = editorContent.getLines().size();
         lineCountText.setText(getString(R.string.line_count, lineCount));
@@ -334,6 +450,9 @@ public class RawDtsEditorActivity extends AppCompatActivity {
 
         if (id == R.id.action_save) {
             saveFile();
+            return true;
+        } else if (id == R.id.action_export) {
+            handleExport();
             return true;
         } else if (id == R.id.action_undo) {
             performUndo();
@@ -347,9 +466,70 @@ public class RawDtsEditorActivity extends AppCompatActivity {
         } else if (id == R.id.action_copy_all) {
             copyAllToClipboard();
             return true;
+        } else if (id == R.id.action_toggle_view) {
+            toggleViewMode(item);
+            return true;
         }
 
         return false;
+    }
+
+    private void toggleViewMode(MenuItem item) {
+        if (isVisualMode) {
+            // Switch to Text Mode
+            syncVisualToText();
+            visualRecycler.setVisibility(View.GONE);
+            editorContent.setVisibility(View.VISIBLE);
+            item.setIcon(R.drawable.ic_drag_handle); // Set icon to "List" for next toggle
+            item.setTitle(R.string.visual_view);
+            isVisualMode = false;
+        } else {
+            // Switch to Visual Mode
+            syncTextToVisual();
+            editorContent.setVisibility(View.GONE);
+            visualRecycler.setVisibility(View.VISIBLE);
+            // Hide search bar if open
+            if (searchBar.getVisibility() == View.VISIBLE)
+                hideSearchBar();
+
+            item.setIcon(R.drawable.ic_code); // Set icon to "Code" for next toggle
+            item.setTitle(R.string.text_view); // Assuming you have a string resource or just hardcode for valid
+            isVisualMode = true;
+        }
+    }
+
+    private void syncTextToVisual() {
+        try {
+            String content = editorContent.getText().toString();
+            currentRootNode = DtsTreeHelper.parse(content);
+            visualAdapter.setRootNode(currentRootNode);
+        } catch (Throwable e) {
+            e.printStackTrace();
+            Toast.makeText(this, "Error parsing DTS: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            // Fallback to text mode if visual fails
+            isVisualMode = false;
+            editorContent.setVisibility(View.VISIBLE);
+            visualRecycler.setVisibility(View.GONE);
+            if (toolbar != null && toolbar.getMenu() != null) {
+                MenuItem item = toolbar.getMenu().findItem(R.id.action_toggle_view);
+                if (item != null) {
+                    item.setIcon(R.drawable.ic_drag_handle);
+                    item.setTitle(R.string.visual_view);
+                }
+            }
+        }
+    }
+
+    private void syncVisualToText() {
+        if (currentRootNode != null) {
+            try {
+                String content = DtsTreeHelper.generate(currentRootNode);
+                editorContent.setText(content);
+            } catch (Exception e) {
+                e.printStackTrace();
+                Toast.makeText(this, "Error generating DTS: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            }
+        }
     }
 
     private void performUndo() {

@@ -545,6 +545,15 @@ public class TableIO {
 
             activity.runOnUiThread(() -> {
                 if (!error) {
+                    // Add to history
+                    com.ireddragonicy.konabessnext.utils.ExportHistoryManager historyManager = new com.ireddragonicy.konabessnext.utils.ExportHistoryManager(
+                            activity);
+                    String chipType = "Unknown";
+                    if (com.ireddragonicy.konabessnext.core.ChipInfo.which != com.ireddragonicy.konabessnext.core.ChipInfo.type.unknown) {
+                        chipType = com.ireddragonicy.konabessnext.core.ChipInfo.which.name();
+                    }
+                    historyManager.addExport(filename, "Raw DTS Export (Main Menu)", destPath, chipType);
+
                     Toast.makeText(activity,
                             activity.getResources().getString(R.string.success_export_to) + " " + destPath,
                             Toast.LENGTH_LONG).show();

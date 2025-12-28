@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:paddingVertical="4dp"
+    android:paddingEnd="16dp">
+
+    <!-- Indentation Spacer -->
+    <View
+        android:id="@+id/prop_indentation"
+        android:layout_width="0dp"
+        android:layout_height="1dp" />
+
+    <!-- Property Key -->
+    <TextView
+        android:id="@+id/prop_key"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="0.4"
+        android:text="property"
+        android:textSize="14sp"
+        android:textColor="?attr/colorOnSurfaceVariant"
+        android:paddingStart="40dp"
+        android:paddingEnd="8dp" />
+
+    <!-- Equal Sign -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="="
+        android:textColor="?attr/colorOnSurfaceVariant"
+        android:layout_marginEnd="8dp" />
+
+    <!-- Property Value Input -->
+    <EditText
+        android:id="@+id/prop_value"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="0.6"
+        android:background="@drawable/dialog_background"
+        android:padding="8dp"
+        android:textSize="14sp"
+        android:textColor="?attr/colorOnSurface"
+        android:inputType="textNoSuggestions"
+        android:hint="value" />
+
+</LinearLayout>

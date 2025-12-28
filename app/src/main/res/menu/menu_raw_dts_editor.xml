@@ -7,6 +7,12 @@
         android:icon="@drawable/ic_save"
         android:title="@string/save"
         app:showAsAction="ifRoom" />
+
+    <item
+        android:id="@+id/action_export"
+        android:icon="@drawable/ic_export_modern"
+        android:title="Export"
+        app:showAsAction="ifRoom" />
     
     <item
         android:id="@+id/action_undo"
@@ -20,6 +26,11 @@
         android:title="@string/redo"
         app:showAsAction="ifRoom" />
     
+    <item
+        android:id="@+id/action_toggle_view"
+        android:icon="@drawable/ic_drag_handle"
+        android:title="@string/visual_view"
+        app:showAsAction="ifRoom" />
     <item
         android:id="@+id/action_search"
         android:icon="@drawable/ic_search"
