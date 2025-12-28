@@ -1,7 +1,7 @@
 # Add project specific ProGuard rules here.
-# Aggressive optimization for minimal APK size
+# Balanced optimization for minimal APK size while maintaining functionality
 
-# Maximum optimization
+# Optimization settings
 -optimizationpasses 5
 -dontusemixedcaseclassnames
 -dontskipnonpubliclibraryclasses
@@ -13,14 +13,31 @@
 -keepattributes SourceFile,LineNumberTable
 -renamesourcefileattribute SourceFile
 
-# Remove ALL logging in release builds
+# CRITICAL: Keep all Activities (fixes "problem parsing the package" error)
+-keep public class * extends android.app.Activity
+-keep public class * extends androidx.appcompat.app.AppCompatActivity
+-keep public class * extends androidx.fragment.app.Fragment
+-keep public class * extends android.app.Application
+
+# Keep all UI components from our package
+-keep class com.ireddragonicy.konabessnext.ui.** { *; }
+-keep class com.ireddragonicy.konabessnext.KonaBessApplication { *; }
+
+# Keep core classes
+-keep class com.ireddragonicy.konabessnext.core.** { *; }
+-keep class com.ireddragonicy.konabessnext.model.** { *; }
+-keep class com.ireddragonicy.konabessnext.data.** { *; }
+-keep class com.ireddragonicy.konabessnext.repository.** { *; }
+-keep class com.ireddragonicy.konabessnext.viewmodel.** { *; }
+-keep class com.ireddragonicy.konabessnext.editor.** { *; }
+-keep class com.ireddragonicy.konabessnext.utils.** { *; }
+
+# Remove logging in release builds
 -assumenosideeffects class android.util.Log {
     public static *** d(...);
     public static *** v(...);
     public static *** i(...);
     public static *** w(...);
-    public static *** e(...);
-    public static *** wtf(...);
 }
 
 # Remove System.out/err
@@ -29,40 +46,35 @@
     public void print(...);
 }
 
-# Keep minimal LibSU classes (only what we use)
--keep class com.topjohnwu.superuser.Shell { *; }
--keep class com.topjohnwu.superuser.Shell$* { *; }
--keep class com.topjohnwu.superuser.io.SuFile { *; }
--keep class com.topjohnwu.superuser.io.SuFileInputStream { *; }
--keep class com.topjohnwu.superuser.io.SuFileOutputStream { *; }
+# LibSU - Keep required classes
+-keep class com.topjohnwu.superuser.** { *; }
+-dontwarn com.topjohnwu.superuser.**
 
-# Minimal Material Components (don't keep everything)
+# MPAndroidChart
+-keep class com.github.mikephil.charting.** { *; }
+-dontwarn com.github.mikephil.charting.**
+
+# Material Components
+-keep class com.google.android.material.** { *; }
 -dontwarn com.google.android.material.**
 
-# Minimal AndroidX 
+# AndroidX - keep important components
+-keep class androidx.** { *; }
 -dontwarn androidx.**
 
-# Keep only application classes that are actually used
--keep class com.ireddragonicy.konabessnext.MainActivity { *; }
--keep class com.ireddragonicy.konabessnext.SettingsActivity { *; }
--keep class com.ireddragonicy.konabessnext.GpuTableEditor { *; }
--keep class com.ireddragonicy.konabessnext.GpuVoltEditor { *; }
--keep class com.ireddragonicy.konabessnext.KonaBessCore { *; }
-
-# Keep adapters (used by RecyclerView)
--keep class com.ireddragonicy.konabessnext.adapters.** { *; }
-
-# Keep utils
--keep class com.ireddragonicy.konabessnext.utils.** { *; }
+# Keep ViewModels
+-keep class * extends androidx.lifecycle.ViewModel { *; }
+-keep class * extends androidx.lifecycle.AndroidViewModel { *; }
 
 # Keep native methods
 -keepclasseswithmembernames,includedescriptorclasses class * {
     native <methods>;
 }
 
-# Keep custom views (minimal)
+# Keep custom views
 -keepclasseswithmembers class * {
     public <init>(android.content.Context, android.util.AttributeSet);
+    public <init>(android.content.Context, android.util.AttributeSet, int);
 }
 
 # Keep Parcelable
@@ -73,9 +85,13 @@
 # Keep Serializable
 -keepnames class * implements java.io.Serializable
 
-# Remove debugging attributes
+# Keep R classes
+-keepclassmembers class **.R$* {
+    public static <fields>;
+}
+
+# Remove Kotlin intrinsics checks in release
 -assumenosideeffects class kotlin.jvm.internal.Intrinsics {
     public static void check*(...);
     public static void throw*(...);
 }
-
