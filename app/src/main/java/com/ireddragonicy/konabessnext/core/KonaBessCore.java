@@ -5,7 +5,7 @@ import com.ireddragonicy.konabessnext.R;
 import android.app.Activity;
 import android.content.Context;
 import android.os.Environment;
-import android.os.SystemProperties;
+import android.os.Environment;
 
 import java.io.*;
 import java.nio.file.Files;
@@ -167,7 +167,7 @@ public class KonaBessCore {
                 case "slot" -> "ro.boot.slot_suffix";
                 default -> null;
             };
-            return propertyName != null ? SystemProperties.get(propertyName, "") : "";
+            return propertyName != null ? getSystemProperty(propertyName, "") : "";
         });
     }
 
@@ -562,9 +562,20 @@ public class KonaBessCore {
         return currentDtb;
     }
 
+    private static String getSystemProperty(String key, String defaultValue) {
+        try {
+            Class<?> clazz = Class.forName("android.os.SystemProperties");
+            java.lang.reflect.Method method = clazz.getDeclaredMethod("get", String.class, String.class);
+            return (String) method.invoke(null, key, defaultValue);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return defaultValue;
+        }
+    }
+
     public static int getDtbIndex() {
         try {
-            return Integer.parseInt(SystemProperties.get("ro.boot.dtb_idx", "-1"));
+            return Integer.parseInt(getSystemProperty("ro.boot.dtb_idx", "-1"));
         } catch (NumberFormatException e) {
             return -1;
         }
