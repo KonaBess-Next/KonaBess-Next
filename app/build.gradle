@@ -102,10 +102,12 @@ android {
         checkReleaseBuilds = false
     }
 
-    // Rename output APKs
+    // Rename output APKs - properly handle ABI splits
     applicationVariants.all { variant ->
-        variant.outputs.all {
-            outputFileName = "KonaBess-Next-${variant.name}.apk"
+        variant.outputs.all { output ->
+            def abi = output.getFilter(com.android.build.OutputFile.ABI)
+            def abiName = abi != null ? "-${abi}" : ""
+            outputFileName = "KonaBess-Next${abiName}-${variant.name}.apk"
         }
     }
 }

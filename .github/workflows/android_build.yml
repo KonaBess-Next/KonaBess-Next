@@ -85,34 +85,36 @@ jobs:
         VERSION=${{ steps.version.outputs.version }}
         BUILD=${{ steps.version.outputs.build }}
         
-        # Check files before rename
-        echo "Listing debug directory:"
-        ls -R app/build/outputs/apk/debug/ || echo "Debug directory not found or empty"
+        echo "=== Listing all generated APKs ==="
+        find app/build/outputs/apk -name "*.apk" -type f
         
-        # Rename Debug APK - handle both universal and split APKs
+        # Rename Debug APK
         DEBUG_APK=$(find app/build/outputs/apk/debug -name "*.apk" ! -name "output-metadata.json" -type f | head -1)
         if [ -n "$DEBUG_APK" ]; then
           mv "$DEBUG_APK" "app/build/outputs/apk/debug/KonaBessNext-v${VERSION}-build${BUILD}-debug.apk"
-          echo "Debug APK renamed successfully: $DEBUG_APK -> KonaBessNext-v${VERSION}-build${BUILD}-debug.apk"
+          echo "✅ Debug APK renamed: $DEBUG_APK"
         else
-          echo "Warning: No debug APK found. Debug APK will not be included."
+          echo "⚠️ No debug APK found"
         fi
         
-        # Handle Release APK
-        # Priority: Look for universal APK first, then fallback to split APK
-        RELEASE_APK=$(find app/build/outputs/apk/release -name "*universal-release.apk" -type f | head -1)
-        if [ -z "$RELEASE_APK" ]; then
-             RELEASE_APK=$(find app/build/outputs/apk/release -name "*.apk" -type f | head -1)
+        # Rename Release APKs - handle both universal and arm64
+        # Universal APK (preferred for distribution)
+        UNIVERSAL_APK=$(find app/build/outputs/apk/release -name "*-release.apk" -type f | grep -v arm64 | head -1)
+        if [ -n "$UNIVERSAL_APK" ]; then
+          mv "$UNIVERSAL_APK" "app/build/outputs/apk/release/KonaBessNext-v${VERSION}-build${BUILD}-universal-release.apk"
+          echo "✅ Universal Release APK renamed: $UNIVERSAL_APK"
         fi
         
-        if [ -n "$RELEASE_APK" ]; then
-           mv "$RELEASE_APK" "app/build/outputs/apk/release/KonaBessNext-v${VERSION}-build${BUILD}-release.apk"
-           echo "Release APK renamed successfully: $RELEASE_APK"
+        # ARM64 APK
+        ARM64_APK=$(find app/build/outputs/apk/release -name "*arm64*-release.apk" -type f | head -1)
+        if [ -n "$ARM64_APK" ]; then
+          mv "$ARM64_APK" "app/build/outputs/apk/release/KonaBessNext-v${VERSION}-build${BUILD}-arm64-release.apk"
+          echo "✅ ARM64 Release APK renamed: $ARM64_APK"
         fi
         
         # Show APK sizes
         echo ""
-        echo "APK Sizes:"
+        echo "=== Final APK Sizes ==="
         ls -lh app/build/outputs/apk/debug/*.apk 2>/dev/null || true
         ls -lh app/build/outputs/apk/release/*.apk 2>/dev/null || true
 
