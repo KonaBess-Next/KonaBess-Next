@@ -2,64 +2,61 @@ package com.ireddragonicy.konabessnext.utils;
 
 import com.topjohnwu.superuser.Shell;
 
+import java.io.File;
 import java.util.List;
 
+/**
+ * Helper class for root operations using libsu.
+ * Supports Magisk, KernelSU, KernelSU Next, and APatch.
+ */
 public class RootHelper {
-    
+
+    private static final File KERNELSU_DIR = new File("/data/adb/ksu");
+
     static {
-        // Initialize libsu with Shell.Config
         Shell.enableVerboseLogging = false;
         Shell.setDefaultBuilder(Shell.Builder.create()
                 .setFlags(Shell.FLAG_REDIRECT_STDERR)
-                .setTimeout(10));
+                .setTimeout(30));
     }
-    
-    /**
-     * Execute a root command and return the result
-     */
+
     public static Shell.Result exec(String... commands) {
         return Shell.cmd(commands).exec();
     }
-    
-    /**
-     * Execute a root command and check if it was successful
-     */
+
     public static boolean execAndCheck(String... commands) {
-        Shell.Result result = exec(commands);
-        return result.isSuccess();
+        return exec(commands).isSuccess();
     }
-    
-    /**
-     * Execute a root command and return output lines
-     */
+
     public static List<String> execForOutput(String... commands) {
-        Shell.Result result = exec(commands);
-        return result.getOut();
+        return exec(commands).getOut();
     }
-    
+
     /**
-     * Check if root access is available
+     * Check if root access is available.
+     * Supports libsu detection with KernelSU fallback.
      */
     public static boolean isRootAvailable() {
-        return Shell.getShell().isRoot();
+        try {
+            Shell shell = Shell.getShell();
+            if (shell.isRoot()) {
+                return true;
+            }
+            // KernelSU fallback: test actual root access
+            if (KERNELSU_DIR.exists()) {
+                return Shell.cmd("id").exec().getOut().toString().contains("uid=0");
+            }
+            return false;
+        } catch (Exception e) {
+            return false;
+        }
     }
-    
-    /**
-     * Execute a non-root shell command
-     */
+
     public static Shell.Result execSh(String... commands) {
         return Shell.cmd(commands).exec();
     }
-    
-    /**
-     * Execute a non-root shell command and return output lines
-     */
+
     public static List<String> execShForOutput(String... commands) {
-        Shell.Result result = execSh(commands);
-        return result.getOut();
+        return execSh(commands).getOut();
     }
 }
-
-
-
-

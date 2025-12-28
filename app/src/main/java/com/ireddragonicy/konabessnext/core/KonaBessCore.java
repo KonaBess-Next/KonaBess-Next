@@ -190,12 +190,18 @@ public class KonaBessCore {
     }
 
     private static void getBootImageByType(Context context, String type) throws IOException {
+        // Check root access first with clear error message
+        if (!RootHelper.isRootAvailable()) {
+            throw new IOException(
+                    "Root access not available. Please grant root permission in your root manager (Magisk/KernelSU/APatch) and try again.");
+        }
+
         String bootImgPath = filesDir + "/boot.img";
         String partition = "/dev/block/bootdevice/by-name/" + type + getCurrent("slot");
 
         if (!RootHelper.execAndCheck(
                 String.format("dd if=%s of=%s && chmod 644 %s", partition, bootImgPath, bootImgPath))) {
-            throw new IOException("Failed to get " + type + " image");
+            throw new IOException("Failed to get " + type + " image. Please check if root permission is granted.");
         }
 
         File target = new File(bootImgPath);
@@ -564,6 +570,3 @@ public class KonaBessCore {
         }
     }
 }
-
-
-
