@@ -99,10 +99,15 @@ jobs:
         fi
         
         # Handle Release APK
-        RELEASE_APK=$(find app/build/outputs/apk/release -name "*.apk" -type f | head -1)
+        # Priority: Look for universal APK first, then fallback to split APK
+        RELEASE_APK=$(find app/build/outputs/apk/release -name "*universal-release.apk" -type f | head -1)
+        if [ -z "$RELEASE_APK" ]; then
+             RELEASE_APK=$(find app/build/outputs/apk/release -name "*.apk" -type f | head -1)
+        fi
+        
         if [ -n "$RELEASE_APK" ]; then
            mv "$RELEASE_APK" "app/build/outputs/apk/release/KonaBessNext-v${VERSION}-build${BUILD}-release.apk"
-           echo "Release APK renamed successfully"
+           echo "Release APK renamed successfully: $RELEASE_APK"
         fi
         
         # Show APK sizes

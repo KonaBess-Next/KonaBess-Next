@@ -29,6 +29,12 @@ android {
             
             // Use optimized ProGuard configuration
             proguardFiles(getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro')
+            
+            // Use debug signing for release build ONLY if no real signing key is provided
+            // This allows local installation/testing while preserving CI signing injection
+            if (!project.hasProperty("android.injected.signing.store.file")) {
+                signingConfig signingConfigs.debug
+            }
         }
         
         debug {
@@ -42,7 +48,7 @@ android {
             enable = true
             reset()
             include "arm64-v8a"
-            universalApk = false
+            universalApk = true
         }
     }
     
