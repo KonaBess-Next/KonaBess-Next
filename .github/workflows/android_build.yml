@@ -52,23 +52,16 @@ jobs:
 
     - name: Build Debug APK
       run: ./gradlew assembleDebug --stacktrace
-      
-    - name: Optimize APK with zipalign
+
+    - name: List generated APKs
       run: |
-        # Find and optimize APKs
-        RELEASE_APK=$(find app/build/outputs/apk/release -name "*.apk" -type f | head -1)
-        if [ -n "$RELEASE_APK" ]; then
-          ANDROID_HOME="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
-          BUILD_TOOLS_VERSION=$(ls -1 "$ANDROID_HOME/build-tools" | sort -V | tail -1)
-          ZIPALIGN="$ANDROID_HOME/build-tools/$BUILD_TOOLS_VERSION/zipalign"
-          
-          if [ -f "$ZIPALIGN" ]; then
-            ALIGNED_APK="${RELEASE_APK%.apk}-aligned.apk"
-            "$ZIPALIGN" -v 4 "$RELEASE_APK" "$ALIGNED_APK"
-            mv "$ALIGNED_APK" "$RELEASE_APK"
-            echo "✅ APK optimized with zipalign"
-          fi
-        fi
+        echo "=== Release APKs ==="
+        find app/build/outputs/apk/release -name "*.apk" -type f 2>/dev/null || echo "No release APKs found"
+        ls -la app/build/outputs/apk/release/ 2>/dev/null || echo "Release directory not found"
+        echo ""
+        echo "=== Debug APKs ==="
+        find app/build/outputs/apk/debug -name "*.apk" -type f 2>/dev/null || echo "No debug APKs found"
+        ls -la app/build/outputs/apk/debug/ 2>/dev/null || echo "Debug directory not found"
         
     - name: Get version name
       id: version
