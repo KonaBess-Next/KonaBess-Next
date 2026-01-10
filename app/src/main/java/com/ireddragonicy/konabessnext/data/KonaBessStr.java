@@ -38,6 +38,7 @@ public class KonaBessStr {
         CHIP_CONVERTERS.put(ChipInfo.type.sun, new DefaultConverter());
         CHIP_CONVERTERS.put(ChipInfo.type.canoe, new CanoeConverter());
         CHIP_CONVERTERS.put(ChipInfo.type.tuna, new TunaConverter());
+        CHIP_CONVERTERS.put(ChipInfo.type.pineapple_sg, new PineappleSgConverter());
     }
 
     public static String convert_bins(int which, Activity activity) throws Exception {
@@ -203,6 +204,12 @@ public class KonaBessStr {
         public String convert(int which, Activity activity) {
             String result = TUNA_MAPPINGS.get(which);
             return result != null ? result : activity.getString(R.string.unknown_table) + which;
+        }
+    }
+
+    private static class PineappleSgConverter extends BaseConverter {
+        PineappleSgConverter() {
+            binMappings.put(0, R.string.sdg3g3);
         }
     }
 
