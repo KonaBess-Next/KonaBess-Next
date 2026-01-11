@@ -68,6 +68,7 @@ public class KonaBessCore {
             put("CanoeP v2 SoC", ChipInfo.type.canoe);
             put("Tuna 7 SoC", ChipInfo.type.tuna);
             put("Tuna SoC", ChipInfo.type.tuna);
+            put("PineappleP SG", ChipInfo.type.pineapple_sg);
         }
     };
 
