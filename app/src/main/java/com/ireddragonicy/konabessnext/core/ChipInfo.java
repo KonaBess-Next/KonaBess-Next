@@ -42,6 +42,7 @@ public class ChipInfo {
         canoe(R.string.sd8e_gen5, 16, true, 1, LevelConfig.CONFIG_480_EXT, MULTI_BIN, null),
         tuna(R.string.sd8sg4, 16, true, 1, LevelConfig.CONFIG_480_EXT, MULTI_BIN, null),
         pineapple_sg(R.string.sdg3g3, 14, true, 1, LevelConfig.CONFIG_480, MULTI_BIN, null),
+        kalamap_qcs_singleBin(R.string.sd_kalamap_qcs, 16, true, 1, LevelConfig.CONFIG_480, SINGLE_BIN, null),
         unknown(R.string.unknown, 11, false, 0, LevelConfig.CONFIG_416, MULTI_BIN, null);
 
         public final int descriptionRes;

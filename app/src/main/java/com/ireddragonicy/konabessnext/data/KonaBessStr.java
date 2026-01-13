@@ -39,6 +39,7 @@ public class KonaBessStr {
         CHIP_CONVERTERS.put(ChipInfo.type.canoe, new CanoeConverter());
         CHIP_CONVERTERS.put(ChipInfo.type.tuna, new TunaConverter());
         CHIP_CONVERTERS.put(ChipInfo.type.pineapple_sg, new PineappleSgConverter());
+        CHIP_CONVERTERS.put(ChipInfo.type.kalamap_qcs_singleBin, new KalamaPQCSConverter());
     }
 
     public static String convert_bins(int which, Activity activity) throws Exception {
@@ -210,6 +211,12 @@ public class KonaBessStr {
     private static class PineappleSgConverter extends BaseConverter {
         PineappleSgConverter() {
             binMappings.put(0, R.string.sdg3g3);
+        }
+    }
+
+    private static class KalamaPQCSConverter extends BaseConverter {
+        KalamaPQCSConverter() {
+            binMappings.put(0, R.string.sd_kalamap_qcs);
         }
     }
 

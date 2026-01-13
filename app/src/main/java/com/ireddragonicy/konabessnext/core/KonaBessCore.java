@@ -69,6 +69,7 @@ public class KonaBessCore {
             put("Tuna 7 SoC", ChipInfo.type.tuna);
             put("Tuna SoC", ChipInfo.type.tuna);
             put("PineappleP SG", ChipInfo.type.pineapple_sg);
+            put("KalamaP QCS", ChipInfo.type.kalamap_qcs_singleBin);
         }
     };
 

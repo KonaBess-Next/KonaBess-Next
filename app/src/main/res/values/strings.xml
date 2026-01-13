@@ -144,6 +144,7 @@
      <string name="sd8e_gen5">Snapdragon 8 Elite Gen5</string>
      <string name="sd8sg4">Snapdragon 8s Gen 4</string>
      <string name="sdg3g3">Snapdragon G3 Gen 3</string>
+     <string name="sd_kalamap_qcs">Snapdragon 8 Gen 2 (QCS)</string>
      <string name="settings">Settings</string>
      <string name="language">Language</string>
      <string name="gpu_freq_unit">GPU Frequency Unit</string>
