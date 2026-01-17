@@ -88,29 +88,48 @@ jobs:
         echo "=== Listing all generated APKs ==="
         find app/build/outputs/apk -name "*.apk" -type f
         
-        # Rename Debug APK
-        DEBUG_APK=$(find app/build/outputs/apk/debug -name "*.apk" ! -name "output-metadata.json" -type f | head -1)
-        if [ -n "$DEBUG_APK" ]; then
-          mv "$DEBUG_APK" "app/build/outputs/apk/debug/KonaBessNext-v${VERSION}-build${BUILD}-debug.apk"
-          echo "✅ Debug APK renamed: $DEBUG_APK"
-        else
-          echo "⚠️ No debug APK found"
-        fi
+        rename_apk() {
+            local file=$1
+            local type=$2
+            local filename=$(basename "$file")
+            
+            # Skip if already renamed or metadata
+            if [[ "$filename" == KonaBessNext-v* ]] || [[ "$filename" == "output-metadata.json" ]]; then
+                return
+            fi
+            
+            local new_name="KonaBessNext-v${VERSION}-build${BUILD}"
+            
+            # Parse ABI
+            # Format is usually KonaBess-Next-<abi>-<type>.apk or KonaBess-Next-<type>.apk
+            local temp="${filename#KonaBess-Next-}" # Remove prefix
+            temp="${temp%-${type}.apk}"             # Remove suffix
+            
+            if [[ -z "$temp" ]] || [[ "$temp" == "$filename" ]]; then
+                # Universal or unknown format - assume universal if empty part
+                if [[ -z "$temp" ]] || [[ "$temp" == "release" ]] || [[ "$temp" == "debug" ]]; then
+                     new_name="${new_name}-universal-${type}.apk"
+                else
+                     new_name="${new_name}-${temp}-${type}.apk"
+                fi
+            else
+                # ABI found
+                new_name="${new_name}-${temp}-${type}.apk"
+            fi
+            
+            mv "$file" "$(dirname "$file")/$new_name"
+            echo "✅ Renamed $filename to $new_name"
+        }
         
-        # Rename Release APKs - handle both universal and arm64
-        # Universal APK (preferred for distribution)
-        UNIVERSAL_APK=$(find app/build/outputs/apk/release -name "*-release.apk" -type f | grep -v arm64 | head -1)
-        if [ -n "$UNIVERSAL_APK" ]; then
-          mv "$UNIVERSAL_APK" "app/build/outputs/apk/release/KonaBessNext-v${VERSION}-build${BUILD}-universal-release.apk"
-          echo "✅ Universal Release APK renamed: $UNIVERSAL_APK"
-        fi
+        # Rename all Debug APKs
+        find app/build/outputs/apk/debug -name "*.apk" -type f | while read file; do
+            rename_apk "$file" "debug"
+        done
         
-        # ARM64 APK
-        ARM64_APK=$(find app/build/outputs/apk/release -name "*arm64*-release.apk" -type f | head -1)
-        if [ -n "$ARM64_APK" ]; then
-          mv "$ARM64_APK" "app/build/outputs/apk/release/KonaBessNext-v${VERSION}-build${BUILD}-arm64-release.apk"
-          echo "✅ ARM64 Release APK renamed: $ARM64_APK"
-        fi
+        # Rename all Release APKs
+        find app/build/outputs/apk/release -name "*.apk" -type f | while read file; do
+            rename_apk "$file" "release"
+        done
         
         # Show APK sizes
         echo ""
