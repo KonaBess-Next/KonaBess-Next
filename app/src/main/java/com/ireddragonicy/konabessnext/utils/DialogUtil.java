@@ -5,6 +5,7 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.os.Build;
 import android.view.ViewGroup;
+import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.ScrollView;
@@ -301,6 +302,37 @@ public class DialogUtil {
      */
     public static MaterialAlertDialogBuilder createDialogBuilder(Context context) {
         return new MaterialAlertDialogBuilder(context);
+    }
+    public static void showEditDialog(Activity activity, String title, String message, 
+                                      String initialValue, int inputType, 
+                                      OnInputListener listener) {
+        EditText input = new EditText(activity);
+        input.setText(initialValue);
+        input.setInputType(inputType);
+        
+        new MaterialAlertDialogBuilder(activity)
+                .setTitle(title)
+                .setMessage(message)
+                .setView(input)
+                .setPositiveButton(R.string.save, (dialog, which) -> {
+                    if (listener != null) listener.onInput(input.getText().toString());
+                })
+                .setNegativeButton(R.string.cancel, null)
+                .show();
+    }
+
+    public interface OnInputListener {
+        void onInput(String text);
+    }
+
+    public static void showSingleChoiceDialog(Activity activity, String title, 
+                                              String[] items, int checkedItem, 
+                                              DialogInterface.OnClickListener listener) {
+        new MaterialAlertDialogBuilder(activity)
+                .setTitle(title)
+                .setSingleChoiceItems(items, checkedItem, listener)
+                .setNegativeButton(R.string.cancel, null)
+                .show();
     }
 }
 

@@ -60,6 +60,7 @@ import com.ireddragonicy.konabessnext.ui.adapters.GpuParamDetailAdapter;
 import com.ireddragonicy.konabessnext.ui.adapters.ParamAdapter;
 import com.ireddragonicy.konabessnext.utils.DialogUtil;
 import com.ireddragonicy.konabessnext.utils.DtsHelper;
+import com.ireddragonicy.konabessnext.utils.FileUtil;
 import com.ireddragonicy.konabessnext.utils.ItemTouchHelperCallback;
 import com.ireddragonicy.konabessnext.core.strategy.ChipArchitecture;
 
@@ -75,7 +76,6 @@ import androidx.lifecycle.ViewModelStoreOwner;
 public class GpuTableEditor {
     public static int bin_position;
 
-    // Using model.Bin and model.Level for MVVM architecture
     public static ArrayList<Bin> bins;
 
     private static ArrayList<String> lines_in_dts;
@@ -109,11 +109,6 @@ public class GpuTableEditor {
         historyListeners.remove(listener);
     }
 
-    // Maintain old refs for a moment or remove?
-    // User wants "Top Professional". Obsolete static refs are bad.
-    // But I must ensure I don't break existing code if I don't refactor everything
-    // at once.
-    // I will keep them but Deprecate usage.
     private static MaterialButton saveButtonRef;
     private static MaterialButton undoButtonRef;
     private static MaterialButton redoButtonRef;
@@ -122,7 +117,6 @@ public class GpuTableEditor {
     private static boolean isDirty = false;
     private static String lastSavedSignature;
 
-    // MVVM ViewModel reference - bridge for gradual migration
     private static GpuFrequencyViewModel viewModelRef;
 
     /**
@@ -191,17 +185,11 @@ public class GpuTableEditor {
         }
     }
 
-    // EditorState is now in com.ireddragonicy.konabessnext.model.EditorState
-
     public static void init() throws IOException {
         lines_in_dts = new ArrayList<>();
         bins = new ArrayList<>();
         bin_position = -1;
-        BufferedReader bufferedReader = new BufferedReader(new FileReader(new File(KonaBessCore.dts_path)));
-        String s;
-        while ((s = bufferedReader.readLine()) != null) {
-            lines_in_dts.add(s);
-        }
+        lines_in_dts.addAll(FileUtil.readLines(KonaBessCore.dts_path));
     }
 
     public static void decode() throws Exception {
@@ -242,44 +230,7 @@ public class GpuTableEditor {
     }
 
     public static void writeOut(List<String> new_dts) throws IOException {
-        File file = new File(KonaBessCore.dts_path);
-
-        // If file exists, delete it first to avoid permission issues
-        if (file.exists()) {
-            if (!file.delete()) {
-                // If can't delete, try to set writable first
-                file.setWritable(true);
-                if (!file.delete()) {
-                    throw new IOException("Cannot delete existing file: " + file.getAbsolutePath());
-                }
-            }
-        }
-
-        // Create new file
-        if (!file.createNewFile()) {
-            throw new IOException("Failed to create file: " + file.getAbsolutePath());
-        }
-
-        // Set proper permissions
-        file.setReadable(true, false);
-        file.setWritable(true, false);
-
-        BufferedWriter bufferedWriter = null;
-        try {
-            bufferedWriter = new BufferedWriter(new FileWriter(file));
-            for (String s : new_dts) {
-                bufferedWriter.write(s);
-                bufferedWriter.newLine();
-            }
-        } finally {
-            if (bufferedWriter != null) {
-                try {
-                    bufferedWriter.close();
-                } catch (IOException e) {
-                    // Ignore close errors
-                }
-            }
-        }
+        FileUtil.writeLines(KonaBessCore.dts_path, new_dts);
     }
 
     public static EditorState captureState() {
@@ -452,13 +403,12 @@ public class GpuTableEditor {
         boolean canUndo = !undoStack.isEmpty();
         boolean canRedo = !redoStack.isEmpty();
 
-        // Notify all listeners (Modular approach)
+        // Notify all listeners
         for (OnHistoryStateChangedListener listener : historyListeners) {
             listener.onHistoryStateChanged(canUndo, canRedo);
         }
 
-        // Legacy support (Direct View manipulation) - Deprecate but keep for
-        // safety/transitions
+        // Legacy support (Direct View manipulation)
         if (undoButtonRef != null && currentActivity != null) {
             currentActivity.runOnUiThread(new Runnable() {
                 @Override
@@ -933,99 +883,77 @@ public class GpuTableEditor {
             String raw_value, String paramTitle) throws Exception {
         // Handle voltage level editing with spinner
         if (raw_name.equals("qcom,level") || raw_name.equals("qcom,cx-level")) {
-            try {
-                Spinner spinner = new Spinner(activity);
-                ArrayAdapter<String> levelAdapter = new ArrayAdapter<>(activity,
-                        android.R.layout.simple_dropdown_item_1line,
-                        ChipInfo.rpmh_levels.level_str());
-                spinner.setAdapter(levelAdapter);
-                spinner.setSelection(GpuVoltEditor.levelint2int(Integer.parseInt(raw_value)));
-
-                new com.google.android.material.dialog.MaterialAlertDialogBuilder(activity)
-                        .setTitle(R.string.edit)
-                        .setView(spinner)
-                        .setMessage(R.string.editvolt_msg)
-                        .setPositiveButton(R.string.save, new DialogInterface.OnClickListener() {
-                            @Override
-                            public void onClick(DialogInterface dialog, int which) {
-                                try {
-                                    final String newValue = String.valueOf(
-                                            ChipInfo.rpmh_levels.levels()[spinner.getSelectedItemPosition()]);
-                                    final String encodedLine = DtsHelper.encodeIntOrHexLine(raw_name, newValue);
-                                    final String existingLine = bins.get(binIndex).levels.get(levelIndex).lines
-                                            .get(lineIndex);
-                                    if (Objects.equals(existingLine, encodedLine)) {
-                                        return;
+            DialogUtil.showSingleChoiceDialog(activity, 
+                activity.getString(R.string.edit),
+                ChipInfo.rpmh_levels.level_str(),
+                GpuVoltEditor.levelint2int(Integer.parseInt(raw_value)),
+                (dialog, which) -> {
+                    try {
+                        final String newValue = String.valueOf(
+                                ChipInfo.rpmh_levels.levels()[which]);
+                        final String encodedLine = DtsHelper.encodeIntOrHexLine(raw_name, newValue);
+                        final String existingLine = bins.get(binIndex).levels.get(levelIndex).lines
+                                .get(lineIndex);
+                        if (Objects.equals(existingLine, encodedLine)) {
+                            dialog.dismiss();
+                            return;
+                        }
+                        final String freqLabel = SettingsActivity.formatFrequency(
+                                getFrequencyFromLevel(bins.get(binIndex).levels.get(levelIndex)), activity);
+                        applyChange(activity.getString(R.string.history_update_voltage_level, freqLabel),
+                                new EditorChange() {
+                                    @Override
+                                    public void run() {
+                                        bins.get(binIndex).levels.get(levelIndex).lines.set(lineIndex,
+                                                encodedLine);
                                     }
-                                    final String freqLabel = SettingsActivity.formatFrequency(
-                                            getFrequencyFromLevel(bins.get(binIndex).levels.get(levelIndex)), activity);
-                                    applyChange(activity.getString(R.string.history_update_voltage_level, freqLabel),
-                                            new EditorChange() {
-                                                @Override
-                                                public void run() {
-                                                    bins.get(binIndex).levels.get(levelIndex).lines.set(lineIndex,
-                                                            encodedLine);
-                                                }
-                                            });
-                                    generateALevel(activity, binIndex, levelIndex, page);
-                                    Toast.makeText(activity, R.string.save_success,
-                                            Toast.LENGTH_SHORT).show();
-                                } catch (Exception exception) {
-                                    DialogUtil.showError(activity, R.string.save_failed);
-                                    exception.printStackTrace();
-                                }
-                            }
-                        })
-                        .setNegativeButton(R.string.cancel, null)
-                        .create().show();
-
-            } catch (Exception e) {
-                DialogUtil.showError(activity, R.string.error_occur);
-            }
+                                });
+                        dialog.dismiss();
+                        generateALevel(activity, binIndex, levelIndex, page);
+                        Toast.makeText(activity, R.string.save_success,
+                                Toast.LENGTH_SHORT).show();
+                    } catch (Exception exception) {
+                        DialogUtil.showError(activity, R.string.save_failed);
+                        exception.printStackTrace();
+                    }
+                });
         } else if (raw_name.equals("qcom,gpu-freq")) {
             // Handle GPU frequency with unit converter
             showFrequencyEditDialog(activity, binIndex, levelIndex, page, lineIndex, raw_name, raw_value, paramTitle);
         } else {
             // Handle other parameters with text input
-            EditText editText = new EditText(activity);
-            editText.setInputType(
-                    DtsHelper.shouldUseHex(raw_name) ? InputType.TYPE_CLASS_TEXT : InputType.TYPE_CLASS_NUMBER);
-            editText.setText(raw_value);
-            new com.google.android.material.dialog.MaterialAlertDialogBuilder(activity)
-                    .setTitle(activity.getResources().getString(R.string.edit) + " \"" + paramTitle + "\"")
-                    .setView(editText)
-                    .setMessage(KonaBessStr.help(raw_name, activity))
-                    .setPositiveButton(R.string.save, new DialogInterface.OnClickListener() {
-
-                        @Override
-                        public void onClick(DialogInterface dialog, int which) {
-                            try {
-                                final String newValue = editText.getText().toString();
-                                final String encodedLine = DtsHelper.encodeIntOrHexLine(raw_name, newValue);
-                                final String existingLine = bins.get(binIndex).levels.get(levelIndex).lines
-                                        .get(lineIndex);
-                                if (Objects.equals(existingLine, encodedLine)) {
-                                    return;
-                                }
-                                final String freqLabel = SettingsActivity.formatFrequency(
-                                        getFrequencyFromLevel(bins.get(binIndex).levels.get(levelIndex)), activity);
-                                applyChange(activity.getString(R.string.history_edit_parameter, paramTitle, freqLabel),
-                                        new EditorChange() {
-                                            @Override
-                                            public void run() {
-                                                bins.get(binIndex).levels.get(levelIndex).lines.set(lineIndex,
-                                                        encodedLine);
-                                            }
-                                        });
-                                generateALevel(activity, binIndex, levelIndex, page);
-                                Toast.makeText(activity, R.string.save_success,
-                                        Toast.LENGTH_SHORT).show();
-                            } catch (Exception e) {
-                                DialogUtil.showError(activity, R.string.save_failed);
-                            }
+            int inputType = DtsHelper.shouldUseHex(raw_name) ? InputType.TYPE_CLASS_TEXT : InputType.TYPE_CLASS_NUMBER;
+            DialogUtil.showEditDialog(activity,
+                activity.getResources().getString(R.string.edit) + " \"" + paramTitle + "\"",
+                KonaBessStr.help(raw_name, activity),
+                raw_value,
+                inputType,
+                (text) -> {
+                    try {
+                        final String newValue = text;
+                        final String encodedLine = DtsHelper.encodeIntOrHexLine(raw_name, newValue);
+                        final String existingLine = bins.get(binIndex).levels.get(levelIndex).lines
+                                .get(lineIndex);
+                        if (Objects.equals(existingLine, encodedLine)) {
+                            return;
                         }
-
-                    }).setNegativeButton(R.string.cancel, null).create().show();
+                        final String freqLabel = SettingsActivity.formatFrequency(
+                                getFrequencyFromLevel(bins.get(binIndex).levels.get(levelIndex)), activity);
+                        applyChange(activity.getString(R.string.history_edit_parameter, paramTitle, freqLabel),
+                                new EditorChange() {
+                                    @Override
+                                    public void run() {
+                                        bins.get(binIndex).levels.get(levelIndex).lines.set(lineIndex,
+                                                encodedLine);
+                                    }
+                                });
+                        generateALevel(activity, binIndex, levelIndex, page);
+                        Toast.makeText(activity, R.string.save_success,
+                                Toast.LENGTH_SHORT).show();
+                    } catch (Exception e) {
+                        DialogUtil.showError(activity, R.string.save_failed);
+                    }
+                });
         }
     }
 

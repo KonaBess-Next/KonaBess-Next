@@ -9,6 +9,7 @@ import androidx.appcompat.app.AlertDialog;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.os.Environment;
+import android.text.InputType;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -37,8 +38,10 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.ireddragonicy.konabessnext.ui.adapters.ActionCardAdapter;
 import com.ireddragonicy.konabessnext.utils.DialogUtil;
 import com.ireddragonicy.konabessnext.utils.ExportHistoryManager;
+import com.ireddragonicy.konabessnext.utils.FileUtil;
 import com.ireddragonicy.konabessnext.utils.GzipUtils;
 import com.ireddragonicy.konabessnext.utils.RootHelper;
+import com.ireddragonicy.konabessnext.utils.ThreadUtil;
 
 public class TableIO {
 
@@ -130,20 +133,12 @@ public class TableIO {
     }
 
     private static void import_edittext(Activity activity) {
-        EditText editText = new EditText(activity);
-        editText.setHint(activity.getResources().getString(R.string.paste_here));
-
-        new com.google.android.material.dialog.MaterialAlertDialogBuilder(activity)
-                .setTitle(R.string.import_data)
-                .setView(editText)
-                .setPositiveButton(R.string.confirm, (dialog, which) -> {
-                    if (which == DialogInterface.BUTTON_POSITIVE) {
-                        dialog.dismiss();
-                        new showDecodeDialog(activity, editText.getText().toString()).start();
-                    }
-                })
-                .setNegativeButton(R.string.cancel, null)
-                .create().show();
+        DialogUtil.showEditDialog(activity, 
+            activity.getString(R.string.import_data), 
+            null, 
+            "", 
+            InputType.TYPE_CLASS_TEXT, 
+            (text) -> new showDecodeDialog(activity, text).start());
     }
 
     private static abstract class ConfirmExportCallback {
@@ -185,21 +180,21 @@ public class TableIO {
     private static void export_cpy(Activity activity, String desc) {
         AlertDialog waiting = DialogUtil.getWaitDialog(activity, R.string.prepare_import_export);
         waiting.show();
-        new Thread(() -> {
+        
+        ThreadUtil.runInBackground(() -> {
             try {
                 String data = "konabess://" + getConfig(desc);
-                activity.runOnUiThread(() -> {
+                ThreadUtil.runOnMain(() -> {
                     waiting.dismiss();
-                    DialogUtil.showDetailedInfo(activity, R.string.export_done, R.string.export_done_msg,
-                            data);
+                    DialogUtil.showDetailedInfo(activity, R.string.export_done, R.string.export_done_msg, data);
                 });
             } catch (Exception e) {
-                activity.runOnUiThread(() -> {
+                ThreadUtil.runOnMain(() -> {
                     waiting.dismiss();
                     DialogUtil.showError(activity, R.string.error_occur);
                 });
             }
-        }).start();
+        });
     }
 
     private static class exportToFile extends Thread {
@@ -216,74 +211,55 @@ public class TableIO {
         }
 
         public void run() {
-            error = false;
+            ThreadUtil.runInBackground(() -> {
+                error = false;
+                ThreadUtil.runOnMain(() -> {
+                    waiting = DialogUtil.getWaitDialog(activity, R.string.prepare_import_export);
+                    waiting.show();
+                });
 
-            // Create and show dialog on UI thread
-            activity.runOnUiThread(() -> {
-                waiting = DialogUtil.getWaitDialog(activity, R.string.prepare_import_export);
-                waiting.show();
-            });
-
-            // Small delay to ensure dialog is created
-            try {
-                Thread.sleep(100);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-
-            // Generate filename
-            String finalFilename;
-            if (filename != null && !filename.isEmpty()) {
-                // Use custom filename, ensure it has .txt extension
-                finalFilename = filename.endsWith(".txt") ? filename : filename + ".txt";
-            } else {
-                // Use default timestamp-based filename
-                finalFilename = "konabess-" + new SimpleDateFormat("MMddHHmmss").format(new Date()) + ".txt";
-            }
-
-            // Use internal storage root directory
-            String destPath = Environment.getExternalStorageDirectory().getAbsolutePath() + "/" + finalFilename;
-
-            try {
-                String data = "konabess://" + getConfig(desc);
-
-                // Write to temp file in app's private directory first
-                File tempFile = new File(activity.getFilesDir(), "temp_export.txt");
-                BufferedWriter bufferedWriter = new BufferedWriter(new FileWriter(tempFile));
-                bufferedWriter.write(data);
-                bufferedWriter.close();
-
-                // Use centralized root copy utility
-                if (!RootHelper.copyFile(tempFile.getAbsolutePath(), destPath, "644")) {
-                    error = true;
-                }
-
-                // Clean up temp file
-                tempFile.delete();
-
-            } catch (Exception e) {
-                error = true;
-                e.printStackTrace();
-            }
-
-            final String finalPath = destPath;
-            final String savedFilename = finalFilename;
-            activity.runOnUiThread(() -> {
-                if (waiting != null && waiting.isShowing()) {
-                    waiting.dismiss();
-                }
-                if (!error) {
-                    // Save to history
-                    ExportHistoryManager historyManager = new ExportHistoryManager(activity);
-                    historyManager.addExport(savedFilename, desc, finalPath,
-                            ChipInfo.which.getDescription(activity));
-
-                    Toast.makeText(activity,
-                            activity.getResources().getString(R.string.success_export_to) + " " + finalPath,
-                            Toast.LENGTH_LONG).show();
+                // Generate filename
+                String finalFilename;
+                if (filename != null && !filename.isEmpty()) {
+                    finalFilename = filename.endsWith(".txt") ? filename : filename + ".txt";
                 } else {
-                    Toast.makeText(activity, R.string.failed_export, Toast.LENGTH_SHORT).show();
+                    finalFilename = "konabess-" + new SimpleDateFormat("MMddHHmmss").format(new Date()) + ".txt";
                 }
+
+                String destPath = Environment.getExternalStorageDirectory().getAbsolutePath() + "/" + finalFilename;
+
+                try {
+                    String data = "konabess://" + getConfig(desc);
+                    File tempFile = new File(activity.getFilesDir(), "temp_export.txt");
+                    FileUtil.writeString(tempFile.getAbsolutePath(), data);
+
+                    if (!RootHelper.copyFile(tempFile.getAbsolutePath(), destPath, "644")) {
+                        error = true;
+                    }
+                    tempFile.delete();
+                } catch (Exception e) {
+                    error = true;
+                    e.printStackTrace();
+                }
+
+                final String finalPath = destPath;
+                final String savedFilename = finalFilename;
+                ThreadUtil.runOnMain(() -> {
+                    if (waiting != null && waiting.isShowing()) {
+                        waiting.dismiss();
+                    }
+                    if (!error) {
+                        ExportHistoryManager historyManager = new ExportHistoryManager(activity);
+                        historyManager.addExport(savedFilename, desc, finalPath,
+                                ChipInfo.which.getDescription(activity));
+
+                        Toast.makeText(activity,
+                                activity.getResources().getString(R.string.success_export_to) + " " + finalPath,
+                                Toast.LENGTH_LONG).show();
+                    } else {
+                        Toast.makeText(activity, R.string.failed_export, Toast.LENGTH_SHORT).show();
+                    }
+                });
             });
         }
     }
@@ -525,53 +501,44 @@ public class TableIO {
         }
 
         public void run() {
-            error = false;
-            String timestamp = new SimpleDateFormat("MMddHHmmss").format(new Date());
-            String filename = "konabess_export_" + timestamp + ".dts";
-            destPath = Environment.getExternalStorageDirectory().getAbsolutePath() + "/" + filename;
+            ThreadUtil.runInBackground(() -> {
+                error = false;
+                String timestamp = new SimpleDateFormat("MMddHHmmss").format(new Date());
+                String filename = "konabess_export_" + timestamp + ".dts";
+                destPath = Environment.getExternalStorageDirectory().getAbsolutePath() + "/" + filename;
 
-            File srcFile = new File(KonaBessCore.dts_path);
+                File srcFile = new File(KonaBessCore.dts_path);
 
-            try {
-                // Use centralized root copy utility
-                if (!RootHelper.copyFile(srcFile.getAbsolutePath(), destPath)) {
-                    // Fallback to java IO if shell fails
-                    copyFile(srcFile, new File(destPath));
-                }
-            } catch (Exception e) {
-                error = true;
-                e.printStackTrace();
-            }
-
-            activity.runOnUiThread(() -> {
-                if (!error) {
-                    // Add to history
-                    com.ireddragonicy.konabessnext.utils.ExportHistoryManager historyManager = new com.ireddragonicy.konabessnext.utils.ExportHistoryManager(
-                            activity);
-                    String chipType = "Unknown";
-                    if (com.ireddragonicy.konabessnext.core.ChipInfo.which != com.ireddragonicy.konabessnext.core.ChipInfo.type.unknown) {
-                        chipType = com.ireddragonicy.konabessnext.core.ChipInfo.which.name();
+                try {
+                    // Use centralized root copy utility
+                    if (!RootHelper.copyFile(srcFile.getAbsolutePath(), destPath)) {
+                        // Fallback to java IO if shell fails
+                        FileUtil.copyFile(srcFile, new File(destPath));
                     }
-                    historyManager.addExport(filename, "Raw DTS Export (Main Menu)", destPath, chipType);
-
-                    Toast.makeText(activity,
-                            activity.getResources().getString(R.string.success_export_to) + " " + destPath,
-                            Toast.LENGTH_LONG).show();
-                } else {
-                    Toast.makeText(activity, R.string.failed_export, Toast.LENGTH_SHORT).show();
+                } catch (Exception e) {
+                    error = true;
+                    e.printStackTrace();
                 }
+
+                ThreadUtil.runOnMain(() -> {
+                    if (!error) {
+                        // Add to history
+                        com.ireddragonicy.konabessnext.utils.ExportHistoryManager historyManager = new com.ireddragonicy.konabessnext.utils.ExportHistoryManager(
+                                activity);
+                        String chipType = "Unknown";
+                        if (com.ireddragonicy.konabessnext.core.ChipInfo.which != com.ireddragonicy.konabessnext.core.ChipInfo.type.unknown) {
+                            chipType = com.ireddragonicy.konabessnext.core.ChipInfo.which.name();
+                        }
+                        historyManager.addExport(filename, "Raw DTS Export (Main Menu)", destPath, chipType);
+
+                        Toast.makeText(activity,
+                                activity.getResources().getString(R.string.success_export_to) + " " + destPath,
+                                Toast.LENGTH_LONG).show();
+                    } else {
+                        Toast.makeText(activity, R.string.failed_export, Toast.LENGTH_SHORT).show();
+                    }
+                });
             });
-        }
-
-        private void copyFile(File source, File dest) throws IOException {
-            try (java.io.InputStream is = new java.io.FileInputStream(source);
-                    java.io.OutputStream os = new java.io.FileOutputStream(dest)) {
-                byte[] buffer = new byte[1024];
-                int length;
-                while ((length = is.read(buffer)) > 0) {
-                    os.write(buffer, 0, length);
-                }
-            }
         }
     }
 
