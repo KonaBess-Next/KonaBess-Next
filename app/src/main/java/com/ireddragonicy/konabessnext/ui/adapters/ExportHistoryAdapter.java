@@ -104,7 +104,7 @@ public class ExportHistoryAdapter extends RecyclerView.Adapter<ExportHistoryAdap
                     .setMessage(R.string.confirm_delete_history_msg)
                     .setPositiveButton(R.string.delete, (dialog, which) -> {
                         historyManager.deleteItem(item);
-                        int pos = holder.getAdapterPosition();
+                        int pos = holder.getBindingAdapterPosition();
                         if (pos != RecyclerView.NO_POSITION) {
                             historyItems.remove(pos);
                             notifyItemRemoved(pos);
@@ -184,11 +184,8 @@ public class ExportHistoryAdapter extends RecyclerView.Adapter<ExportHistoryAdap
             // Use original filename to preserve extension for receiving app
             File newFile = new File(cachePath, file.getName());
 
-            // Direct Root Copy (User Intent: Efficiency & No Redundancy)
-            String cmd = String.format("cat '%s' > '%s' && chmod 666 '%s'",
-                    file.getAbsolutePath(), newFile.getAbsolutePath(), newFile.getAbsolutePath());
-
-            if (!RootHelper.execAndCheck(cmd)) {
+            // Use centralized root copy utility
+            if (!RootHelper.copyFile(file.getAbsolutePath(), newFile.getAbsolutePath(), "666")) {
                 Toast.makeText(activity, "Failed to copy file with Root.", Toast.LENGTH_SHORT).show();
                 return;
             }

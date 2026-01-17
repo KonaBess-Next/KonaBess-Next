@@ -66,6 +66,8 @@ public class ActionCardAdapter extends RecyclerView.Adapter<ActionCardAdapter.Vi
         holder.card.setEnabled(item.enabled);
         holder.card.setClickable(item.enabled);
         holder.card.setFocusable(item.enabled);
+        
+        // Simple disabled visual state
         holder.card.setAlpha(item.enabled ? 1f : 0.5f);
 
         holder.card.setOnClickListener(new View.OnClickListener() {

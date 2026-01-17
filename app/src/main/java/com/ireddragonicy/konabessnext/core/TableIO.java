@@ -253,11 +253,8 @@ public class TableIO {
                 bufferedWriter.write(data);
                 bufferedWriter.close();
 
-                // Use root to copy file to sdcard
-                String cmd = String.format("cat '%s' > '%s' && chmod 644 '%s'",
-                        tempFile.getAbsolutePath(), destPath, destPath);
-
-                if (!RootHelper.execAndCheck(cmd)) {
+                // Use centralized root copy utility
+                if (!RootHelper.copyFile(tempFile.getAbsolutePath(), destPath, "644")) {
                     error = true;
                 }
 
@@ -399,7 +396,9 @@ public class TableIO {
 
         RecyclerView recyclerView = new RecyclerView(activity);
         recyclerView.setLayoutManager(new LinearLayoutManager(activity));
-        recyclerView.setPadding(0, 12, 0, 24);
+        // Fix: Increase bottom padding to 88dp for navbar and set clipToPadding false
+        int bottomPadding = (int) (activity.getResources().getDisplayMetrics().density * 88); 
+        recyclerView.setPadding(0, 12, 0, bottomPadding);
         recyclerView.setClipToPadding(false);
 
         ArrayList<ActionCardAdapter.ActionItem> items = new ArrayList<>();
@@ -408,11 +407,13 @@ public class TableIO {
         items.add(new ActionCardAdapter.ActionItem(
                 R.drawable.ic_history_modern,
                 activity.getResources().getString(R.string.export_history),
-                activity.getResources().getString(R.string.export_history_desc)));
+                activity.getResources().getString(R.string.export_history_desc),
+                canExport));
         items.add(new ActionCardAdapter.ActionItem(
                 R.drawable.ic_import_modern,
                 activity.getResources().getString(R.string.import_from_file),
-                activity.getResources().getString(R.string.import_from_file_msg)));
+                activity.getResources().getString(R.string.import_from_file_msg),
+                canExport));
         items.add(new ActionCardAdapter.ActionItem(
                 R.drawable.ic_export_modern,
                 activity.getResources().getString(R.string.export_to_file),
@@ -421,7 +422,8 @@ public class TableIO {
         items.add(new ActionCardAdapter.ActionItem(
                 R.drawable.ic_clipboard_import,
                 activity.getResources().getString(R.string.import_from_clipboard),
-                activity.getResources().getString(R.string.import_from_clipboard_msg)));
+                activity.getResources().getString(R.string.import_from_clipboard_msg),
+                canExport));
         items.add(new ActionCardAdapter.ActionItem(
                 R.drawable.ic_clipboard_export,
                 activity.getResources().getString(R.string.export_to_clipboard),
@@ -505,9 +507,12 @@ public class TableIO {
                     LinearLayout.LayoutParams.MATCH_PARENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT));
         }
-        page.addView(recyclerView, new LinearLayout.LayoutParams(
+        
+        // Use weight 1.0f to fill remaining vertical space, ensuring scrolling works
+        LinearLayout.LayoutParams recyclerParams = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT));
+                0, 1.0f);
+        page.addView(recyclerView, recyclerParams);
     }
 
     private static class exportRawDts extends Thread {
@@ -528,14 +533,9 @@ public class TableIO {
             File srcFile = new File(KonaBessCore.dts_path);
 
             try {
-                // Use cat and shell to copy to ensure permissions are handled if helpful,
-                // but since source is ours and dest is sdcard (with permission), a simple copy
-                // might work.
-                // However, using the existing RootHelper pattern is consistent and safe for
-                // file operations.
-                String cmd = String.format("cat '%s' > '%s'", srcFile.getAbsolutePath(), destPath);
-                if (!RootHelper.execAndCheck(cmd)) {
-                    // Fallback to java IO if shell fails (unlikely given root usage elsewhere)
+                // Use centralized root copy utility
+                if (!RootHelper.copyFile(srcFile.getAbsolutePath(), destPath)) {
+                    // Fallback to java IO if shell fails
                     copyFile(srcFile, new File(destPath));
                 }
             } catch (Exception e) {
