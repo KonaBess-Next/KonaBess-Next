@@ -156,7 +156,7 @@ public class GpuVoltEditor {
                             generateVolts(activity, page);
                             showedView.addView(page);
                         } else {
-                            DialogUtil.showError(activity, R.string.not_support);
+                            DialogUtil.showError(activity, R.string.incompatible_device);
                         }
                     });
                 } catch (Exception e) {
@@ -186,6 +186,10 @@ public class GpuVoltEditor {
         });
         toolbar.addView(saveParamsBtn);
         return scrollView;
+    }
+
+    public static void writeOut(List<String> new_dts) throws IOException {
+        FileUtil.writeLines(KonaBessCore.dts_path, new_dts);
     }
 
     private static void generateVolts(Activity activity, LinearLayout page) {
