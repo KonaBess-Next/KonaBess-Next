@@ -201,19 +201,9 @@ public class GpuTableEditor {
                     if (bin_position < 0)
                         bin_position = i;
                     ChipInfo.which.architecture.decode(lines_in_dts, bins, i);
-                    // Since decode removes lines from lines_in_dts, we need to adjust index
-                    // decode removes lines [i, end]. The next line is now at index i.
-                    // The loop does ++i, so we need to decrement i to process the current index
-                    // again.
                     i--;
                 }
             } catch (Exception e) {
-                // Ignore parsing errors for blocks we don't care about, or rethrow if critical
-                // But GpuTableEditor logic mostly ignored "bracket!=0" exceptions in some
-                // paths.
-                // However, BaseChipArchitecture throws Exception on failure.
-                // We should probably allow the loop to continue or fail?
-                // Original code threw Exception in some cases.
                 throw e;
             }
         }
