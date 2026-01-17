@@ -49,7 +49,9 @@ public class SettingsFragment extends Fragment {
 
         recyclerView = new RecyclerView(requireContext());
         recyclerView.setLayoutManager(new LinearLayoutManager(requireContext()));
-        recyclerView.setPadding(0, 8, 0, 16);
+        // Fix: Increase bottom padding to 88dp for navbar and set clipToPadding false
+        int bottomPadding = (int) (requireContext().getResources().getDisplayMetrics().density * 88);
+        recyclerView.setPadding(0, 8, 0, bottomPadding);
         recyclerView.setClipToPadding(false);
 
         loadSettings();

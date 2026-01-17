@@ -363,6 +363,23 @@ public class GpuFrequencyFragment extends Fragment {
         buttonParams.gravity = Gravity.CENTER_HORIZONTAL;
         cardContent.addView(retryButton, buttonParams);
 
+        // Add "Submit DTS to GitHub" button for unsupported devices
+        MaterialButton submitDtsButton = new MaterialButton(requireContext(), null,
+                com.google.android.material.R.attr.materialButtonOutlinedStyle);
+        submitDtsButton.setText(R.string.submit_dts_to_github);
+        submitDtsButton.setCornerRadius(32);
+        submitDtsButton.setPadding(buttonPadding * 2, buttonPadding, buttonPadding * 2, buttonPadding);
+        submitDtsButton.setTextSize(14);
+        submitDtsButton.setIconResource(R.drawable.ic_share);
+        submitDtsButton.setIconGravity(MaterialButton.ICON_GRAVITY_TEXT_START);
+        submitDtsButton.setOnClickListener(v -> submitDtsToGitHub(activity));
+        LinearLayout.LayoutParams submitParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT);
+        submitParams.gravity = Gravity.CENTER_HORIZONTAL;
+        submitParams.setMargins(0, 24, 0, 0);
+        cardContent.addView(submitDtsButton, submitParams);
+
         card.addView(cardContent);
 
         // Add card to container with margin
@@ -545,6 +562,135 @@ public class GpuFrequencyFragment extends Fragment {
         }
         needsReload = false;
         loadContent();
+    }
+
+    /**
+     * Submit DTS files to GitHub for device support request.
+     * Exports boot.img DTS and opens GitHub issue URL with device info.
+     */
+    private void submitDtsToGitHub(MainActivity activity) {
+        // Show loading dialog
+        androidx.appcompat.app.AlertDialog loadingDialog = new com.google.android.material.dialog.MaterialAlertDialogBuilder(activity)
+                .setTitle(R.string.preparing_dts_submission)
+                .setMessage(R.string.extracting_dts_files)
+                .setCancelable(false)
+                .create();
+        loadingDialog.show();
+
+        new Thread(() -> {
+            try {
+                // Get device info
+                String deviceModel = android.os.Build.MODEL;
+                String deviceBrand = android.os.Build.BRAND;
+                String deviceBoard = android.os.Build.BOARD;
+                String androidVersion = android.os.Build.VERSION.RELEASE;
+                String sdkVersion = String.valueOf(android.os.Build.VERSION.SDK_INT);
+
+                // Check if DTS was already extracted, if not try to extract it
+                String dtsPath = KonaBessCore.dts_path;
+                boolean hasDts = dtsPath != null && new java.io.File(dtsPath).exists();
+                
+                // If no DTS, try to extract boot image and generate DTS
+                if (!hasDts) {
+                    try {
+                        // Setup environment and extract boot image
+                        KonaBessCore.setupEnv(activity);
+                        KonaBessCore.getBootImage(activity);
+                        // bootImage2dts calls unpackBootImage internally, then converts to DTS
+                        KonaBessCore.bootImage2dts(activity);
+                        
+                        // Check again after extraction - find the first DTS file
+                        java.io.File filesDir = activity.getFilesDir();
+                        java.io.File[] dtsFiles = filesDir.listFiles((dir, name) -> name.endsWith(".dts"));
+                        if (dtsFiles != null && dtsFiles.length > 0) {
+                            dtsPath = dtsFiles[0].getAbsolutePath();
+                            hasDts = true;
+                        }
+                    } catch (Exception extractError) {
+                        extractError.printStackTrace();
+                        // Continue anyway - we'll show manual instructions
+                    }
+                }
+
+                // Build issue body
+                StringBuilder issueBody = new StringBuilder();
+                issueBody.append("## Device Information\n\n");
+                issueBody.append("| Property | Value |\n");
+                issueBody.append("|-------------|-------|\n");
+                issueBody.append("| Brand | ").append(deviceBrand).append(" |\n");
+                issueBody.append("| Model | ").append(deviceModel).append(" |\n");
+                issueBody.append("| Board | ").append(deviceBoard).append(" |\n");
+                issueBody.append("| Android | ").append(androidVersion).append(" (SDK ").append(sdkVersion).append(") |\n");
+                issueBody.append("\n## DTS Status\n\n");
+
+                String exportPath = null;
+                boolean exportSuccess = false;
+                
+                if (hasDts) {
+                    // Try to export DTS to accessible location
+                    String timestamp = new java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US).format(new java.util.Date());
+                    String exportFilename = "konabess_dts_" + deviceModel.replace(" ", "_") + "_" + timestamp + ".dts";
+                    exportPath = android.os.Environment.getExternalStorageDirectory().getAbsolutePath() + "/" + exportFilename;
+
+                    exportSuccess = com.ireddragonicy.konabessnext.utils.RootHelper.copyFile(dtsPath, exportPath, "644");
+
+                    if (exportSuccess) {
+                        issueBody.append("✅ DTS file extracted successfully.\n\n");
+                        issueBody.append("**File exported to:** `").append(exportPath).append("`\n\n");
+                        issueBody.append("> Please attach the DTS file to this issue.\n\n");
+                    } else {
+                        issueBody.append("⚠️ DTS extraction completed but export failed.\n\n");
+                        issueBody.append("> Please manually extract and attach your device's DTS file.\n\n");
+                    }
+                } else {
+                    issueBody.append("❌ No DTS file available. Boot image extraction may have failed.\n\n");
+                    issueBody.append("> Please try boot image extraction manually and attach the DTS.\n\n");
+                }
+
+                issueBody.append("## Additional Information\n\n");
+                issueBody.append("<!-- Add any additional details about your device or GPU here -->\n\n");
+
+                // Build GitHub issue URL
+                String issueTitle = "[Device Support] " + deviceBrand + " " + deviceModel;
+                String githubUrl = "https://github.com/KonaBess-Next/KonaBess-Next/issues/new"
+                        + "?title=" + java.net.URLEncoder.encode(issueTitle, "UTF-8")
+                        + "&body=" + java.net.URLEncoder.encode(issueBody.toString(), "UTF-8")
+                        + "&labels=" + java.net.URLEncoder.encode("device-support", "UTF-8");
+
+                final String finalExportPath = exportPath;
+                final boolean finalExportSuccess = exportSuccess;
+
+                activity.runOnUiThread(() -> {
+                    loadingDialog.dismiss();
+
+                    // Show confirmation dialog
+                    com.google.android.material.dialog.MaterialAlertDialogBuilder confirmDialog =
+                            new com.google.android.material.dialog.MaterialAlertDialogBuilder(activity)
+                                    .setTitle(R.string.submit_dts_to_github)
+                                    .setPositiveButton(R.string.open_github, (dialog, which) -> {
+                                        android.content.Intent intent = new android.content.Intent(android.content.Intent.ACTION_VIEW);
+                                        intent.setData(android.net.Uri.parse(githubUrl));
+                                        startActivity(intent);
+                                    })
+                                    .setNegativeButton(R.string.cancel, null);
+
+                    if (finalExportSuccess) {
+                        confirmDialog.setMessage(getString(R.string.dts_exported_success, finalExportPath));
+                    } else {
+                        confirmDialog.setMessage(R.string.dts_export_manual_required);
+                    }
+
+                    confirmDialog.show();
+                });
+
+            } catch (Exception e) {
+                e.printStackTrace();
+                activity.runOnUiThread(() -> {
+                    loadingDialog.dismiss();
+                    android.widget.Toast.makeText(activity, R.string.error_occur, android.widget.Toast.LENGTH_SHORT).show();
+                });
+            }
+        }).start();
     }
 }
 

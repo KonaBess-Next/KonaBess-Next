@@ -269,4 +269,12 @@
     <string name="expand_collapse">Expand/Collapse</string>
     <string name="visual_view">Visual View</string>
     <string name="text_view">Text View</string>
+    
+    <!-- DTS Submission to GitHub -->
+    <string name="submit_dts_to_github">Submit DTS to GitHub</string>
+    <string name="preparing_dts_submission">Preparing Submission</string>
+    <string name="extracting_dts_files">Extracting device information and DTS files…</string>
+    <string name="open_github">Open GitHub</string>
+    <string name="dts_exported_success">DTS file exported to:\n\n%1$s\n\nPlease attach this file to the GitHub issue to help add support for your device.</string>
+    <string name="dts_export_manual_required">Could not export DTS automatically.\n\nPlease manually extract and attach your device\'s DTS file to the GitHub issue.</string>
 </resources>
