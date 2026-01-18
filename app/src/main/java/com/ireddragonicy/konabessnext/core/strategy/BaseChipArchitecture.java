@@ -1,6 +1,7 @@
 package com.ireddragonicy.konabessnext.core.strategy;
 
 import java.util.List;
+import java.util.ArrayList;
 import com.ireddragonicy.konabessnext.model.Bin;
 import com.ireddragonicy.konabessnext.model.Level;
 
@@ -45,7 +46,8 @@ public abstract class BaseChipArchitecture implements ChipArchitecture {
         int start = 0;
 
         // Get bin ID from first line
-        bin.setId(parseBinId(lines.get(0), bins.size()));
+        bin.id = parseBinId(lines.get(0), bins.size());
+        bin.header = new ArrayList<>();
 
         while (++i < lines.size() && bracket >= 0) {
             String line = lines.get(i).trim();
@@ -81,11 +83,11 @@ public abstract class BaseChipArchitecture implements ChipArchitecture {
      * Helper to generate content for a single bin (headers + levels).
      */
     protected void generateBinContent(Bin bin, List<String> lines) {
-        lines.addAll(bin.getHeader());
+        lines.addAll(bin.header);
         for (int j = 0; j < bin.getLevelCount(); j++) {
             lines.add("qcom,gpu-pwrlevel@" + j + " {");
             lines.add("reg = <" + j + ">;");
-            lines.addAll(bin.getLevel(j).getLines());
+            lines.addAll(bin.getLevel(j).lines);
             lines.add("};");
         }
         lines.add("};");

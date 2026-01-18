@@ -11,35 +11,35 @@ import java.util.Map;
 public class KonaBessStr {
 
     // Cache for converters to avoid repeated lookups
-    private static final Map<ChipInfo.type, ChipConverter> CHIP_CONVERTERS = new HashMap<>();
+    private static final Map<ChipInfo.Type, ChipConverter> CHIP_CONVERTERS = new HashMap<>();
 
     // Initialize converters once
     static {
-        CHIP_CONVERTERS.put(ChipInfo.type.kona, new KonaConverter());
-        CHIP_CONVERTERS.put(ChipInfo.type.kona_singleBin, new KonaSingleBinConverter());
-        CHIP_CONVERTERS.put(ChipInfo.type.msmnile, new MsmnileConverter());
-        CHIP_CONVERTERS.put(ChipInfo.type.msmnile_singleBin, new MsmnileSingleBinConverter());
-        CHIP_CONVERTERS.put(ChipInfo.type.lahaina, new LahainaConverter());
-        CHIP_CONVERTERS.put(ChipInfo.type.lahaina_singleBin, new LahainaSingleBinConverter());
-        CHIP_CONVERTERS.put(ChipInfo.type.lito_v1, new LitoConverter());
-        CHIP_CONVERTERS.put(ChipInfo.type.lito_v2, new LitoConverter());
-        CHIP_CONVERTERS.put(ChipInfo.type.lagoon, new LagoonConverter());
-        CHIP_CONVERTERS.put(ChipInfo.type.shima, new ShimaConverter());
-        CHIP_CONVERTERS.put(ChipInfo.type.yupik, new DefaultConverter());
-        CHIP_CONVERTERS.put(ChipInfo.type.waipio_singleBin, new WaipioSingleBinConverter());
-        CHIP_CONVERTERS.put(ChipInfo.type.cape_singleBin, new CapeSingleBinConverter());
-        CHIP_CONVERTERS.put(ChipInfo.type.kalama, new KalamaConverter());
-        CHIP_CONVERTERS.put(ChipInfo.type.diwali, new DiwaliConverter());
-        CHIP_CONVERTERS.put(ChipInfo.type.ukee_singleBin, new UkeeConverter());
-        CHIP_CONVERTERS.put(ChipInfo.type.pineapple, new PineappleConverter());
-        CHIP_CONVERTERS.put(ChipInfo.type.cliffs_singleBin, new CliffsSingleBinConverter());
-        CHIP_CONVERTERS.put(ChipInfo.type.cliffs_7_singleBin, new Cliffs7SingleBinConverter());
-        CHIP_CONVERTERS.put(ChipInfo.type.kalama_sg_singleBin, new KalamaSgSingleBinConverter());
-        CHIP_CONVERTERS.put(ChipInfo.type.sun, new DefaultConverter());
-        CHIP_CONVERTERS.put(ChipInfo.type.canoe, new CanoeConverter());
-        CHIP_CONVERTERS.put(ChipInfo.type.tuna, new TunaConverter());
-        CHIP_CONVERTERS.put(ChipInfo.type.pineapple_sg, new PineappleSgConverter());
-        CHIP_CONVERTERS.put(ChipInfo.type.kalamap_qcs_singleBin, new KalamaPQCSConverter());
+        CHIP_CONVERTERS.put(ChipInfo.Type.kona, new KonaConverter());
+        CHIP_CONVERTERS.put(ChipInfo.Type.kona_singleBin, new KonaSingleBinConverter());
+        CHIP_CONVERTERS.put(ChipInfo.Type.msmnile, new MsmnileConverter());
+        CHIP_CONVERTERS.put(ChipInfo.Type.msmnile_singleBin, new MsmnileSingleBinConverter());
+        CHIP_CONVERTERS.put(ChipInfo.Type.lahaina, new LahainaConverter());
+        CHIP_CONVERTERS.put(ChipInfo.Type.lahaina_singleBin, new LahainaSingleBinConverter());
+        CHIP_CONVERTERS.put(ChipInfo.Type.lito_v1, new LitoConverter());
+        CHIP_CONVERTERS.put(ChipInfo.Type.lito_v2, new LitoConverter());
+        CHIP_CONVERTERS.put(ChipInfo.Type.lagoon, new LagoonConverter());
+        CHIP_CONVERTERS.put(ChipInfo.Type.shima, new ShimaConverter());
+        CHIP_CONVERTERS.put(ChipInfo.Type.yupik, new DefaultConverter());
+        CHIP_CONVERTERS.put(ChipInfo.Type.waipio_singleBin, new WaipioSingleBinConverter());
+        CHIP_CONVERTERS.put(ChipInfo.Type.cape_singleBin, new CapeSingleBinConverter());
+        CHIP_CONVERTERS.put(ChipInfo.Type.kalama, new KalamaConverter());
+        CHIP_CONVERTERS.put(ChipInfo.Type.diwali, new DiwaliConverter());
+        CHIP_CONVERTERS.put(ChipInfo.Type.ukee_singleBin, new UkeeConverter());
+        CHIP_CONVERTERS.put(ChipInfo.Type.pineapple, new PineappleConverter());
+        CHIP_CONVERTERS.put(ChipInfo.Type.cliffs_singleBin, new CliffsSingleBinConverter());
+        CHIP_CONVERTERS.put(ChipInfo.Type.cliffs_7_singleBin, new Cliffs7SingleBinConverter());
+        CHIP_CONVERTERS.put(ChipInfo.Type.kalama_sg_singleBin, new KalamaSgSingleBinConverter());
+        CHIP_CONVERTERS.put(ChipInfo.Type.sun, new DefaultConverter());
+        CHIP_CONVERTERS.put(ChipInfo.Type.canoe, new CanoeConverter());
+        CHIP_CONVERTERS.put(ChipInfo.Type.tuna, new TunaConverter());
+        CHIP_CONVERTERS.put(ChipInfo.Type.pineapple_sg, new PineappleSgConverter());
+        CHIP_CONVERTERS.put(ChipInfo.Type.kalamap_qcs_singleBin, new KalamaPQCSConverter());
     }
 
     public static String convert_bins(int which, Activity activity) throws Exception {

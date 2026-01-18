@@ -17,6 +17,7 @@
     <string name="import_export">Import/Export</string>
     <string name="backuping_img">Doing backup, please wait</string>
     <string name="failed_backup">Failed when doing backup</string>
+    <string name="backup_fail">Backup failed</string>
     <string name="backup_success">Done</string>
     <string name="repacking">Repacking boot image, please wait</string>
     <string name="repack_failed">Failed when repacking</string>
@@ -277,4 +278,11 @@
     <string name="open_github">Open GitHub</string>
     <string name="dts_exported_success">DTS file exported to:\n\n%1$s\n\nPlease attach this file to the GitHub issue to help add support for your device.</string>
     <string name="dts_export_manual_required">Could not export DTS automatically.\n\nPlease manually extract and attach your device\'s DTS file to the GitHub issue.</string>
+    <string name="export_desc">Save your current GPU frequency and voltage table to a file for backup or sharing.</string>
+    <string name="enter_export_desc">Enter a description for this export</string>
+    <string name="success">Success</string>
+    <string name="reboot">Reboot</string>
+    <string name="processing">Processing</string>
+    <string name="export">Export</string>
+    <string name="add_frequency">Add Frequency</string>
 </resources>

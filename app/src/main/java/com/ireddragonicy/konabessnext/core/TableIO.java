@@ -42,6 +42,8 @@ import com.ireddragonicy.konabessnext.utils.FileUtil;
 import com.ireddragonicy.konabessnext.utils.GzipUtils;
 import com.ireddragonicy.konabessnext.utils.RootHelper;
 import com.ireddragonicy.konabessnext.utils.ThreadUtil;
+import android.net.Uri;
+import kotlin.Unit;
 
 public class TableIO {
 
@@ -74,7 +76,7 @@ public class TableIO {
     }
 
     private static boolean decodeAndWriteData(JSONObject jsonObject) throws Exception {
-        if (!ChipInfo.which.isEquivalentTo(ChipInfo.type.valueOf(jsonObject.getString(json_keys.CHIP))))
+        if (!ChipInfo.which.isEquivalentTo(ChipInfo.Type.valueOf(jsonObject.getString(json_keys.CHIP))))
             return true;
         prepareTables();
         ArrayList<String> freq = new ArrayList<>(Arrays.asList(jsonObject.getString(json_keys.FREQ).split("\n")));
@@ -289,7 +291,7 @@ public class TableIO {
                                     .setTitle(R.string.going_import)
                                     .setMessage(jsonObject.getString(json_keys.DESCRIPTION) + "\n"
                                             + activity.getResources().getString(R.string.compatible_chip)
-                                            + ChipInfo.type.valueOf(jsonObject.getString(json_keys.CHIP))
+                                            + ChipInfo.Type.valueOf(jsonObject.getString(json_keys.CHIP))
                                                     .getDescription(activity))
                                     .setPositiveButton(R.string.confirm, (dialog, which) -> {
                                         if (which == DialogInterface.BUTTON_POSITIVE) {
@@ -341,30 +343,7 @@ public class TableIO {
         new showDecodeDialog(activity, data).start();
     }
 
-    private static class importFromFile extends MainActivity.fileWorker {
-        Activity activity;
 
-        public importFromFile(Activity activity) {
-            this.activity = activity;
-        }
-
-        public void run() {
-            if (uri == null)
-                return;
-            activity.runOnUiThread(() -> {
-                waiting_import.show();
-            });
-            try {
-                BufferedReader bufferedReader = new BufferedReader(
-                        new InputStreamReader(activity.getContentResolver().openInputStream(uri)));
-                new showDecodeDialog(activity, bufferedReader.readLine()).start();
-                bufferedReader.close();
-            } catch (Exception e) {
-                activity.runOnUiThread(() -> Toast.makeText(activity,
-                        R.string.unable_get_target_file, Toast.LENGTH_SHORT).show());
-            }
-        }
-    }
 
     private static void generateView(Activity activity, LinearLayout page) {
         // Back navigation handled by OnBackPressedDispatcher in MainActivity
@@ -416,61 +395,101 @@ public class TableIO {
                 activity.getResources().getString(R.string.backup_image_desc),
                 canExport));
 
-        ActionCardAdapter adapter = new ActionCardAdapter(items);
-        adapter.setOnItemClickListener(new ActionCardAdapter.OnItemClickListener() {
-            @Override
-            public void onItemClick(int position) {
-                ActionCardAdapter.ActionItem selectedItem = items.get(position);
-                if (!selectedItem.enabled) {
-                    Toast.makeText(activity, R.string.export_requires_chipset,
-                            Toast.LENGTH_SHORT).show();
-                    return;
-                }
-                if (position == 0) {
-                    // Open history activity
-                    Intent intent = new Intent(activity, ExportHistoryActivity.class);
-                    activity.startActivity(intent);
-                } else if (position == 1) {
-                    MainActivity.runWithFilePath(activity, new importFromFile(activity));
-                } else if (position == 2) {
-                    showExportDialog(activity, new ConfirmExportCallback() {
-                        @Override
-                        public void onConfirm(String desc, String filename) {
-                            MainActivity.runWithStoragePermission(activity, new exportToFile(activity, desc, filename));
+
+    ActionCardAdapter adapter = new ActionCardAdapter(items);
+    adapter.setOnItemClickListener(new ActionCardAdapter.OnItemClickListener() {
+        @Override
+        public void onItemClick(int position) {
+            ActionCardAdapter.ActionItem selectedItem = items.get(position);
+            if (!selectedItem.enabled) {
+                Toast.makeText(activity, R.string.export_requires_chipset,
+                        Toast.LENGTH_SHORT).show();
+                return;
+            }
+            if (position == 0) {
+                // Open history activity
+                Intent intent = new Intent(activity, ExportHistoryActivity.class);
+                activity.startActivity(intent);
+            } else if (position == 1) {
+                if (activity instanceof MainActivity) {
+                    ((MainActivity) activity).runWithFilePath(intent -> {
+                        if (intent != null && intent.getData() != null) {
+                            Uri uri = intent.getData();
+                            activity.runOnUiThread(() -> {
+                                if (waiting_import != null) waiting_import.show();
+                            });
+                            ThreadUtil.runInBackground(() -> {
+                                try {
+                                    BufferedReader bufferedReader = new BufferedReader(
+                                            new InputStreamReader(activity.getContentResolver().openInputStream(uri)));
+                                    new showDecodeDialog(activity, bufferedReader.readLine()).start();
+                                    bufferedReader.close();
+                                } catch (Exception e) {
+                                    activity.runOnUiThread(() -> Toast.makeText(activity,
+                                            R.string.unable_get_target_file, Toast.LENGTH_SHORT).show());
+                                }
+                            });
                         }
+                        return Unit.INSTANCE;
                     });
-                } else if (position == 3) {
-                    import_edittext(activity);
-                } else if (position == 4) {
-                    showExportDialog(activity, new ConfirmExportCallback() {
+                }
+            } else if (position == 2) {
+                showExportDialog(activity, new ConfirmExportCallback() {
+                    @Override
+                    public void onConfirm(String desc, String filename) {
+                        if (activity instanceof MainActivity) {
+                            ((MainActivity) activity).runWithStoragePermission(() -> {
+                                new exportToFile(activity, desc, filename).start();
+                                return Unit.INSTANCE;
+                            });
+                        }
+                    }
+                });
+            } else if (position == 3) {
+                import_edittext(activity);
+            } else if (position == 4) {
+                 showExportDialog(activity, new ConfirmExportCallback() {
                         @Override
                         public void onConfirm(String desc, String filename) {
                             export_cpy(activity, desc);
                         }
                     });
-                } else if (position == 5) {
-                    MainActivity.runWithStoragePermission(activity, new exportRawDts(activity));
-                } else if (position == 6) {
-                    MainActivity mainActivity = (MainActivity) activity;
-
-                    // Backup path is now always in internal storage root
-                    String backupPath = "/sdcard/" + KonaBessCore.boot_name + ".img";
-
-                    new com.google.android.material.dialog.MaterialAlertDialogBuilder(mainActivity)
-                            .setTitle(R.string.backup_old_image)
-                            .setMessage(activity.getResources().getString(R.string.will_backup_to) + " " + backupPath)
-                            .setPositiveButton(R.string.ok, (dialog, which) -> {
-                                if (which == DialogInterface.BUTTON_POSITIVE) {
-                                    dialog.dismiss();
-                                    MainActivity.runWithStoragePermission(mainActivity,
-                                            mainActivity.new backupBoot(mainActivity));
-                                }
-                            })
-                            .setNegativeButton(R.string.cancel, null)
-                            .create().show();
+            } else if (position == 5) {
+                if (activity instanceof MainActivity) {
+                    ((MainActivity) activity).runWithStoragePermission(() -> {
+                        new exportRawDts(activity).start();
+                        return Unit.INSTANCE;
+                    });
                 }
+            } else if (position == 6) {
+                MainActivity mainActivity = (MainActivity) activity;
+
+                // Backup path is now always in internal storage root
+                String backupPath = "/sdcard/" + KonaBessCore.boot_name + ".img";
+
+                new com.google.android.material.dialog.MaterialAlertDialogBuilder(mainActivity)
+                        .setTitle(R.string.backup_old_image)
+                        .setMessage(activity.getResources().getString(R.string.will_backup_to) + " " + backupPath)
+                        .setPositiveButton(R.string.ok, (dialog, which) -> {
+                            if (which == DialogInterface.BUTTON_POSITIVE) {
+                                dialog.dismiss();
+                                    mainActivity.runWithStoragePermission(() -> {
+                                        ThreadUtil.runInBackground(() -> {
+                                            if (RootHelper.run("dd if=/dev/block/bootdevice/by-name/" + KonaBessCore.boot_name + " of=" + backupPath)) {
+                                                ThreadUtil.runOnMain(() -> Toast.makeText(activity, R.string.backup_success, Toast.LENGTH_SHORT).show());
+                                            } else {
+                                                ThreadUtil.runOnMain(() -> Toast.makeText(activity, R.string.backup_fail, Toast.LENGTH_SHORT).show());
+                                            }
+                                        });
+                                        return Unit.INSTANCE;
+                                    });
+                            }
+                        })
+                        .setNegativeButton(R.string.cancel, null)
+                        .create().show();
             }
-        });
+        }
+    });
 
         recyclerView.setAdapter(adapter);
 
@@ -526,7 +545,7 @@ public class TableIO {
                         com.ireddragonicy.konabessnext.utils.ExportHistoryManager historyManager = new com.ireddragonicy.konabessnext.utils.ExportHistoryManager(
                                 activity);
                         String chipType = "Unknown";
-                        if (com.ireddragonicy.konabessnext.core.ChipInfo.which != com.ireddragonicy.konabessnext.core.ChipInfo.type.unknown) {
+                        if (com.ireddragonicy.konabessnext.core.ChipInfo.which != com.ireddragonicy.konabessnext.core.ChipInfo.Type.unknown) {
                             chipType = com.ireddragonicy.konabessnext.core.ChipInfo.which.name();
                         }
                         historyManager.addExport(filename, "Raw DTS Export (Main Menu)", destPath, chipType);

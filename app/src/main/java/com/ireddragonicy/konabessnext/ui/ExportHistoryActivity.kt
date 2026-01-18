@@ -1,0 +1,110 @@
+package com.ireddragonicy.konabessnext.ui
+
+import android.content.Context
+import android.os.Bundle
+import android.view.View
+import android.widget.LinearLayout
+import android.widget.Toast
+import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.ViewModelProvider
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
+import com.google.android.material.appbar.MaterialToolbar
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
+import com.ireddragonicy.konabessnext.R
+import com.ireddragonicy.konabessnext.ui.adapters.ExportHistoryAdapter
+import com.ireddragonicy.konabessnext.utils.LocaleUtil
+import com.ireddragonicy.konabessnext.viewmodel.ExportHistoryViewModel
+import dagger.hilt.android.AndroidEntryPoint
+
+@AndroidEntryPoint
+class ExportHistoryActivity : AppCompatActivity() {
+
+    // ViewModel for MVVM
+    private lateinit var viewModel: ExportHistoryViewModel
+
+    private lateinit var recyclerView: RecyclerView
+    private lateinit var emptyState: LinearLayout
+    private lateinit var fabClear: ExtendedFloatingActionButton
+    private var adapter: ExportHistoryAdapter? = null
+
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(LocaleUtil.wrap(newBase))
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+
+        // Apply theme
+        applyColorPalette()
+
+        setContentView(R.layout.activity_export_history)
+
+        // Initialize ViewModel
+        viewModel = ViewModelProvider(this)[ExportHistoryViewModel::class.java]
+
+        // Setup toolbar
+        val toolbar = findViewById<MaterialToolbar>(R.id.history_toolbar)
+        toolbar.setNavigationOnClickListener { finish() }
+
+        // Setup views
+        recyclerView = findViewById(R.id.history_recycler_view)
+        emptyState = findViewById(R.id.history_empty_state)
+        fabClear = findViewById(R.id.history_fab_clear)
+
+        // Setup RecyclerView
+        recyclerView.layoutManager = LinearLayoutManager(this)
+
+        // Observe ViewModel
+        observeViewModel()
+
+        // Setup FAB
+        fabClear.setOnClickListener { showClearAllDialog() }
+    }
+
+    private fun observeViewModel() {
+        viewModel.historyItems.observe(this) { items ->
+            if (items.isEmpty()) {
+                emptyState.visibility = View.VISIBLE
+                recyclerView.visibility = View.GONE
+                fabClear.visibility = View.GONE
+            } else {
+                emptyState.visibility = View.GONE
+                recyclerView.visibility = View.VISIBLE
+                fabClear.visibility = View.VISIBLE
+
+                adapter = ExportHistoryAdapter(
+                    items.toMutableList(), this, viewModel.historyManager // Accessing public getter from ViewModel
+                ) { viewModel.loadHistory() }
+                recyclerView.adapter = adapter
+            }
+        }
+    }
+
+    private fun showClearAllDialog() {
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.confirm_clear_history)
+            .setMessage(R.string.confirm_clear_history_msg)
+            .setPositiveButton(R.string.clear_all) { _, _ ->
+                viewModel.clearHistory()
+                Toast.makeText(this, R.string.history_cleared, Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    private fun applyColorPalette() {
+        val prefs = getSharedPreferences("KonaBessSettings", Context.MODE_PRIVATE)
+        val palette = prefs.getInt("color_palette", 0)
+
+        when (palette) {
+            1 -> setTheme(R.style.Theme_KonaBess_Purple)
+            2 -> setTheme(R.style.Theme_KonaBess_Blue)
+            3 -> setTheme(R.style.Theme_KonaBess_Green)
+            4 -> setTheme(R.style.Theme_KonaBess_Pink)
+            5 -> setTheme(R.style.Theme_KonaBess_AMOLED)
+            else -> setTheme(R.style.Theme_KonaBess)
+        }
+    }
+}

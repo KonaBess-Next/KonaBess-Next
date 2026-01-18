@@ -1,0 +1,824 @@
+WARNING: A restricted method in java.lang.System has been called
+WARNING: java.lang.System::load has been called by net.rubygrapefruit.platform.internal.NativeLibraryLoader in an unnamed module (file:/C:/Users/ireddragonicy/.gradle/wrapper/dists/gradle-9.2.1-all/2lbhfocpgk6niea1fja7mj8kz/gradle-9.2.1/lib/native-platform-0.22-milestone-29.jar)
+WARNING: Use --enable-native-access=ALL-UNNAMED to avoid a warning for callers in this module
+WARNING: Restricted methods will be blocked in a future release unless native access is enabled
+
+Reusing configuration cache.
+> Task :app:preBuild UP-TO-DATE
+> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
+> Task :app:generateDebugBuildConfig UP-TO-DATE
+> Task :app:generateDebugResValues UP-TO-DATE
+> Task :app:createDebugCompatibleScreenManifests UP-TO-DATE
+> Task :app:mergeDebugShaders UP-TO-DATE
+> Task :app:javaPreCompileDebug UP-TO-DATE
+> Task :app:validateSigningDebug UP-TO-DATE
+> Task :app:writeDebugAppMetadata UP-TO-DATE
+> Task :app:desugarDebugFileDependencies UP-TO-DATE
+> Task :app:mergeDebugJniLibFolders UP-TO-DATE
+> Task :app:writeDebugSigningConfigVersions UP-TO-DATE
+> Task :app:extractDeepLinksDebug UP-TO-DATE
+> Task :app:compileDebugShaders NO-SOURCE
+> Task :app:generateDebugResources UP-TO-DATE
+> Task :app:generateDebugAssets UP-TO-DATE
+> Task :app:mergeDebugNativeLibs NO-SOURCE
+> Task :app:checkDebugAarMetadata UP-TO-DATE
+> Task :app:mapDebugSourceSetPaths UP-TO-DATE
+> Task :app:stripDebugDebugSymbols NO-SOURCE
+> Task :app:checkDebugDuplicateClasses UP-TO-DATE
+> Task :app:mergeDebugAssets UP-TO-DATE
+> Task :app:mergeDebugResources UP-TO-DATE
+> Task :app:mergeLibDexDebug UP-TO-DATE
+> Task :app:compressDebugAssets UP-TO-DATE
+> Task :app:processDebugMainManifest UP-TO-DATE
+> Task :app:processDebugManifest UP-TO-DATE
+> Task :app:processDebugManifestForPackage UP-TO-DATE
+> Task :app:mergeExtDexDebug UP-TO-DATE
+> Task :app:processDebugResources UP-TO-DATE
+> Task :app:kspDebugKotlin
+> Task :app:compileDebugKotlin
+
+> Task :app:compileDebugJavaWithJavac FAILED
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:230: error: linesInDts has private access in EditorState
+        state.linesInDts = new ArrayList<>(lines_in_dts);
+             ^
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:231: error: binsSnapshot has private access in EditorState
+        state.binsSnapshot = cloneBinsList(bins);
+             ^
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:232: error: binPosition has private access in EditorState
+        state.binPosition = bin_position;
+             ^
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:268: error: linesInDts has private access in EditorState
+        lines_in_dts = new ArrayList<>(state.linesInDts);
+                                            ^
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:269: error: binsSnapshot has private access in EditorState
+        bins = cloneBinsList(state.binsSnapshot);
+                                  ^
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:270: error: binPosition has private access in EditorState
+        bin_position = state.binPosition;
+                            ^
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:278: error: linesInDts has private access in EditorState
+        copy.linesInDts = original.linesInDts != null
+            ^
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:278: error: linesInDts has private access in EditorState
+        copy.linesInDts = original.linesInDts != null
+                                  ^
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:279: error: linesInDts has private access in EditorState
+                ? new ArrayList<>(original.linesInDts)
+                                          ^
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:281: error: binsSnapshot has private access in EditorState
+        copy.binsSnapshot = cloneBinsList(original.binsSnapshot);
+            ^
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:281: error: binsSnapshot has private access in EditorState
+        copy.binsSnapshot = cloneBinsList(original.binsSnapshot);
+                                                  ^
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:282: error: binPosition has private access in EditorState
+        copy.binPosition = original.binPosition;
+            ^
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:282: error: binPosition has private access in EditorState
+        copy.binPosition = original.binPosition;
+                                   ^
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:314: error: id has private access in Dtb
+            sessionCache.put(current.id, session);
+                                    ^
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1274: error: originalPosition has private access in FreqItem
+            item.originalPosition = i;
+                ^
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1275: error: frequencyHz has private access in FreqItem
+            item.frequencyHz = freq;
+                ^
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1284: error: busMax has private access in FreqItem
+                        item.busMax = String.valueOf(busMax);
+                            ^
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1287: error: busMin has private access in FreqItem
+                        item.busMin = String.valueOf(busMin);
+                            ^
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1291: error: busFreq has private access in FreqItem
+                        item.busFreq = String.valueOf(busFreq);
+                            ^
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1294: error: voltageLevel has private access in FreqItem
+                        item.voltageLevel = GpuVoltEditor.levelint2str(voltLevel);
+                            ^
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1350: error: actionType has private access in FreqItem
+            switch (item.actionType) {
+                        ^
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1363: error: cannot find symbol
+                            if (ChipInfo.which == ChipInfo.type.lito_v1
+                                                          ^
+  symbol:   variable type
+  location: class ChipInfo
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1364: error: cannot find symbol
+                                    || ChipInfo.which == ChipInfo.type.lito_v2
+                                                                 ^
+  symbol:   variable type
+  location: class ChipInfo
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1365: error: cannot find symbol
+                                    || ChipInfo.which == ChipInfo.type.lagoon) {
+                                                                 ^
+  symbol:   variable type
+  location: class ChipInfo
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1424: error: cannot find symbol
+                            if (ChipInfo.which == ChipInfo.type.lito_v1
+                                                          ^
+  symbol:   variable type
+  location: class ChipInfo
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1425: error: cannot find symbol
+                                    || ChipInfo.which == ChipInfo.type.lito_v2
+                                                                 ^
+  symbol:   variable type
+  location: class ChipInfo
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1426: error: cannot find symbol
+                                    || ChipInfo.which == ChipInfo.type.lagoon) {
+                                                                 ^
+  symbol:   variable type
+  location: class ChipInfo
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1473: error: cannot find symbol
+                                    if (ChipInfo.which == ChipInfo.type.lito_v1
+                                                                  ^
+  symbol:   variable type
+  location: class ChipInfo
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1474: error: cannot find symbol
+                                            || ChipInfo.which == ChipInfo.type.lito_v2
+                                                                         ^
+  symbol:   variable type
+  location: class ChipInfo
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1475: error: cannot find symbol
+                                            || ChipInfo.which == ChipInfo.type.lagoon) {
+                                                                         ^
+  symbol:   variable type
+  location: class ChipInfo
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1514: error: isHeader has private access in FreqItem
+            if (!item.isHeader && !item.isFooter && item.hasFrequencyValue()) {
+                     ^
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1514: error: isFooter has private access in FreqItem
+            if (!item.isHeader && !item.isFooter && item.hasFrequencyValue()) {
+                                       ^
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1514: error: cannot find symbol
+            if (!item.isHeader && !item.isFooter && item.hasFrequencyValue()) {
+                                                        ^
+  symbol:   method hasFrequencyValue()
+  location: variable item of type FreqItem
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1520: error: frequencyHz has private access in FreqItem
+                    if (freq == item.frequencyHz) {
+                                    ^
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1602: error: cannot find symbol
+        KonaBessCore.Dtb currentDtb = KonaBessCore.getCurrentDtb();
+                    ^
+  symbol:   class Dtb
+  location: class KonaBessCore
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1636: error: dtbs has private access in KonaBessCore
+        if (KonaBessCore.dtbs == null || KonaBessCore.dtbs.isEmpty()) {
+                        ^
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1636: error: dtbs has private access in KonaBessCore
+        if (KonaBessCore.dtbs == null || KonaBessCore.dtbs.isEmpty()) {
+                                                     ^
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1641: error: cannot find symbol
+        KonaBessCore.Dtb currentDtb = KonaBessCore.getCurrentDtb();
+                    ^
+  symbol:   class Dtb
+  location: class KonaBessCore
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1642: error: cannot find symbol
+        int currentDtbIndex = KonaBessCore.getDtbIndex();
+                                          ^
+  symbol:   method getDtbIndex()
+  location: class KonaBessCore
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1660: error: dtbs has private access in KonaBessCore
+                KonaBessCore.dtbs,
+                            ^
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1666: error: id has private access in Dtb
+                    if (currentDtb != null && selectedDtb.id != currentDtb.id) {
+                                                         ^
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1699: error: cannot find symbol
+                KonaBessCore.Dtb previous = KonaBessCore.getCurrentDtb();
+                            ^
+  symbol:   class Dtb
+  location: class KonaBessCore
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1700: error: id has private access in Dtb
+                if (previous != null && previous.id != newDtb.id) {
+                                                             ^
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1705: error: non-static method chooseTarget(Dtb,Activity) cannot be referenced from a static context
+                KonaBessCore.chooseTarget(newDtb, activity);
+                            ^
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1707: error: id has private access in Dtb
+                boolean restored = restoreSession(newDtb.id);
+                                                        ^
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1724: error: id has private access in Dtb
+                    chipsetNameView.setText(newDtb.id + " " +
+                                                  ^
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1725: error: type has private access in Dtb
+                            newDtb.type.getDescription(activity));
+                                  ^
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1741: error: id has private access in Dtb
+                        Toast.makeText(activity, "Switched to chipset " + newDtb.id,
+                                                                                ^
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1791: error: cannot find symbol
+        ArrayList<GpuBinAdapter.BinItem> items = new ArrayList<>();
+                               ^
+  symbol:   class BinItem
+  location: class GpuBinAdapter
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1793: error: cannot find symbol
+            items.add(new GpuBinAdapter.BinItem(
+                                       ^
+  symbol:   class BinItem
+  location: class GpuBinAdapter
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1819: error: dtbs has private access in KonaBessCore
+            if (KonaBessCore.dtbs != null && KonaBessCore.dtbs.size() > 1) {
+                            ^
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1819: error: dtbs has private access in KonaBessCore
+            if (KonaBessCore.dtbs != null && KonaBessCore.dtbs.size() > 1) {
+                                                         ^
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuVoltEditor.java:140: error: non-static method runOnMain(Runnable) cannot be referenced from a static context
+            ThreadUtil.runOnMain(() -> {
+                      ^
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuVoltEditor.java:145: error: non-static method runInBackground(Runnable) cannot be referenced from a static context
+            ThreadUtil.runInBackground(() -> {
+                      ^
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuVoltEditor.java:149: error: non-static method runOnMain(Runnable) cannot be referenced from a static context
+                    ThreadUtil.runOnMain(() -> {
+                              ^
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuVoltEditor.java:163: error: non-static method runOnMain(Runnable) cannot be referenced from a static context
+                    ThreadUtil.runOnMain(() -> {
+                              ^
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuVoltEditor.java:198: error: cannot find symbol
+        ArrayList<ParamAdapter.item> items = new ArrayList<>();
+                              ^
+  symbol:   class item
+  location: class ParamAdapter
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuVoltEditor.java:214: error: cannot find symbol
+        ArrayList<ParamAdapter.item> items = new ArrayList<>();
+                              ^
+  symbol:   class item
+  location: class ParamAdapter
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\strategy\BaseChipArchitecture.java:48: error: cannot find symbol
+        bin.setId(parseBinId(lines.get(0), bins.size()));
+           ^
+  symbol:   method setId(int)
+  location: variable bin of type Bin
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\strategy\BaseChipArchitecture.java:84: error: cannot find symbol
+        lines.addAll(bin.getHeader());
+                        ^
+  symbol:   method getHeader()
+  location: variable bin of type Bin
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\strategy\BaseChipArchitecture.java:88: error: cannot find symbol
+            lines.addAll(bin.getLevel(j).getLines());
+                                        ^
+  symbol:   method getLines()
+  location: class Level
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\strategy\MultiBinStrategy.java:20: error: cannot find symbol
+            lines.add("qcom,gpu-pwrlevels-" + bin.getId() + " {");
+                                                 ^
+  symbol:   method getId()
+  location: variable bin of type Bin
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\TableIO.java:79: error: cannot find symbol
+        if (!ChipInfo.which.isEquivalentTo(ChipInfo.type.valueOf(jsonObject.getString(json_keys.CHIP))))
+                                                   ^
+  symbol:   variable type
+  location: class ChipInfo
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\TableIO.java:134: error: non-static method compress(byte[]) cannot be referenced from a static context
+        return GzipUtils.compress(jsonObject.toString().getBytes(StandardCharsets.UTF_8));
+                        ^
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\TableIO.java:186: error: non-static method runInBackground(Runnable) cannot be referenced from a static context
+        ThreadUtil.runInBackground(() -> {
+                  ^
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\TableIO.java:189: error: non-static method runOnMain(Runnable) cannot be referenced from a static context
+                ThreadUtil.runOnMain(() -> {
+                          ^
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\TableIO.java:194: error: non-static method runOnMain(Runnable) cannot be referenced from a static context
+                ThreadUtil.runOnMain(() -> {
+                          ^
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\TableIO.java:216: error: non-static method runInBackground(Runnable) cannot be referenced from a static context
+            ThreadUtil.runInBackground(() -> {
+                      ^
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\TableIO.java:218: error: non-static method runOnMain(Runnable) cannot be referenced from a static context
+                ThreadUtil.runOnMain(() -> {
+                          ^
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\TableIO.java:238: error: non-static method copyFile(String,String,String) cannot be referenced from a static context
+                    if (!RootHelper.copyFile(tempFile.getAbsolutePath(), destPath, "644")) {
+                                   ^
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\TableIO.java:249: error: non-static method runOnMain(Runnable) cannot be referenced from a static context
+                ThreadUtil.runOnMain(() -> {
+                          ^
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\TableIO.java:285: error: non-static method uncompress(String) cannot be referenced from a static context
+                    String decoded_data = GzipUtils.uncompress(data);
+                                                   ^
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\TableIO.java:294: error: cannot find symbol
+                                            + ChipInfo.type.valueOf(jsonObject.getString(json_keys.CHIP))
+                                                      ^
+  symbol:   variable type
+  location: class ChipInfo
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\TableIO.java:360: error: non-static method isPrepared() cannot be referenced from a static context
+        boolean canExport = KonaBessCore.isPrepared();
+                                        ^
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\TableIO.java:404: error: enabled has private access in ActionItem
+            if (!selectedItem.enabled) {
+                             ^
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\TableIO.java:421: error: non-static method runInBackground(Runnable) cannot be referenced from a static context
+                            ThreadUtil.runInBackground(() -> {
+                                      ^
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\TableIO.java:468: error: boot_name has private access in KonaBessCore
+                String backupPath = "/sdcard/" + KonaBessCore.boot_name + ".img";
+                                                             ^
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\TableIO.java:477: error: non-static method runInBackground(Runnable) cannot be referenced from a static context
+                                        ThreadUtil.runInBackground(() -> {
+                                                  ^
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\TableIO.java:478: error: boot_name has private access in KonaBessCore
+                                            if (RootHelper.run("dd if=/dev/block/bootdevice/by-name/" + KonaBessCore.boot_name + " of=" + backupPath)) {
+                                                                                                                    ^
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\TableIO.java:478: error: cannot find symbol
+                                            if (RootHelper.run("dd if=/dev/block/bootdevice/by-name/" + KonaBessCore.boot_name + " of=" + backupPath)) {
+                                                          ^
+  symbol:   method run(String)
+  location: class RootHelper
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\TableIO.java:479: error: non-static method runOnMain(Runnable) cannot be referenced from a static context
+                                                ThreadUtil.runOnMain(() -> Toast.makeText(activity, R.string.backup_success, Toast.LENGTH_SHORT).show());
+                                                          ^
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\TableIO.java:481: error: non-static method runOnMain(Function0<Unit>) cannot be referenced from a static context
+                                                ThreadUtil.runOnMain(() -> Toast.makeText(activity, R.string.backup_fail, Toast.LENGTH_SHORT).show());
+                                                          ^
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\TableIO.java:481: error: cannot find symbol
+                                                ThreadUtil.runOnMain(() -> Toast.makeText(activity, R.string.backup_fail, Toast.LENGTH_SHORT).show());
+                                                                                                            ^
+  symbol:   variable backup_fail
+  location: class string
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\TableIO.java:523: error: non-static method runInBackground(Runnable) cannot be referenced from a static context
+            ThreadUtil.runInBackground(() -> {
+                      ^
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\TableIO.java:533: error: non-static method copyFile(String,String) cannot be referenced from a static context
+                    if (!RootHelper.copyFile(srcFile.getAbsolutePath(), destPath)) {
+                                   ^
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\TableIO.java:542: error: non-static method runOnMain(Runnable) cannot be referenced from a static context
+                ThreadUtil.runOnMain(() -> {
+                          ^
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\TableIO.java:548: error: cannot find symbol
+                        if (com.ireddragonicy.konabessnext.core.ChipInfo.which != com.ireddragonicy.konabessnext.core.ChipInfo.type.unknown) {
+                                                                                                                              ^
+  symbol:   variable type
+  location: class ChipInfo
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\data\KonaBessStr.java:18: error: cannot find symbol
+        CHIP_CONVERTERS.put(ChipInfo.type.kona, new KonaConverter());
+                                    ^
+  symbol:   variable type
+  location: class ChipInfo
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\data\KonaBessStr.java:19: error: cannot find symbol
+        CHIP_CONVERTERS.put(ChipInfo.type.kona_singleBin, new KonaSingleBinConverter());
+                                    ^
+  symbol:   variable type
+  location: class ChipInfo
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\data\KonaBessStr.java:20: error: cannot find symbol
+        CHIP_CONVERTERS.put(ChipInfo.type.msmnile, new MsmnileConverter());
+                                    ^
+  symbol:   variable type
+  location: class ChipInfo
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\data\KonaBessStr.java:21: error: cannot find symbol
+        CHIP_CONVERTERS.put(ChipInfo.type.msmnile_singleBin, new MsmnileSingleBinConverter());
+                                    ^
+  symbol:   variable type
+  location: class ChipInfo
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\data\KonaBessStr.java:22: error: cannot find symbol
+        CHIP_CONVERTERS.put(ChipInfo.type.lahaina, new LahainaConverter());
+                                    ^
+  symbol:   variable type
+  location: class ChipInfo
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\data\KonaBessStr.java:23: error: cannot find symbol
+        CHIP_CONVERTERS.put(ChipInfo.type.lahaina_singleBin, new LahainaSingleBinConverter());
+                                    ^
+  symbol:   variable type
+  location: class ChipInfo
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\data\KonaBessStr.java:24: error: cannot find symbol
+        CHIP_CONVERTERS.put(ChipInfo.type.lito_v1, new LitoConverter());
+                                    ^
+  symbol:   variable type
+  location: class ChipInfo
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\data\KonaBessStr.java:25: error: cannot find symbol
+        CHIP_CONVERTERS.put(ChipInfo.type.lito_v2, new LitoConverter());
+                                    ^
+  symbol:   variable type
+  location: class ChipInfo
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\data\KonaBessStr.java:26: error: cannot find symbol
+        CHIP_CONVERTERS.put(ChipInfo.type.lagoon, new LagoonConverter());
+                                    ^
+  symbol:   variable type
+  location: class ChipInfo
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\data\KonaBessStr.java:27: error: cannot find symbol
+        CHIP_CONVERTERS.put(ChipInfo.type.shima, new ShimaConverter());
+                                    ^
+  symbol:   variable type
+  location: class ChipInfo
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\data\KonaBessStr.java:28: error: cannot find symbol
+        CHIP_CONVERTERS.put(ChipInfo.type.yupik, new DefaultConverter());
+                                    ^
+  symbol:   variable type
+  location: class ChipInfo
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\data\KonaBessStr.java:29: error: cannot find symbol
+        CHIP_CONVERTERS.put(ChipInfo.type.waipio_singleBin, new WaipioSingleBinConverter());
+                                    ^
+  symbol:   variable type
+  location: class ChipInfo
+D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\data\KonaBessStr.java:30: error: cannot find symbol
+        CHIP_CONVERTERS.put(ChipInfo.type.cape_singleBin, new CapeSingleBinConverter());
+                                    ^
+  symbol:   variable type
+  location: class ChipInfo
+Note: D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\editor\core\VirtualizedCodeEditor.java uses or overrides a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+100 errors
+
+[Incubating] Problems report is available at: file:///D:/Project/KonaBess-Next/build/reports/problems/problems-report.html
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:compileDebugJavaWithJavac'.
+> Compilation failed; see the compiler output below.
+  Note: D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\editor\core\VirtualizedCodeEditor.java uses or overrides a deprecated API.
+  Note: Recompile with -Xlint:deprecation for details.
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1705: error: non-static method chooseTarget(Dtb,Activity) cannot be referenced from a static context
+                  KonaBessCore.chooseTarget(newDtb, activity);
+                              ^
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuVoltEditor.java:140: error: non-static method runOnMain(Runnable) cannot be referenced from a static context
+              ThreadUtil.runOnMain(() -> {
+                        ^
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuVoltEditor.java:145: error: non-static method runInBackground(Runnable) cannot be referenced from a static context
+              ThreadUtil.runInBackground(() -> {
+                        ^
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuVoltEditor.java:149: error: non-static method runOnMain(Runnable) cannot be referenced from a static context
+                      ThreadUtil.runOnMain(() -> {
+                                ^
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuVoltEditor.java:163: error: non-static method runOnMain(Runnable) cannot be referenced from a static context
+                      ThreadUtil.runOnMain(() -> {
+                                ^
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\TableIO.java:134: error: non-static method compress(byte[]) cannot be referenced from a static context
+          return GzipUtils.compress(jsonObject.toString().getBytes(StandardCharsets.UTF_8));
+                          ^
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\TableIO.java:186: error: non-static method runInBackground(Runnable) cannot be referenced from a static context
+          ThreadUtil.runInBackground(() -> {
+                    ^
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\TableIO.java:189: error: non-static method runOnMain(Runnable) cannot be referenced from a static context
+                  ThreadUtil.runOnMain(() -> {
+                            ^
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\TableIO.java:194: error: non-static method runOnMain(Runnable) cannot be referenced from a static context
+                  ThreadUtil.runOnMain(() -> {
+                            ^
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\TableIO.java:216: error: non-static method runInBackground(Runnable) cannot be referenced from a static context
+              ThreadUtil.runInBackground(() -> {
+                        ^
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\TableIO.java:218: error: non-static method runOnMain(Runnable) cannot be referenced from a static context
+                  ThreadUtil.runOnMain(() -> {
+                            ^
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\TableIO.java:238: error: non-static method copyFile(String,String,String) cannot be referenced from a static context
+                      if (!RootHelper.copyFile(tempFile.getAbsolutePath(), destPath, "644")) {
+                                     ^
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\TableIO.java:249: error: non-static method runOnMain(Runnable) cannot be referenced from a static context
+                  ThreadUtil.runOnMain(() -> {
+                            ^
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\TableIO.java:285: error: non-static method uncompress(String) cannot be referenced from a static context
+                      String decoded_data = GzipUtils.uncompress(data);
+                                                     ^
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\TableIO.java:360: error: non-static method isPrepared() cannot be referenced from a static context
+          boolean canExport = KonaBessCore.isPrepared();
+                                          ^
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\TableIO.java:421: error: non-static method runInBackground(Runnable) cannot be referenced from a static context
+                              ThreadUtil.runInBackground(() -> {
+                                        ^
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\TableIO.java:477: error: non-static method runInBackground(Runnable) cannot be referenced from a static context
+                                          ThreadUtil.runInBackground(() -> {
+                                                    ^
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\TableIO.java:479: error: non-static method runOnMain(Runnable) cannot be referenced from a static context
+                                                  ThreadUtil.runOnMain(() -> Toast.makeText(activity, R.string.backup_success, Toast.LENGTH_SHORT).show());
+                                                            ^
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\TableIO.java:481: error: non-static method runOnMain(Function0<Unit>) cannot be referenced from a static context
+                                                  ThreadUtil.runOnMain(() -> Toast.makeText(activity, R.string.backup_fail, Toast.LENGTH_SHORT).show());
+                                                            ^
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\TableIO.java:523: error: non-static method runInBackground(Runnable) cannot be referenced from a static context
+              ThreadUtil.runInBackground(() -> {
+                        ^
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\TableIO.java:533: error: non-static method copyFile(String,String) cannot be referenced from a static context
+                      if (!RootHelper.copyFile(srcFile.getAbsolutePath(), destPath)) {
+                                     ^
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\TableIO.java:542: error: non-static method runOnMain(Runnable) cannot be referenced from a static context
+                  ThreadUtil.runOnMain(() -> {
+                            ^
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1363: error: cannot find symbol
+                              if (ChipInfo.which == ChipInfo.type.lito_v1
+                                                            ^
+    symbol:   variable type
+    location: class ChipInfo
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1364: error: cannot find symbol
+                                      || ChipInfo.which == ChipInfo.type.lito_v2
+                                                                   ^
+    symbol:   variable type
+    location: class ChipInfo
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1365: error: cannot find symbol
+                                      || ChipInfo.which == ChipInfo.type.lagoon) {
+                                                                   ^
+    symbol:   variable type
+    location: class ChipInfo
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1424: error: cannot find symbol
+                              if (ChipInfo.which == ChipInfo.type.lito_v1
+                                                            ^
+    symbol:   variable type
+    location: class ChipInfo
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1425: error: cannot find symbol
+                                      || ChipInfo.which == ChipInfo.type.lito_v2
+                                                                   ^
+    symbol:   variable type
+    location: class ChipInfo
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1426: error: cannot find symbol
+                                      || ChipInfo.which == ChipInfo.type.lagoon) {
+                                                                   ^
+    symbol:   variable type
+    location: class ChipInfo
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1473: error: cannot find symbol
+                                      if (ChipInfo.which == ChipInfo.type.lito_v1
+                                                                    ^
+    symbol:   variable type
+    location: class ChipInfo
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1474: error: cannot find symbol
+                                              || ChipInfo.which == ChipInfo.type.lito_v2
+                                                                           ^
+    symbol:   variable type
+    location: class ChipInfo
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1475: error: cannot find symbol
+                                              || ChipInfo.which == ChipInfo.type.lagoon) {
+                                                                           ^
+    symbol:   variable type
+    location: class ChipInfo
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1602: error: cannot find symbol
+          KonaBessCore.Dtb currentDtb = KonaBessCore.getCurrentDtb();
+                      ^
+    symbol:   class Dtb
+    location: class KonaBessCore
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1641: error: cannot find symbol
+          KonaBessCore.Dtb currentDtb = KonaBessCore.getCurrentDtb();
+                      ^
+    symbol:   class Dtb
+    location: class KonaBessCore
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1699: error: cannot find symbol
+                  KonaBessCore.Dtb previous = KonaBessCore.getCurrentDtb();
+                              ^
+    symbol:   class Dtb
+    location: class KonaBessCore
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1791: error: cannot find symbol
+          ArrayList<GpuBinAdapter.BinItem> items = new ArrayList<>();
+                                 ^
+    symbol:   class BinItem
+    location: class GpuBinAdapter
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1793: error: cannot find symbol
+              items.add(new GpuBinAdapter.BinItem(
+                                         ^
+    symbol:   class BinItem
+    location: class GpuBinAdapter
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuVoltEditor.java:198: error: cannot find symbol
+          ArrayList<ParamAdapter.item> items = new ArrayList<>();
+                                ^
+    symbol:   class item
+    location: class ParamAdapter
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuVoltEditor.java:214: error: cannot find symbol
+          ArrayList<ParamAdapter.item> items = new ArrayList<>();
+                                ^
+    symbol:   class item
+    location: class ParamAdapter
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\TableIO.java:79: error: cannot find symbol
+          if (!ChipInfo.which.isEquivalentTo(ChipInfo.type.valueOf(jsonObject.getString(json_keys.CHIP))))
+                                                     ^
+    symbol:   variable type
+    location: class ChipInfo
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\TableIO.java:294: error: cannot find symbol
+                                              + ChipInfo.type.valueOf(jsonObject.getString(json_keys.CHIP))
+                                                        ^
+    symbol:   variable type
+    location: class ChipInfo
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\TableIO.java:481: error: cannot find symbol
+                                                  ThreadUtil.runOnMain(() -> Toast.makeText(activity, R.string.backup_fail, Toast.LENGTH_SHORT).show());
+                                                                                                              ^
+    symbol:   variable backup_fail
+    location: class string
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\TableIO.java:548: error: cannot find symbol
+                          if (com.ireddragonicy.konabessnext.core.ChipInfo.which != com.ireddragonicy.konabessnext.core.ChipInfo.type.unknown) {
+                                                                                                                                ^
+    symbol:   variable type
+    location: class ChipInfo
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\data\KonaBessStr.java:18: error: cannot find symbol
+          CHIP_CONVERTERS.put(ChipInfo.type.kona, new KonaConverter());
+                                      ^
+    symbol:   variable type
+    location: class ChipInfo
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\data\KonaBessStr.java:19: error: cannot find symbol
+          CHIP_CONVERTERS.put(ChipInfo.type.kona_singleBin, new KonaSingleBinConverter());
+                                      ^
+    symbol:   variable type
+    location: class ChipInfo
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\data\KonaBessStr.java:20: error: cannot find symbol
+          CHIP_CONVERTERS.put(ChipInfo.type.msmnile, new MsmnileConverter());
+                                      ^
+    symbol:   variable type
+    location: class ChipInfo
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\data\KonaBessStr.java:21: error: cannot find symbol
+          CHIP_CONVERTERS.put(ChipInfo.type.msmnile_singleBin, new MsmnileSingleBinConverter());
+                                      ^
+    symbol:   variable type
+    location: class ChipInfo
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\data\KonaBessStr.java:22: error: cannot find symbol
+          CHIP_CONVERTERS.put(ChipInfo.type.lahaina, new LahainaConverter());
+                                      ^
+    symbol:   variable type
+    location: class ChipInfo
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\data\KonaBessStr.java:23: error: cannot find symbol
+          CHIP_CONVERTERS.put(ChipInfo.type.lahaina_singleBin, new LahainaSingleBinConverter());
+                                      ^
+    symbol:   variable type
+    location: class ChipInfo
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\data\KonaBessStr.java:24: error: cannot find symbol
+          CHIP_CONVERTERS.put(ChipInfo.type.lito_v1, new LitoConverter());
+                                      ^
+    symbol:   variable type
+    location: class ChipInfo
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\data\KonaBessStr.java:25: error: cannot find symbol
+          CHIP_CONVERTERS.put(ChipInfo.type.lito_v2, new LitoConverter());
+                                      ^
+    symbol:   variable type
+    location: class ChipInfo
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\data\KonaBessStr.java:26: error: cannot find symbol
+          CHIP_CONVERTERS.put(ChipInfo.type.lagoon, new LagoonConverter());
+                                      ^
+    symbol:   variable type
+    location: class ChipInfo
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\data\KonaBessStr.java:27: error: cannot find symbol
+          CHIP_CONVERTERS.put(ChipInfo.type.shima, new ShimaConverter());
+                                      ^
+    symbol:   variable type
+    location: class ChipInfo
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\data\KonaBessStr.java:28: error: cannot find symbol
+          CHIP_CONVERTERS.put(ChipInfo.type.yupik, new DefaultConverter());
+                                      ^
+    symbol:   variable type
+    location: class ChipInfo
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\data\KonaBessStr.java:29: error: cannot find symbol
+          CHIP_CONVERTERS.put(ChipInfo.type.waipio_singleBin, new WaipioSingleBinConverter());
+                                      ^
+    symbol:   variable type
+    location: class ChipInfo
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\data\KonaBessStr.java:30: error: cannot find symbol
+          CHIP_CONVERTERS.put(ChipInfo.type.cape_singleBin, new CapeSingleBinConverter());
+                                      ^
+    symbol:   variable type
+    location: class ChipInfo
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:230: error: linesInDts has private access in EditorState
+          state.linesInDts = new ArrayList<>(lines_in_dts);
+               ^
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:231: error: binsSnapshot has private access in EditorState
+          state.binsSnapshot = cloneBinsList(bins);
+               ^
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:232: error: binPosition has private access in EditorState
+          state.binPosition = bin_position;
+               ^
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:268: error: linesInDts has private access in EditorState
+          lines_in_dts = new ArrayList<>(state.linesInDts);
+                                              ^
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:269: error: binsSnapshot has private access in EditorState
+          bins = cloneBinsList(state.binsSnapshot);
+                                    ^
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:270: error: binPosition has private access in EditorState
+          bin_position = state.binPosition;
+                              ^
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:278: error: linesInDts has private access in EditorState
+          copy.linesInDts = original.linesInDts != null
+              ^
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:278: error: linesInDts has private access in EditorState
+          copy.linesInDts = original.linesInDts != null
+                                    ^
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:279: error: linesInDts has private access in EditorState
+                  ? new ArrayList<>(original.linesInDts)
+                                            ^
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:281: error: binsSnapshot has private access in EditorState
+          copy.binsSnapshot = cloneBinsList(original.binsSnapshot);
+              ^
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:281: error: binsSnapshot has private access in EditorState
+          copy.binsSnapshot = cloneBinsList(original.binsSnapshot);
+                                                    ^
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:282: error: binPosition has private access in EditorState
+          copy.binPosition = original.binPosition;
+              ^
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:282: error: binPosition has private access in EditorState
+          copy.binPosition = original.binPosition;
+                                     ^
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:314: error: id has private access in Dtb
+              sessionCache.put(current.id, session);
+                                      ^
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1274: error: originalPosition has private access in FreqItem
+              item.originalPosition = i;
+                  ^
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1275: error: frequencyHz has private access in FreqItem
+              item.frequencyHz = freq;
+                  ^
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1284: error: busMax has private access in FreqItem
+                          item.busMax = String.valueOf(busMax);
+                              ^
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1287: error: busMin has private access in FreqItem
+                          item.busMin = String.valueOf(busMin);
+                              ^
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1291: error: busFreq has private access in FreqItem
+                          item.busFreq = String.valueOf(busFreq);
+                              ^
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1294: error: voltageLevel has private access in FreqItem
+                          item.voltageLevel = GpuVoltEditor.levelint2str(voltLevel);
+                              ^
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1350: error: actionType has private access in FreqItem
+              switch (item.actionType) {
+                          ^
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1514: error: isHeader has private access in FreqItem
+              if (!item.isHeader && !item.isFooter && item.hasFrequencyValue()) {
+                       ^
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1514: error: isFooter has private access in FreqItem
+              if (!item.isHeader && !item.isFooter && item.hasFrequencyValue()) {
+                                         ^
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1520: error: frequencyHz has private access in FreqItem
+                      if (freq == item.frequencyHz) {
+                                      ^
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1636: error: dtbs has private access in KonaBessCore
+          if (KonaBessCore.dtbs == null || KonaBessCore.dtbs.isEmpty()) {
+                          ^
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1636: error: dtbs has private access in KonaBessCore
+          if (KonaBessCore.dtbs == null || KonaBessCore.dtbs.isEmpty()) {
+                                                       ^
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1660: error: dtbs has private access in KonaBessCore
+                  KonaBessCore.dtbs,
+                              ^
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1666: error: id has private access in Dtb
+                      if (currentDtb != null && selectedDtb.id != currentDtb.id) {
+                                                           ^
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1700: error: id has private access in Dtb
+                  if (previous != null && previous.id != newDtb.id) {
+                                                               ^
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1707: error: id has private access in Dtb
+                  boolean restored = restoreSession(newDtb.id);
+                                                          ^
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1724: error: id has private access in Dtb
+                      chipsetNameView.setText(newDtb.id + " " +
+                                                    ^
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1725: error: type has private access in Dtb
+                              newDtb.type.getDescription(activity));
+                                    ^
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1741: error: id has private access in Dtb
+                          Toast.makeText(activity, "Switched to chipset " + newDtb.id,
+                                                                                  ^
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1819: error: dtbs has private access in KonaBessCore
+              if (KonaBessCore.dtbs != null && KonaBessCore.dtbs.size() > 1) {
+                              ^
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1819: error: dtbs has private access in KonaBessCore
+              if (KonaBessCore.dtbs != null && KonaBessCore.dtbs.size() > 1) {
+                                                           ^
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\TableIO.java:404: error: enabled has private access in ActionItem
+              if (!selectedItem.enabled) {
+                               ^
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\TableIO.java:468: error: boot_name has private access in KonaBessCore
+                  String backupPath = "/sdcard/" + KonaBessCore.boot_name + ".img";
+                                                               ^
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\TableIO.java:478: error: boot_name has private access in KonaBessCore
+                                              if (RootHelper.run("dd if=/dev/block/bootdevice/by-name/" + KonaBessCore.boot_name + " of=" + backupPath)) {
+                                                                                                                      ^
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1514: error: cannot find symbol
+              if (!item.isHeader && !item.isFooter && item.hasFrequencyValue()) {
+                                                          ^
+    symbol:   method hasFrequencyValue()
+    location: variable item of type FreqItem
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\GpuTableEditor.java:1642: error: cannot find symbol
+          int currentDtbIndex = KonaBessCore.getDtbIndex();
+                                            ^
+    symbol:   method getDtbIndex()
+    location: class KonaBessCore
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\strategy\BaseChipArchitecture.java:48: error: cannot find symbol
+          bin.setId(parseBinId(lines.get(0), bins.size()));
+             ^
+    symbol:   method setId(int)
+    location: variable bin of type Bin
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\strategy\BaseChipArchitecture.java:84: error: cannot find symbol
+          lines.addAll(bin.getHeader());
+                          ^
+    symbol:   method getHeader()
+    location: variable bin of type Bin
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\strategy\BaseChipArchitecture.java:88: error: cannot find symbol
+              lines.addAll(bin.getLevel(j).getLines());
+                                          ^
+    symbol:   method getLines()
+    location: class Level
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\strategy\MultiBinStrategy.java:20: error: cannot find symbol
+              lines.add("qcom,gpu-pwrlevels-" + bin.getId() + " {");
+                                                   ^
+    symbol:   method getId()
+    location: variable bin of type Bin
+  D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\core\TableIO.java:478: error: cannot find symbol
+                                              if (RootHelper.run("dd if=/dev/block/bootdevice/by-name/" + KonaBessCore.boot_name + " of=" + backupPath)) {
+                                                            ^
+    symbol:   method run(String)
+    location: class RootHelper
+  100 errors
+
+* Try:
+> Check your code and dependencies to fix the compilation error(s)
+> Run with --scan to generate a Build Scan (powered by Develocity).
+
+BUILD FAILED in 5s
+27 actionable tasks: 3 executed, 24 up-to-date
+Configuration cache entry reused.

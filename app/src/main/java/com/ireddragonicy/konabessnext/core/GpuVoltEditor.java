@@ -195,7 +195,7 @@ public class GpuVoltEditor {
     private static void generateVolts(Activity activity, LinearLayout page) {
         page.removeAllViews();
         ListView listView = new ListView(activity);
-        ArrayList<ParamAdapter.item> items = new ArrayList<>();
+        ArrayList<ParamAdapter.Item> items = new ArrayList<>();
         
         for (Opp opp : opps) {
             items.add(createItem(opp.frequency + " MHz", getLevelStr(opp.volt)));
@@ -211,7 +211,7 @@ public class GpuVoltEditor {
 
     private static void generateAVolt(Activity activity, LinearLayout page, int index) {
         ListView listView = new ListView(activity);
-        ArrayList<ParamAdapter.item> items = new ArrayList<>();
+        ArrayList<ParamAdapter.Item> items = new ArrayList<>();
         Opp opp = opps.get(index);
         
         items.add(createItem(activity.getString(R.string.back), ""));
@@ -254,8 +254,8 @@ public class GpuVoltEditor {
         page.addView(listView);
     }
 
-    private static ParamAdapter.item createItem(String title, String subtitle) {
-        ParamAdapter.item item = new ParamAdapter.item();
+    private static ParamAdapter.Item createItem(String title, String subtitle) {
+        ParamAdapter.Item item = new ParamAdapter.Item();
         item.title = title;
         item.subtitle = subtitle;
         return item;

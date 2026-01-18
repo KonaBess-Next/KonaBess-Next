@@ -130,7 +130,11 @@ public class GpuActionToolbar extends LinearLayout implements GpuTableEditor.OnH
             }
 
             btnRepack = createMaterialButton(activity, "Repack & Flash", R.drawable.ic_flash);
-            btnRepack.setOnClickListener(v -> ((MainActivity) activity).new repackLogic().start());
+            btnRepack.setOnClickListener(v -> {
+                if (activity instanceof MainActivity) {
+                    ((MainActivity) activity).startRepack();
+                }
+            });
 
             LinearLayout.LayoutParams repackParams = new LinearLayout.LayoutParams(0, LayoutParams.WRAP_CONTENT, 1.0f);
             btnRepack.setLayoutParams(repackParams);

@@ -14,7 +14,7 @@ public class ChipInfo {
     private static final ChipArchitecture MULTI_BIN = new MultiBinStrategy();
     private static final ChipArchitecture SINGLE_BIN = new SingleBinStrategy();
 
-    public enum type {
+    public enum Type {
         // Resource ID, maxLevels, ignoreVolt, minLevelOffset, levelConfig, strategy,
         // voltPattern
         kona(R.string.sdm865_series, 11, false, 2, LevelConfig.CONFIG_416, MULTI_BIN, "gpu-opp-table_v2"),
@@ -53,7 +53,7 @@ public class ChipInfo {
         public final String voltTablePattern;
         private final LevelConfig levelConfig;
 
-        type(int descriptionRes, int maxTableLevels, boolean ignoreVoltTable,
+        Type(int descriptionRes, int maxTableLevels, boolean ignoreVoltTable,
                 int minLevelOffset, LevelConfig levelConfig, ChipArchitecture architecture, String voltTablePattern) {
             this.descriptionRes = descriptionRes;
             this.maxTableLevels = maxTableLevels;
@@ -76,7 +76,7 @@ public class ChipInfo {
             return levelConfig.levelStrings;
         }
 
-        public boolean isEquivalentTo(type other) {
+        public boolean isEquivalentTo(Type other) {
             if (other == null)
                 return false;
             if (this == other)
@@ -89,7 +89,7 @@ public class ChipInfo {
         }
     }
 
-    public static type which;
+    public static Type which;
 
     // Backward compatibility wrapper
     public static class rpmh_levels {

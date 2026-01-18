@@ -1,11 +1,13 @@
 plugins {
     id 'com.android.application'
     id 'org.jetbrains.kotlin.android'
+    id 'com.google.devtools.ksp'
+    id 'com.google.dagger.hilt.android'
 }
 
 android {
     namespace = 'com.ireddragonicy.konabessnext'
-    compileSdk = 35
+    compileSdk = 36
     
     buildFeatures {
         buildConfig = true
@@ -14,7 +16,7 @@ android {
     defaultConfig {
         applicationId = "com.ireddragonicy.konabessnext"
         minSdk = 28
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 100
         versionName = "1.0"
     }
@@ -76,8 +78,7 @@ android {
                 'META-INF/notice.txt',
                 'META-INF/ASL2.0',
                 'META-INF/*.kotlin_module',
-                'META-INF/proguard/*.pro',
-                'kotlin/**'  // Remove Kotlin metadata
+                'META-INF/proguard/*.pro'
             ]
         }
     }
@@ -134,9 +135,15 @@ dependencies {
 
 
     // MVVM Architecture Components
-    implementation 'androidx.lifecycle:lifecycle-viewmodel:2.8.7'
-    implementation 'androidx.lifecycle:lifecycle-livedata:2.8.7'
-    implementation 'androidx.lifecycle:lifecycle-common-java8:2.8.7'
-    implementation 'androidx.activity:activity:1.9.3'
-    implementation 'androidx.fragment:fragment:1.8.5'
+    implementation 'androidx.lifecycle:lifecycle-viewmodel:2.10.0'
+    implementation 'androidx.lifecycle:lifecycle-livedata:2.10.0'
+    implementation 'androidx.lifecycle:lifecycle-common-java8:2.10.0'
+    implementation 'androidx.activity:activity:1.12.2'
+    implementation 'androidx.activity:activity-ktx:1.12.2'
+    implementation 'androidx.fragment:fragment:1.8.9'
+    implementation 'androidx.fragment:fragment-ktx:1.8.9'
+
+    // Hilt Dependency Injection
+    implementation "com.google.dagger:hilt-android:2.58"
+    ksp "com.google.dagger:hilt-compiler:2.58"
 }

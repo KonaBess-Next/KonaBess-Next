@@ -17,7 +17,7 @@ public class MultiBinStrategy extends BaseChipArchitecture {
     public List<String> generateTable(List<Bin> bins) {
         List<String> lines = new ArrayList<>();
         for (Bin bin : bins) {
-            lines.add("qcom,gpu-pwrlevels-" + bin.getId() + " {");
+            lines.add("qcom,gpu-pwrlevels-" + bin.id + " {");
             generateBinContent(bin, lines);
         }
         return lines;

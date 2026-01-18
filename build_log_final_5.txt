@@ -1,0 +1,87 @@
+WARNING: A restricted method in java.lang.System has been called
+WARNING: java.lang.System::load has been called by net.rubygrapefruit.platform.internal.NativeLibraryLoader in an unnamed module (file:/C:/Users/ireddragonicy/.gradle/wrapper/dists/gradle-9.2.1-all/2lbhfocpgk6niea1fja7mj8kz/gradle-9.2.1/lib/native-platform-0.22-milestone-29.jar)
+WARNING: Use --enable-native-access=ALL-UNNAMED to avoid a warning for callers in this module
+WARNING: Restricted methods will be blocked in a future release unless native access is enabled
+
+Reusing configuration cache.
+> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :clean
+> Task :app:clean
+> Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
+> Task :app:generateDebugResValues
+> Task :app:writeDebugSigningConfigVersions
+> Task :app:createDebugCompatibleScreenManifests
+> Task :app:validateSigningDebug
+> Task :app:desugarDebugFileDependencies
+> Task :app:generateDebugBuildConfig
+> Task :app:writeDebugAppMetadata
+> Task :app:mergeDebugShaders
+> Task :app:mergeDebugJniLibFolders
+> Task :app:mapDebugSourceSetPaths
+> Task :app:compileDebugShaders NO-SOURCE
+> Task :app:extractDeepLinksDebug
+> Task :app:generateDebugAssets UP-TO-DATE
+> Task :app:checkDebugAarMetadata
+> Task :app:mergeDebugNativeLibs NO-SOURCE
+> Task :app:stripDebugDebugSymbols NO-SOURCE
+> Task :app:generateDebugResources
+> Task :app:javaPreCompileDebug
+> Task :app:mergeDebugAssets
+> Task :app:checkDebugDuplicateClasses
+> Task :app:mergeLibDexDebug
+> Task :app:compressDebugAssets
+> Task :app:processDebugMainManifest
+> Task :app:processDebugManifest
+> Task :app:processDebugManifestForPackage
+> Task :app:mergeDebugResources
+> Task :app:mergeExtDexDebug
+> Task :app:processDebugResources
+> Task :app:kspDebugKotlin
+
+> Task :app:compileDebugKotlin
+w: file:///D:/Project/KonaBess-Next/app/src/main/java/com/ireddragonicy/konabessnext/KonaBessApplication.kt:27:33 'static field FLAG_REDIRECT_STDERR: Int' is deprecated. Deprecated in Java.
+w: file:///D:/Project/KonaBess-Next/app/src/main/java/com/ireddragonicy/konabessnext/core/KonaBessCore.kt:361:53 Java type mismatch: inferred type is 'String?', but 'String' was expected.
+w: file:///D:/Project/KonaBess-Next/app/src/main/java/com/ireddragonicy/konabessnext/repository/DeviceRepository.kt:26:5 This annotation is currently applied to the value parameter only, but in the future it will also be applied to field.
+- To opt in to applying to both value parameter and field, add '-Xannotation-default-target=param-property' to your compiler arguments.
+- To keep applying to the value parameter only, use the '@param:' annotation target.
+
+See https://youtrack.jetbrains.com/issue/KT-73255 for more details.
+w: file:///D:/Project/KonaBess-Next/app/src/main/java/com/ireddragonicy/konabessnext/ui/MainActivity.kt:117:24 'fun launchWhenStarted(block: suspend CoroutineScope.() -> Unit): Job' is deprecated. launchWhenStarted is deprecated as it can lead to wasted resources in some cases. Replace with suspending repeatOnLifecycle to run the block whenever the Lifecycle state is at least Lifecycle.State.STARTED.
+w: file:///D:/Project/KonaBess-Next/app/src/main/java/com/ireddragonicy/konabessnext/ui/adapters/DtsTreeAdapter.kt:126:32 No cast needed.
+w: file:///D:/Project/KonaBess-Next/app/src/main/java/com/ireddragonicy/konabessnext/ui/adapters/DtsTreeAdapter.kt:130:38 No cast needed.
+w: file:///D:/Project/KonaBess-Next/app/src/main/java/com/ireddragonicy/konabessnext/ui/adapters/DtsTreeAdapter.kt:268:38 No cast needed.
+w: file:///D:/Project/KonaBess-Next/app/src/main/java/com/ireddragonicy/konabessnext/ui/adapters/DtsTreeAdapter.kt:299:38 No cast needed.
+w: file:///D:/Project/KonaBess-Next/app/src/main/java/com/ireddragonicy/konabessnext/ui/fragments/GpuCurveEditorFragment.kt:139:35 'fun onBackPressed(): Unit' is deprecated. This method has been deprecated in favor of using the
+      {@link OnBackPressedDispatcher} via {@link #getOnBackPressedDispatcher()}.
+      The OnBackPressedDispatcher controls how back button events are dispatched
+      to one or more {@link OnBackPressedCallback} objects.
+w: file:///D:/Project/KonaBess-Next/app/src/main/java/com/ireddragonicy/konabessnext/ui/fragments/GpuFrequencyFragment.kt:645:68 Unnecessary non-null assertion (!!) on a non-null receiver of type 'String'.
+w: file:///D:/Project/KonaBess-Next/app/src/main/java/com/ireddragonicy/konabessnext/ui/fragments/GpuVoltFragment.kt:46:42 'fun getColor(p0: Int): Int' is deprecated. Deprecated in Java.
+w: file:///D:/Project/KonaBess-Next/app/src/main/java/com/ireddragonicy/konabessnext/utils/ItemTouchHelperCallback.kt:28:39 'val adapterPosition: Int' is deprecated. Deprecated in Java.
+w: file:///D:/Project/KonaBess-Next/app/src/main/java/com/ireddragonicy/konabessnext/utils/ItemTouchHelperCallback.kt:29:33 'val adapterPosition: Int' is deprecated. Deprecated in Java.
+w: file:///D:/Project/KonaBess-Next/app/src/main/java/com/ireddragonicy/konabessnext/utils/LocaleUtil.kt:23:22 'constructor(p0: String!): Locale' is deprecated. Deprecated in Java.
+w: file:///D:/Project/KonaBess-Next/app/src/main/java/com/ireddragonicy/konabessnext/utils/RootHelper.kt:17:33 'static field FLAG_REDIRECT_STDERR: Int' is deprecated. Deprecated in Java.
+
+> Task :app:compileDebugJavaWithJavac
+Note: D:\Project\KonaBess-Next\app\src\main\java\com\ireddragonicy\konabessnext\editor\core\VirtualizedCodeEditor.java uses or overrides a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+
+> Task :app:hiltAggregateDepsDebug
+> Task :app:hiltJavaCompileDebug
+> Task :app:processDebugJavaRes
+> Task :app:mergeDebugJavaResource
+> Task :app:transformDebugClassesWithAsm
+> Task :app:dexBuilderDebug
+> Task :app:mergeDebugGlobalSynthetics
+> Task :app:mergeProjectDexDebug
+> Task :app:packageDebug
+> Task :app:assembleDebug
+> Task :app:createDebugApkListingFileRedirect
+
+[Incubating] Problems report is available at: file:///D:/Project/KonaBess-Next/build/reports/problems/problems-report.html
+
+BUILD SUCCESSFUL in 19s
+39 actionable tasks: 39 executed
+Configuration cache entry reused.

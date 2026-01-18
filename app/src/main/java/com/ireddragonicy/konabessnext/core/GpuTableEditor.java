@@ -59,6 +59,8 @@ import com.ireddragonicy.konabessnext.ui.adapters.GpuFreqAdapter;
 import com.ireddragonicy.konabessnext.ui.adapters.GpuParamDetailAdapter;
 import com.ireddragonicy.konabessnext.ui.adapters.ParamAdapter;
 import com.ireddragonicy.konabessnext.utils.DialogUtil;
+import com.ireddragonicy.konabessnext.core.KonaBessCore;
+import com.ireddragonicy.konabessnext.model.Dtb;
 import com.ireddragonicy.konabessnext.utils.DtsHelper;
 import com.ireddragonicy.konabessnext.utils.FileUtil;
 import com.ireddragonicy.konabessnext.utils.ItemTouchHelperCallback;
@@ -293,7 +295,7 @@ public class GpuTableEditor {
     }
 
     private static void saveCurrentSession() {
-        KonaBessCore.Dtb current = KonaBessCore.getCurrentDtb();
+        Dtb current = KonaBessCore.getCurrentDtb();
         if (current == null || lines_in_dts == null || bins == null) {
             return;
         }
@@ -355,7 +357,7 @@ public class GpuTableEditor {
         updateUndoRedoButtons();
     }
 
-    private static void setDirty(boolean dirty) {
+    public static void setDirty(boolean dirty) {
         isDirty = dirty;
         updateSaveButtonAppearance();
     }
@@ -417,7 +419,7 @@ public class GpuTableEditor {
         }
     }
 
-    private static void updateHistoryButtonLabel() {
+    public static void updateHistoryButtonLabel() {
         if (historyButtonRef == null) {
             return;
         }
@@ -1358,9 +1360,9 @@ public class GpuTableEditor {
                         applyChange(activity.getString(R.string.history_add_frequency, freqLabel), () -> {
                             bins.get(id).levels.add(insertIndex, level_clone(template));
                             offset_initial_level(id, 1);
-                            if (ChipInfo.which == ChipInfo.type.lito_v1
-                                    || ChipInfo.which == ChipInfo.type.lito_v2
-                                    || ChipInfo.which == ChipInfo.type.lagoon) {
+                            if (ChipInfo.which == ChipInfo.Type.lito_v1
+                                    || ChipInfo.which == ChipInfo.Type.lito_v2
+                                    || ChipInfo.which == ChipInfo.Type.lagoon) {
                                 offset_ca_target_level(id, 1);
                             }
                         });
@@ -1419,9 +1421,9 @@ public class GpuTableEditor {
                         applyChange(activity.getString(R.string.history_add_frequency, freqLabel), () -> {
                             bins.get(id).levels.add(0, level_clone(template));
                             offset_initial_level(id, 1);
-                            if (ChipInfo.which == ChipInfo.type.lito_v1
-                                    || ChipInfo.which == ChipInfo.type.lito_v2
-                                    || ChipInfo.which == ChipInfo.type.lagoon) {
+                            if (ChipInfo.which == ChipInfo.Type.lito_v1
+                                    || ChipInfo.which == ChipInfo.Type.lito_v2
+                                    || ChipInfo.which == ChipInfo.Type.lagoon) {
                                 offset_ca_target_level(id, 1);
                             }
                         });
@@ -1468,9 +1470,9 @@ public class GpuTableEditor {
                                 applyChange(activity.getString(R.string.history_remove_frequency, freqLabel), () -> {
                                     bins.get(id).levels.remove(levelPosition);
                                     offset_initial_level(id, -1);
-                                    if (ChipInfo.which == ChipInfo.type.lito_v1
-                                            || ChipInfo.which == ChipInfo.type.lito_v2
-                                            || ChipInfo.which == ChipInfo.type.lagoon) {
+                                    if (ChipInfo.which == ChipInfo.Type.lito_v1
+                                            || ChipInfo.which == ChipInfo.Type.lito_v2
+                                            || ChipInfo.which == ChipInfo.Type.lagoon) {
                                         offset_ca_target_level(id, -1);
                                     }
                                 });
@@ -1597,7 +1599,7 @@ public class GpuTableEditor {
 
         // Chipset name
         TextView chipsetName = new TextView(activity);
-        KonaBessCore.Dtb currentDtb = KonaBessCore.getCurrentDtb();
+        Dtb currentDtb = KonaBessCore.getCurrentDtb();
         if (currentDtb != null) {
             chipsetName.setText(currentDtb.id + " " +
                     currentDtb.type.getDescription(activity));
@@ -1636,7 +1638,7 @@ public class GpuTableEditor {
             return;
         }
 
-        KonaBessCore.Dtb currentDtb = KonaBessCore.getCurrentDtb();
+        Dtb currentDtb = KonaBessCore.getCurrentDtb();
         int currentDtbIndex = KonaBessCore.getDtbIndex();
 
         // Inflate custom modern dialog layout
@@ -1688,13 +1690,13 @@ public class GpuTableEditor {
     }
 
     private static void switchChipset(Activity activity, LinearLayout page,
-            KonaBessCore.Dtb newDtb, TextView chipsetNameView) {
+            Dtb newDtb, TextView chipsetNameView) {
         AlertDialog waiting = DialogUtil.getWaitDialog(activity, R.string.getting_freq_table);
         waiting.show();
 
         new Thread(() -> {
             try {
-                KonaBessCore.Dtb previous = KonaBessCore.getCurrentDtb();
+                Dtb previous = KonaBessCore.getCurrentDtb();
                 if (previous != null && previous.id != newDtb.id) {
                     saveCurrentSession();
                 }
@@ -1773,7 +1775,7 @@ public class GpuTableEditor {
         }
     }
 
-    private static void generateBins(Activity activity, LinearLayout page) throws Exception {
+    public static void generateBins(Activity activity, LinearLayout page) throws Exception {
         // At root level, disable callback so system handles back (exit/home)
         disableBackCallback();
 
@@ -1826,7 +1828,7 @@ public class GpuTableEditor {
             recyclerView.setClipToPadding(false);
             recyclerView.setPadding(0, (int) (density * 8), 0, (int) (density * 16));
 
-            GpuBinAdapter adapter = new GpuBinAdapter(items);
+            GpuBinAdapter adapter = new GpuBinAdapter(items, activity);
             adapter.setOnItemClickListener(new GpuBinAdapter.OnItemClickListener() {
                 @Override
                 public void onBinClick(int position) {
