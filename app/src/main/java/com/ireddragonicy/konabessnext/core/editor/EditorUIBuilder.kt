@@ -287,7 +287,14 @@ object EditorUIBuilder {
             recyclerView.setPadding(0, 0, 0, (density * 80).toInt())
 
             adapter = GpuFreqAdapter(items, activity)
-            val helper = ItemTouchHelper(ItemTouchHelperCallback(adapter))
+            val callback = ItemTouchHelperCallback(adapter)
+            callback.onDragFinished = {
+                try {
+                    listener.onReorderLevels(binIndex, adapter.items)
+                } catch (ignored: Exception) {
+                }
+            }
+            val helper = ItemTouchHelper(callback)
             helper.attachToRecyclerView(recyclerView)
             adapter.setOnStartDragListener { viewHolder: RecyclerView.ViewHolder? -> viewHolder?.let { helper.startDrag(it) } }
             recyclerView.adapter = adapter
@@ -386,17 +393,6 @@ object EditorUIBuilder {
                 }
              }
         }
-
-        recyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() {
-            override fun onScrollStateChanged(rv: RecyclerView, newState: Int) {
-                if (newState == RecyclerView.SCROLL_STATE_IDLE) {
-                    try {
-                        listener.onReorderLevels(binIndex, adapter.items)
-                    } catch (ignored: Exception) {
-                    }
-                }
-            }
-        })
     }
 
     // ===== Parameter Details UI =====

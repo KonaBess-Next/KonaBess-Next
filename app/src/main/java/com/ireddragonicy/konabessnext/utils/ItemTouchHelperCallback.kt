@@ -6,6 +6,8 @@ import com.ireddragonicy.konabessnext.ui.adapters.GpuFreqAdapter
 
 open class ItemTouchHelperCallback(private val adapter: GpuFreqAdapter) : ItemTouchHelper.Callback() {
 
+    var onDragFinished: (() -> Unit)? = null
+
     override fun isLongPressDragEnabled(): Boolean {
         return true // Enable drag by long-pressing anywhere on the card
     }
@@ -76,5 +78,6 @@ open class ItemTouchHelperCallback(private val adapter: GpuFreqAdapter) : ItemTo
             scaleX = 1.0f
             scaleY = 1.0f
         }
+        onDragFinished?.invoke()
     }
 }

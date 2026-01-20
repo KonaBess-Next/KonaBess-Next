@@ -407,10 +407,14 @@ class EditorStateManager private constructor() {
     }
 
     fun updateUndoRedoButtons() {
-        val canUndo = !undoStack.isEmpty()
-        val canRedo = !redoStack.isEmpty()
+        // Fallback to internal state if no arguments provided
+        updateUndoRedoButtons(!undoStack.isEmpty(), !redoStack.isEmpty())
+    }
 
-        notifyHistoryListeners()
+    fun updateUndoRedoButtons(canUndo: Boolean, canRedo: Boolean) {
+        notifyHistoryListeners() // This notifies listeners with internal state... maybe should pass args?
+        // Actually, listeners are for internal state changes. External state might handle its own listeners.
+        // But let's leave internal listeners alone for now.
 
         if (undoButtonRef != null && currentActivity != null) {
             currentActivity!!.runOnUiThread {
@@ -427,11 +431,14 @@ class EditorStateManager private constructor() {
     }
 
     fun updateHistoryButtonLabel() {
+        updateHistoryButtonLabel(changeHistory.size)
+    }
+
+    fun updateHistoryButtonLabel(count: Int) {
         if (historyButtonRef == null) return
         runOnMainThread {
             if (historyButtonRef == null) return@runOnMainThread
             // Icon-only button - update content description for accessibility
-            val count = changeHistory.size
             val description = if (currentActivity != null) {
                 if (count == 0) {
                     currentActivity!!.getString(R.string.history)
@@ -446,8 +453,12 @@ class EditorStateManager private constructor() {
     }
 
     fun showHistoryDialog(activity: Activity?) {
+        showHistoryDialog(activity, changeHistory)
+    }
+
+    fun showHistoryDialog(activity: Activity?, historyList: List<String>) {
         if (activity == null) return
-        if (changeHistory.isEmpty()) {
+        if (historyList.isEmpty()) {
             MaterialAlertDialogBuilder(activity)
                 .setTitle(R.string.history_title)
                 .setMessage(R.string.history_empty)
@@ -456,7 +467,7 @@ class EditorStateManager private constructor() {
                 .show()
             return
         }
-        val entries = changeHistory.toTypedArray<CharSequence>()
+        val entries = historyList.toTypedArray<CharSequence>()
         MaterialAlertDialogBuilder(activity)
             .setTitle(R.string.history_title)
             .setItems(entries, null)

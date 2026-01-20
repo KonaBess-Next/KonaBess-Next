@@ -41,6 +41,8 @@ class GpuTableEditor : EditorUIBuilder.UIActionListener, ChipsetManager.OnChipse
     fun onOpenLevels(binIndex: Int, scrollToPosition: Int) {
         currentBinIndex = binIndex
         currentLevelIndex = null
+        viewModelRef?.selectedBinIndex?.value = binIndex
+        viewModelRef?.selectedLevelIndex?.value = -1
         currentActivity?.let { restoreBackListener(it) }
         currentActivity?.let {
             if (currentPage != null && bins != null) {
@@ -53,6 +55,7 @@ class GpuTableEditor : EditorUIBuilder.UIActionListener, ChipsetManager.OnChipse
     override fun onOpenParamDetails(binIndex: Int, levelIndex: Int) {
         currentBinIndex = binIndex
         currentLevelIndex = levelIndex
+        viewModelRef?.selectedLevelIndex?.value = levelIndex
         currentActivity?.let { restoreBackListener(it) }
         currentActivity?.let {
             if (currentPage != null && bins != null) {
@@ -70,6 +73,8 @@ class GpuTableEditor : EditorUIBuilder.UIActionListener, ChipsetManager.OnChipse
             // Back from Levels -> Bins
             currentBinIndex = null
             currentLevelIndex = null
+            viewModelRef?.selectedBinIndex?.value = -1
+            viewModelRef?.selectedLevelIndex?.value = -1
             if (currentActivity is MainActivity) {
                 (currentActivity as MainActivity).updateGpuToolbarTitle(
                     currentActivity!!.getString(R.string.edit_freq_table)
@@ -86,16 +91,21 @@ class GpuTableEditor : EditorUIBuilder.UIActionListener, ChipsetManager.OnChipse
 
     @Throws(Exception::class)
     override fun onAddLevelTop(binIndex: Int) {
+        // UI Check
         if (!LevelOperations.canAddNewLevel(bins, binIndex)) return
         val bin = bins?.getOrNull(binIndex) ?: return
+        
+        // Delegate to ViewModel
         val activity = currentActivity ?: return
-
-        val freqLabel = LevelOperations.getFrequencyLabel(bin.levels.firstOrNull() ?: return, activity)
-        stateManager.applyChange(
-            activity.getString(R.string.history_add_frequency, freqLabel),
-            { LevelOperations.addLevelAtTop(bins, binIndex) },
-            getLinesInDts(), bins!!, bin_position
-        )
+        viewModelRef?.addFrequency(binIndex, true /* top */)
+        
+        // Refresh UI logic (ViewModel update will trigger reactive refresh via Fragment, 
+        // but explicit scroll is requested here)
+        // Wait, if we rely on reactive flow, the list updates. 
+        // But scrolling to specific position needs a trigger.
+        // For now, let's assume the reactive refresh happens, and we might lose scroll context unless we handle it.
+        // But this legacy method calls onOpenLevels.
+        // Let's call onOpenLevels just to set the index and force refresh/scroll.
         onOpenLevels(binIndex, scrollToPosition = 3)
     }
 
@@ -103,76 +113,47 @@ class GpuTableEditor : EditorUIBuilder.UIActionListener, ChipsetManager.OnChipse
     override fun onAddLevelBottom(binIndex: Int) {
         if (!LevelOperations.canAddNewLevel(bins, binIndex)) return
         val bin = bins?.getOrNull(binIndex) ?: return
-        val activity = currentActivity ?: return
+        
+        viewModelRef?.addFrequency(binIndex, false /* bottom */)
 
         val offset = ChipInfo.which?.minLevelOffset ?: 0
         val insertIndex = (bin.levels.size - offset).coerceAtLeast(0)
-        val freqLabel = bin.levels.getOrNull(insertIndex)?.let {
-            LevelOperations.getFrequencyLabel(it, activity)
-        } ?: "New Level"
-
-        // Calculate scroll position: 3 headers + insertIndex + 1 (for newly added item)
         val scrollPos = 3 + insertIndex + 1
         
-        stateManager.applyChange(
-            activity.getString(R.string.history_add_frequency, freqLabel),
-            { LevelOperations.addLevelAtBottom(bins, binIndex) },
-            getLinesInDts(), bins!!, bin_position
-        )
         onOpenLevels(binIndex, scrollToPosition = scrollPos)
     }
 
     @Throws(Exception::class)
     override fun onDuplicateLevel(binIndex: Int, levelIndex: Int) {
         if (!LevelOperations.canAddNewLevel(bins, binIndex)) return
-        val bin = bins?.getOrNull(binIndex) ?: return
-        val level = bin.levels.getOrNull(levelIndex) ?: return
-        val activity = currentActivity ?: return
-
-        val freqLabel = LevelOperations.getFrequencyLabel(level, activity)
-        stateManager.applyChange(
-            activity.getString(R.string.history_duplicate_frequency, freqLabel),
-            { LevelOperations.duplicateLevel(bins, binIndex, levelIndex) },
-            getLinesInDts(), bins!!, bin_position
-        )
+        viewModelRef?.duplicateFrequency(binIndex, levelIndex)
         onOpenLevels(binIndex)
     }
 
     @Throws(Exception::class)
     override fun onRemoveLevel(binIndex: Int, levelIndex: Int) {
-        val bin = bins?.getOrNull(binIndex) ?: return
-        val level = bin.levels.getOrNull(levelIndex) ?: return
-        val activity = currentActivity ?: return
-
-        val freqLabel = LevelOperations.getFrequencyLabel(level, activity)
-        stateManager.applyChange(
-            activity.getString(R.string.history_remove_frequency, freqLabel),
-            { LevelOperations.removeLevel(bins, binIndex, levelIndex) },
-            getLinesInDts(), bins!!, bin_position
-        )
-
+        viewModelRef?.removeFrequency(binIndex, levelIndex)
         onOpenLevels(binIndex)
     }
 
     @Throws(Exception::class)
     override fun onReorderLevels(binIndex: Int, items: List<GpuFreqAdapter.FreqItem>) {
-        val binsSnapshot = LevelOperations.cloneBinsList(bins)
-        val changed = LevelOperations.updateBinsFromAdapter(bins, binIndex, items)
-
-        if (changed) {
-            // Revert the change to capture state, then apply it properly via stateManager
-            val newBins = LevelOperations.cloneBinsList(bins)
-            bins!!.clear()
-            bins!!.addAll(binsSnapshot) // Restore
-
-            stateManager.applyChange(
-                currentActivity!!.getString(R.string.history_reorder_frequency),
-                {
-                    bins!!.clear()
-                    bins!!.addAll(newBins)
-                },
-                lines_in_dts!!, bins!!, bin_position
-            )
+        // Since drag & drop provides a list, we might need a batch update or specific move.
+        // LevelOperations.updateBinsFromAdapter modifies in place.
+        // We really want to replicate the move or just batch set the new levels.
+        
+        // GpuFrequencyViewModel does not have batch 'setLevels'.
+        // It has 'reorderFrequency(from, to)'.
+        // Adapting Drag&Drop list result to a single 'reorder' is hard if multiple moves happened.
+        // Best approach: "Replace all levels for this bin".
+        
+        // Let's add 'updateLevels(binIndex, newLevels)' to ViewModel?
+        // Or 'updateBin(binIndex, newBin)'.
+        // Or we can use 'performBatchEdit'.
+        
+        viewModelRef?.performBatchEdit { mutableBins ->
+            // Use LevelOperations to apply change to the mutable copy
+             LevelOperations.updateBinsFromAdapter(mutableBins as ArrayList<Bin>, binIndex, items)
         }
     }
 
@@ -219,18 +200,26 @@ class GpuTableEditor : EditorUIBuilder.UIActionListener, ChipsetManager.OnChipse
         paramTitle: String
     ) {
         val act = currentActivity ?: return
-        val currentBins = bins ?: return
         
         ParameterEditHandler.handleParameterEdit(
-            act, currentBins, binIndex, levelIndex, lineIndex,
+            act, bins ?: ArrayList(), binIndex, levelIndex, lineIndex,
             rawName, rawValue, paramTitle,
             object : ParameterEditHandler.OnParameterEditedListener {
                 override fun onEdited(lineIndex: Int, encodedLine: String, historyMessage: String) {
-                    stateManager.applyChange(
-                        historyMessage,
-                        { currentBins[binIndex].levels[levelIndex].lines[lineIndex] = encodedLine },
-                        getLinesInDts(), currentBins, bin_position
-                    )
+                    // Extract value from encoded line if possible, or pass whole line?
+                    // ViewModel 'updateParameter' takes 'newValue'.
+                    // But 'encodedLine' is the full line e.g. "qcom,freq = <300000>;"
+                    // ParameterEditHandler logic constructs the line. 
+                    // To follow ViewModel pattern, we should preferably just update the parameter value.
+                    // But for now, we can use 'performBatchEdit' or just manually update if logic is complex.
+                    
+                    // Actually, ViewModel.updateParameter expects just the value inside <>.
+                    // But ParameterEditHandler returns the FULL line.
+                    // Let's use batch edit to just set the line.
+                    
+                    viewModelRef?.performBatchEdit { mutableBins ->
+                         mutableBins.getOrNull(binIndex)?.levels?.getOrNull(levelIndex)?.lines?.set(lineIndex, encodedLine)
+                    }
                     Toast.makeText(act, R.string.save_success, Toast.LENGTH_SHORT).show()
                 }
 
@@ -249,18 +238,15 @@ class GpuTableEditor : EditorUIBuilder.UIActionListener, ChipsetManager.OnChipse
         deltaMHz: Int
     ) {
         val act = currentActivity ?: return
-        val currentBins = bins ?: return
         
         ParameterEditHandler.handleFrequencyAdjust(
-            act, currentBins, binIndex, levelIndex, lineIndex,
+            act, bins ?: ArrayList(), binIndex, levelIndex, lineIndex,
             rawName, deltaMHz,
             object : ParameterEditHandler.OnParameterEditedListener {
                 override fun onEdited(lineIndex: Int, encodedLine: String, historyMessage: String) {
-                    stateManager.applyChange(
-                        historyMessage,
-                        { bins!![binIndex].levels[levelIndex].lines[lineIndex] = encodedLine },
-                        lines_in_dts!!, bins!!, bin_position
-                    )
+                    viewModelRef?.performBatchEdit { mutableBins ->
+                         mutableBins.getOrNull(binIndex)?.levels?.getOrNull(levelIndex)?.lines?.set(lineIndex, encodedLine)
+                    }
                 }
 
                 override fun refreshView() {
@@ -276,46 +262,55 @@ class GpuTableEditor : EditorUIBuilder.UIActionListener, ChipsetManager.OnChipse
 
     // ===== OnChipsetSwitchedListener Implementation =====
 
-    @Throws(Exception::class)
     override fun onInitAndDecode() {
-        init()
-        decode()
+        // Delegated to ViewModel
+        viewModelRef?.loadData()
     }
+
+    // ... (unchanged methods handled by previous refactor) ...
 
     @Throws(Exception::class)
     override fun onPatchThrottleLevel() {
-        LevelOperations.patchThrottleLevel(bins)
+        // Handled by Repository/ViewModel during load
     }
 
     override fun onResetEditorState() {
-        stateManager.resetEditorState(genBack(genTable()))
+        // Handled by Repository state clearing
     }
 
     @Throws(Exception::class)
     override fun onRefreshView(restoredSession: Boolean, targetBinIndex: Int?, targetLevelIndex: Int?) {
-        stateManager.refreshDirtyStateFromSignature(lines_in_dts!!, bins!!)
+        // View refresh is reactive in Fragment via Flow collection
+        // But we might need to manually trigger generating views if Fragment relies on this callback
+        // for specific restoration navigation.
+        
+        // This callback is called by ChipsetManager "onUiThread".
+        // In the reactive world, the Fragment observes 'bins'.
+        
+        // However, restoring navigation state (which bin was open) is UI logic.
         if (targetBinIndex == null) {
-            EditorUIBuilder.generateBins(currentActivity!!, currentPage!!, bins!!, this, this)
+            currentActivity?.let { 
+                 if (currentPage != null && bins != null)
+                     EditorUIBuilder.generateBins(it, currentPage!!, bins!!, this, this) 
+            }
         } else {
             currentBinIndex = targetBinIndex
-            if (targetLevelIndex != null) {
-                currentLevelIndex = targetLevelIndex
-                EditorUIBuilder.generateALevel(
-                    currentActivity!!,
-                    currentPage!!,
-                    bins!!,
-                    targetBinIndex,
-                    targetLevelIndex,
-                    this
-                )
-            } else {
-                EditorUIBuilder.generateLevels(currentActivity!!, currentPage!!, bins!!, targetBinIndex, this)
+            currentActivity?.let { act ->
+                if (targetLevelIndex != null) {
+                    currentLevelIndex = targetLevelIndex
+                    EditorUIBuilder.generateALevel(
+                        act, currentPage!!, bins!!, targetBinIndex, targetLevelIndex, this
+                    )
+                } else {
+                    EditorUIBuilder.generateLevels(act, currentPage!!, bins!!, targetBinIndex, this)
+                }
+                restoreBackListener(act)
             }
-            restoreBackListener(currentActivity!!)
         }
     }
 
     override fun saveCurrentSession() {
+        // TODO: Move session state to Repository/ViewModel
         stateManager.saveCurrentSession(lines_in_dts, bins, bin_position, currentBinIndex, currentLevelIndex)
     }
 
@@ -352,92 +347,25 @@ class GpuTableEditor : EditorUIBuilder.UIActionListener, ChipsetManager.OnChipse
     }
 
     // ===== Entry Point (gpuTableLogic) =====
-
-    class gpuTableLogic(activity: Activity, showedView: LinearLayout) : Thread() {
-        var activity: Activity
-        var waiting: AlertDialog? = null
-        var showedView: LinearLayout
-        var page: LinearLayout? = null
-
-        init {
-            this.activity = activity
-            this.showedView = showedView
-        }
-
-        override fun run() {
-            activity.runOnUiThread {
-                waiting = DialogUtil.getWaitDialog(activity, R.string.getting_freq_table)
-                waiting!!.show()
-            }
-
-            try {
-                init()
-                decode()
-                LevelOperations.patchThrottleLevel(bins)
-                stateManager.resetEditorState(genBack(genTable()))
-            } catch (e: Exception) {
-                activity.runOnUiThread {
-                    DialogUtil.showError(
-                        activity,
-                        R.string.getting_freq_table_failed
-                    )
-                }
-                return
-            }
-
-            activity.runOnUiThread {
-                currentActivity = activity
-                stateManager.currentActivity = activity
-                stateManager.setOnStateRestoredCallback { refreshCurrentView() }
-
-                waiting!!.dismiss()
-                showedView.removeAllViews()
-
-                val instance = GpuTableEditor()
-                EditorUIBuilder.generateToolBar(activity, showedView, instance)
-
-                page = LinearLayout(activity)
-                page!!.orientation = LinearLayout.VERTICAL
-                page!!.layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    LinearLayout.LayoutParams.MATCH_PARENT
-                )
-                currentPage = page
-
-                currentBinIndex = null
-                currentLevelIndex = null
-
-                try {
-                    val listener = GpuTableEditor()
-                    EditorUIBuilder.generateBins(activity, page!!, bins!!, listener, listener)
-                } catch (e: Exception) {
-                    DialogUtil.showError(activity, R.string.getting_freq_table_failed)
-                }
-
-                stateManager.updateUndoRedoButtons()
-                stateManager.updateHistoryButtonLabel()
-                stateManager.updateSaveButtonAppearance()
-
-                showedView.addView(page)
-            }
-        }
-    }
+    // DELETED: Logic moved to GpuFrequencyViewModel using Coroutines.
 
     companion object {
-        // Core Data
+        // Core Data - Populated by GpuRepository
         @JvmField
         var bin_position: Int = 0
         @JvmField
         var bins: ArrayList<Bin>? = null
         @JvmStatic
-        private var lines_in_dts: ArrayList<String>? = null
+        var lines_in_dts: ArrayList<String>? = null
 
         // State Management
         private val stateManager = EditorStateManager.getInstance()
 
         // UI State
-        private var currentActivity: Activity? = null
-        private var currentPage: LinearLayout? = null
+        @JvmField
+        var currentActivity: Activity? = null
+        @JvmField
+        var currentPage: LinearLayout? = null
         private var currentBinIndex: Int? = null
         private var currentLevelIndex: Int? = null
 
@@ -455,54 +383,33 @@ class GpuTableEditor : EditorUIBuilder.UIActionListener, ChipsetManager.OnChipse
         @JvmStatic
         @Throws(IOException::class)
         fun init() {
-            lines_in_dts = ArrayList()
-            bins = ArrayList()
-            bin_position = -1
-            if (KonaBessCore.dts_path != null) {
-                lines_in_dts!!.addAll(FileUtil.readLines(KonaBessCore.dts_path!!))
-            }
+            // Legacy no-op or delegate if strictly needed. 
+            // Repository handles loading.
         }
 
         @JvmStatic
         @Throws(Exception::class)
         fun decode() {
-            var i = -1
-            while (++i < lines_in_dts!!.size) {
-                val this_line = lines_in_dts!![i].trim { it <= ' ' }
-                try {
-                    if (ChipInfo.which!!.architecture.isStartLine(this_line)) {
-                        if (bin_position < 0)
-                            bin_position = i
-                        ChipInfo.which!!.architecture.decode(lines_in_dts!!, bins!!, i)
-                        i--
-                    }
-                } catch (e: Exception) {
-                    throw e
-                }
-            }
+            // Legacy no-op. Repository handles decoding.
         }
 
         @JvmStatic
         fun genTable(): List<String> {
-            return ChipInfo.which!!.architecture.generateTable(bins!!)
+            return bins?.let { ChipInfo.which!!.architecture.generateTable(it) } ?: emptyList()
         }
 
         @JvmStatic
         fun genBack(table: List<String>?): List<String> {
+            // Simple reconstruction if needed primarily by legacy save
             val new_dts = (lines_in_dts?.toMutableList() ?: mutableListOf())
-            val insertPos = if (bin_position >= 0) {
-                 bin_position.coerceAtMost(new_dts.size)
-            } else {
-                 new_dts.size // Append if position invalid
-            }
+            val insertPos = if (bin_position >= 0) bin_position.coerceAtMost(new_dts.size) else new_dts.size
             new_dts.addAll(insertPos, table.orEmpty())
             return new_dts
         }
 
         fun writeOut(new_dts: List<String>?) {
-            if (KonaBessCore.dts_path != null && new_dts != null) {
-                FileUtil.writeLines(KonaBessCore.dts_path!!, new_dts)
-            }
+            // Delegate saving to ViewModel
+             viewModelRef?.save(false) 
         }
 
         // ===== Public API =====
@@ -547,12 +454,21 @@ class GpuTableEditor : EditorUIBuilder.UIActionListener, ChipsetManager.OnChipse
 
         @JvmStatic
         fun updateUndoRedoButtons() {
-            stateManager.updateUndoRedoButtons()
+             val canUndo = viewModelRef?.canUndo?.value ?: false
+             val canRedo = viewModelRef?.canRedo?.value ?: false
+             stateManager.updateUndoRedoButtons(canUndo, canRedo)
         }
 
         @JvmStatic
         fun updateHistoryButtonLabel() {
-            stateManager.updateHistoryButtonLabel()
+             val count = viewModelRef?.history?.value?.size ?: 0
+             stateManager.updateHistoryButtonLabel(count)
+        }
+        
+        @JvmStatic
+        fun showHistoryDialog(activity: Activity?) {
+             val history = viewModelRef?.history?.value ?: emptyList()
+             stateManager.showHistoryDialog(activity, history)
         }
 
         /**
@@ -564,18 +480,11 @@ class GpuTableEditor : EditorUIBuilder.UIActionListener, ChipsetManager.OnChipse
             currentActivity = activity
             currentPage = page
             stateManager.currentActivity = activity
-
-            // Ensure state is initialized if accessed directly without gpuTableLogic
+            
+            // If bins are missing, try to load via ViewModel
             if (bins == null) {
-                try {
-                    init()
-                    decode()
-                    LevelOperations.patchThrottleLevel(bins)
-                    stateManager.resetEditorState(genBack(genTable()))
-                } catch (e: Exception) {
-                    DialogUtil.showError(activity, R.string.getting_freq_table_failed)
-                    return
-                }
+                viewModelRef?.loadData()
+                return 
             }
 
             try {
@@ -590,59 +499,31 @@ class GpuTableEditor : EditorUIBuilder.UIActionListener, ChipsetManager.OnChipse
 
         @JvmStatic
         fun saveFrequencyTable(context: Context?, showToast: Boolean, historyMessage: String?) {
-            try {
-                val table = genTable()
-                val content = genBack(table)
-                
-                writeOut(content)
-                stateManager.markStateSaved(content)
-                if (historyMessage != null) {
-                    stateManager.addHistoryEntry(historyMessage)
-                }
-                if (showToast) {
-                    Toast.makeText(context, R.string.save_success, Toast.LENGTH_SHORT).show()
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-                if (context is Activity) {
-                    DialogUtil.showError(context, R.string.save_failed)
-                }
-            }
+            // Delegate to ViewModel
+            viewModelRef?.save(showToast)
         }
 
         @JvmStatic
         fun handleUndo() {
-            val act = currentActivity ?: return
-            val currentBins = bins ?: return
-            stateManager.handleUndo(
-                lines_in_dts ?: ArrayList(), currentBins,
-                { bin_position },
-                { pos -> bin_position = pos })
+            viewModelRef?.undo()
+            // UI refresh now handled reactively via stateVersion observer
         }
 
         @JvmStatic
         fun handleRedo() {
-            val act = currentActivity ?: return
-            val currentBins = bins ?: return
-            stateManager.handleRedo(
-                lines_in_dts ?: ArrayList(), currentBins,
-                { bin_position },
-                { pos -> bin_position = pos })
+            viewModelRef?.redo()
+            // UI refresh now handled reactively via stateVersion observer
         }
 
         @JvmStatic
-        fun showHistoryDialog(activity: Activity?) {
-            stateManager.showHistoryDialog(activity)
-        }
-
-        private fun refreshCurrentView() {
+        fun refreshCurrentView() {
             if (currentActivity == null || currentPage == null) return
             try {
                 val instance = GpuTableEditor() // Helper for callbacks
                 if (currentBinIndex == null || currentBinIndex!! < 0) {
-                    EditorUIBuilder.generateBins(currentActivity!!, currentPage!!, bins!!, instance, instance)
+                     if (bins != null) EditorUIBuilder.generateBins(currentActivity!!, currentPage!!, bins!!, instance, instance)
                 } else if (currentLevelIndex == null) {
-                    EditorUIBuilder.generateLevels(
+                     if (bins != null) EditorUIBuilder.generateLevels(
                         currentActivity!!,
                         currentPage!!,
                         bins!!,
@@ -650,7 +531,7 @@ class GpuTableEditor : EditorUIBuilder.UIActionListener, ChipsetManager.OnChipse
                         instance
                     )
                 } else {
-                    EditorUIBuilder.generateALevel(
+                    if (bins != null) EditorUIBuilder.generateALevel(
                         currentActivity!!,
                         currentPage!!,
                         bins!!,

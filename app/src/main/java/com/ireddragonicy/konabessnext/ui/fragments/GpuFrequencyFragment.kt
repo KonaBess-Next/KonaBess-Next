@@ -44,6 +44,8 @@ import java.net.URLEncoder
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 
 @AndroidEntryPoint
 class GpuFrequencyFragment : Fragment() {
@@ -155,24 +157,24 @@ class GpuFrequencyFragment : Fragment() {
                 }
             }
 
+            // Reactive UI refresh - single observer for all state changes
             launch {
-                gpuFrequencyViewModel.canUndo.collect {
-                    GpuTableEditor.updateUndoRedoButtons()
-                }
-            }
-
-            launch {
-                gpuFrequencyViewModel.canRedo.collect {
-                    GpuTableEditor.updateUndoRedoButtons()
-                }
-            }
-
-            launch {
-                gpuFrequencyViewModel.history.collect {
-                    GpuTableEditor.updateHistoryButtonLabel()
+                gpuFrequencyViewModel.stateVersion.collect { version ->
+                    if (version > 0 && deviceViewModel.isPrepared.value) {
+                        // Auto-refresh UI and buttons when state changes
+                        GpuTableEditor.updateUndoRedoButtons()
+                        GpuTableEditor.updateHistoryButtonLabel()
+                        refreshCurrentView()
+                    }
                 }
             }
         }
+    }
+    
+    private fun refreshCurrentView() {
+        if (!isAdded) return
+        // Delegate to GpuTableEditor which preserves navigation state
+        GpuTableEditor.refreshCurrentView()
     }
 
     override fun onResume() {
@@ -205,7 +207,6 @@ class GpuFrequencyFragment : Fragment() {
 
     private var gpuEditorContainer: LinearLayout? = null
     private var dataArea: LinearLayout? = null
-    private var actionToolbar: com.ireddragonicy.konabessnext.ui.widget.GpuActionToolbar? = null
 
     private fun showGpuEditor(activity: MainActivity) {
         if (!isAdded) return
@@ -220,18 +221,48 @@ class GpuFrequencyFragment : Fragment() {
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
         )
         
-        // Toolbar
-        actionToolbar = com.ireddragonicy.konabessnext.ui.widget.GpuActionToolbar(activity)
-        actionToolbar!!.setParentViewForVolt(contentContainer)
-        
-        // Fix: Pass listener to enable Chipset Selector
-        actionToolbar!!.setChipsetListener(GpuTableEditor())
-        
-        actionToolbar!!.build(activity)
-        
-        // Setup Toolbar Listeners
-        actionToolbar!!.setOnModeSelectedListener { mode ->
-            updateViewMode(mode)
+        // Compose Toolbar (replaces legacy GpuActionToolbar)
+        val toolbarComposeView = androidx.compose.ui.platform.ComposeView(requireContext())
+        toolbarComposeView.setContent {
+            val context = androidx.compose.ui.platform.LocalContext.current
+            val darkTheme = androidx.compose.foundation.isSystemInDarkTheme()
+            val dynamicColor = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S
+            
+            val colorScheme = when {
+                dynamicColor && darkTheme -> androidx.compose.material3.dynamicDarkColorScheme(context)
+                dynamicColor && !darkTheme -> androidx.compose.material3.dynamicLightColorScheme(context)
+                darkTheme -> androidx.compose.material3.darkColorScheme()
+                else -> androidx.compose.material3.lightColorScheme()
+            }
+            
+            androidx.compose.material3.MaterialTheme(colorScheme = colorScheme) {
+                val isDirty by gpuFrequencyViewModel.isDirty.collectAsState()
+                val canUndo by gpuFrequencyViewModel.canUndo.collectAsState()
+                val canRedo by gpuFrequencyViewModel.canRedo.collectAsState()
+                val history by gpuFrequencyViewModel.history.collectAsState()
+                val currentMode by sharedViewModel.viewMode.collectAsState()
+                
+                com.ireddragonicy.konabessnext.ui.compose.GpuEditorToolbar(
+                    isDirty = isDirty,
+                    canUndo = canUndo,
+                    canRedo = canRedo,
+                    historyCount = history.size,
+                    currentViewMode = currentMode,
+                    showChipsetSelector = true,
+                    onSave = { GpuTableEditor.saveFrequencyTable(activity, true, "Saved manually") },
+                    onUndo = { GpuTableEditor.handleUndo() },
+                    onRedo = { GpuTableEditor.handleRedo() },
+                    onShowHistory = { GpuTableEditor.showHistoryDialog(activity) },
+                    onViewModeChanged = { mode -> updateViewMode(mode) },
+                    onChipsetClick = {
+                        val listener = GpuTableEditor()
+                        com.ireddragonicy.konabessnext.core.editor.ChipsetManager.showChipsetSelectorDialog(
+                            activity, contentContainer!!, android.widget.TextView(activity), listener
+                        )
+                    },
+                    onFlashClick = { activity.startRepack() }
+                )
+            }
         }
         
         val density = resources.displayMetrics.density
@@ -239,7 +270,7 @@ class GpuFrequencyFragment : Fragment() {
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         )
         toolbarParams.setMargins((density * 8).toInt(), (density * 8).toInt(), (density * 8).toInt(), (density * 16).toInt())
-        gpuEditorContainer!!.addView(actionToolbar, toolbarParams)
+        gpuEditorContainer!!.addView(toolbarComposeView, toolbarParams)
 
         // Fragment Container for Frames (GUI / Text / Tree)
         val fragmentContainer = android.widget.FrameLayout(requireContext())

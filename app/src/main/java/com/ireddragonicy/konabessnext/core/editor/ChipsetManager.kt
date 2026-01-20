@@ -19,7 +19,10 @@ import com.ireddragonicy.konabessnext.model.Bin
 import com.ireddragonicy.konabessnext.model.Dtb
 import com.ireddragonicy.konabessnext.ui.adapters.ChipsetSelectorAdapter
 import com.ireddragonicy.konabessnext.utils.DialogUtil
-import kotlin.concurrent.thread
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Manages chipset switching and session persistence across chipsets.
@@ -170,16 +173,20 @@ object ChipsetManager {
         chipsetNameView: TextView,
         listener: OnChipsetSwitchedListener
     ) {
+        val lifecycleOwner = activity as? androidx.activity.ComponentActivity
+            ?: return // Safety check, should be ComponentActivity
+
         if (KonaBessCore.dtbs == null) {
             val waiting = DialogUtil.getWaitDialog(activity, R.string.processing)
             waiting.show()
-            thread {
+            
+            lifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
                 try {
                     KonaBessCore.checkDevice(activity)
                 } catch (e: Exception) {
                     e.printStackTrace()
                 }
-                activity.runOnUiThread {
+                withContext(Dispatchers.Main) {
                     waiting.dismiss()
                     showChipsetSelectorDialog(activity, page, chipsetNameView, listener)
                 }
@@ -247,10 +254,11 @@ object ChipsetManager {
         newDtb: Dtb, chipsetNameView: TextView,
         listener: OnChipsetSwitchedListener
     ) {
+        val lifecycleOwner = activity as? androidx.activity.ComponentActivity ?: return
         val waiting = DialogUtil.getWaitDialog(activity, R.string.getting_freq_table)
         waiting.show()
 
-        thread {
+        lifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
             try {
                 val previous = KonaBessCore.currentDtb
                 if (previous != null && previous.id != newDtb.id) {
@@ -272,7 +280,7 @@ object ChipsetManager {
                     listener.saveCurrentSession()
                 }
 
-                activity.runOnUiThread {
+                withContext(Dispatchers.Main) {
                     waiting.dismiss()
 
                     chipsetNameView.text = "${newDtb.id} ${newDtb.type.getDescription(activity)}"
@@ -285,7 +293,7 @@ object ChipsetManager {
                     }
                 }
             } catch (e: Exception) {
-                activity.runOnUiThread {
+                withContext(Dispatchers.Main) {
                     waiting.dismiss()
                     DialogUtil.showError(activity, R.string.getting_freq_table_failed)
                 }

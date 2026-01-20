@@ -87,7 +87,9 @@ class GpuRepository @Inject constructor(
                  val newOpps = decodeOpps(ArrayList(lines))
                  _opps.value = newOpps
                  
-                 _linesInDts.value = lines
+                // Correctly update _linesInDts with the STRIPPED list (without tables)
+                // so that genBack() can cleanly append the generated table later.
+                 _linesInDts.value = linesMutable
             }
         } catch (e: Exception) {
             _parsedResult.value = ParseResult.Error(e.message ?: "Parse error")
@@ -119,6 +121,44 @@ class GpuRepository @Inject constructor(
     private val _isDirty = MutableStateFlow(false)
     val isDirty: StateFlow<Boolean> = _isDirty.asStateFlow()
 
+    // Initial state snapshots for isDirty comparison
+    private var initialBins: List<Bin> = emptyList()
+    private var initialOpps: List<Opp> = emptyList()
+    private var initialDtsLines: List<String> = emptyList()
+
+    private fun refreshIsDirty() {
+        // Strict structural equality check
+        // Note: we must compare against deep copies captured at load time
+        // Bin.equals (data class) checks content recursively
+        
+        // We also check linesInDts to catch text edits that didn't affect bins?
+        // Logic: if bins match and opps match, are we clean?
+        // Text Editor might change comments.
+        // If user edited text, _dtsContent changed.
+        
+        // The previous logic only checked Bins + Opps hash.
+        // So we stick to that for "Functional" dirty state.
+        // If comment changed, isDirty might be false?
+        // Let's stick to Bins/Opps equality for consistency with previous intent.
+        
+        val binsChanged = _bins.value != initialBins
+        val oppsChanged = _opps.value != initialOpps
+        
+        _isDirty.value = binsChanged || oppsChanged
+    }
+
+    // State version - increments on every state change for reactive observation
+    private val _stateVersion = MutableStateFlow(0L)
+    val stateVersion: StateFlow<Long> = _stateVersion.asStateFlow()
+
+    // Centralized legacy state synchronization
+    private fun syncLegacyState() {
+        com.ireddragonicy.konabessnext.core.GpuTableEditor.bins = ArrayList(_bins.value)
+        com.ireddragonicy.konabessnext.core.GpuTableEditor.bin_position = binPosition
+        com.ireddragonicy.konabessnext.core.GpuTableEditor.lines_in_dts = ArrayList(_linesInDts.value)
+        _stateVersion.value++
+    }
+
     suspend fun loadTable() = withContext(Dispatchers.IO) {
         _parsedResult.value = ParseResult.Loading
         try {
@@ -138,10 +178,7 @@ class GpuRepository @Inject constructor(
             // Decode Freq Table (Bins) - This removes lines from linesMutable
             val newBins = decodeBins(linesMutable)
             _bins.value = newBins
-            
-            // Synchronize with static GpuTableEditor.bins for legacy code
-            com.ireddragonicy.konabessnext.core.GpuTableEditor.bins = ArrayList(newBins)
-            com.ireddragonicy.konabessnext.core.GpuTableEditor.bin_position = binPosition
+            binPosition = if (binPosition < 0) 0 else binPosition
             
             // Decode Voltage Table (Opps) - This removes lines from linesMutable
             val newOpps = decodeOpps(linesMutable)
@@ -149,10 +186,20 @@ class GpuRepository @Inject constructor(
             
             _linesInDts.value = linesMutable
             
+            // Centralized sync
+            syncLegacyState()
+            
             // Reset history
             undoStack.clear()
             redoStack.clear()
             updateHistoryState()
+            
+            // Capture initial state for isDirty tracking
+            // MUST be deep copies so they don't mutate with the live state
+            initialBins = EditorState.deepCopyBins(newBins)
+            initialOpps = EditorState.deepCopyOpps(newOpps)
+            initialDtsLines = ArrayList(linesMutable) // Copy for good measure
+            
             _isDirty.value = false
             
             _parsedResult.value = ParseResult.Success(newBins)
@@ -230,6 +277,12 @@ class GpuRepository @Inject constructor(
         val path = deviceRepository.dtsPath ?: throw IOException("DTS Path not set")
         val newDts = genBack()
         FileUtil.writeLines(path, newDts)
+        
+        // Update snapshots to current state as the new baseline
+        initialBins = EditorState.deepCopyBins(_bins.value)
+        initialOpps = EditorState.deepCopyOpps(_opps.value)
+        initialDtsLines = ArrayList(_linesInDts.value)
+        
         _isDirty.value = false
     }
 
@@ -316,13 +369,14 @@ class GpuRepository @Inject constructor(
         pushUndoState(captureState(), description)
         
         isUpdatingFromGui = true
-        _bins.value = ArrayList(newBins) // Optimistic update
+        _bins.value = ArrayList(newBins)
         _parsedResult.value = ParseResult.Success(_bins.value)
-        updateGeneratedContent() // Generates string -> updates _dtsContent
+        updateGeneratedContent()
         
-        _isDirty.value = true
         redoStack.clear()
         updateHistoryState()
+        syncLegacyState()
+        refreshIsDirty() // Compare with initial state
     }
 
     fun undo() {
@@ -358,8 +412,14 @@ class GpuRepository @Inject constructor(
         binPosition = state.binPosition
         _opps.value = state.oppsSnapshot
         oppPosition = state.oppPosition
+        
+        // Prevent round-trip parsing since we are restoring a known valid state
+        isUpdatingFromGui = true
         updateGeneratedContent()
+        
         _parsedResult.value = ParseResult.Success(_bins.value)
+        syncLegacyState()
+        refreshIsDirty() // Compare with initial state after undo/redo
     }
     
     private fun pushUndoState(state: EditorState, description: String) {

@@ -38,6 +38,7 @@ class GpuFrequencyViewModel @Inject constructor(
     val canUndo: StateFlow<Boolean> = repository.canUndo
     val canRedo: StateFlow<Boolean> = repository.canRedo
     val history: StateFlow<List<String>> = repository.history
+    val stateVersion: StateFlow<Long> = repository.stateVersion
 
     private val _toastEvent = MutableSharedFlow<String>()
     val toastEvent: SharedFlow<String> = _toastEvent.asSharedFlow()
