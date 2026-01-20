@@ -66,6 +66,10 @@ class GpuRepository @Inject constructor(
         val newBins = decodeBins(linesMutable)
         _bins.value = newBins
         
+        // Synchronize with static GpuTableEditor.bins for legacy code
+        com.ireddragonicy.konabessnext.core.GpuTableEditor.bins = ArrayList(newBins)
+        com.ireddragonicy.konabessnext.core.GpuTableEditor.bin_position = binPosition
+        
         // Decode Voltage Table (Opps) - This removes lines from linesMutable
         val newOpps = decodeOpps(linesMutable)
         _opps.value = newOpps
@@ -88,9 +92,9 @@ class GpuRepository @Inject constructor(
         while (++i < linesMutable.size) {
             val thisLine = linesMutable[i].trim()
             try {
-                if (ChipInfo.which.architecture.isStartLine(thisLine)) {
+                if (ChipInfo.which?.architecture?.isStartLine(thisLine) == true) {
                     if (binPosition < 0) binPosition = i
-                    ChipInfo.which.architecture.decode(linesMutable, newBins, i)
+                    ChipInfo.which!!.architecture.decode(linesMutable, newBins, i)
                     // Logic in original code: i-- because decode consumes lines? 
                     // Wait, ChipArchitecture.decode usually parses multiple lines.
                     // The loop continues. If decode advanced logic, great.
@@ -278,9 +282,9 @@ class GpuRepository @Inject constructor(
         while (++i < linesMutable.size) {
             val thisLine = linesMutable[i].trim()
             try {
-                if (ChipInfo.which.architecture.isStartLine(thisLine)) {
+                if (ChipInfo.which?.architecture?.isStartLine(thisLine) == true) {
                     if (binPosition < 0) binPosition = i
-                    ChipInfo.which.architecture.decode(linesMutable, newBins, i)
+                    ChipInfo.which!!.architecture.decode(linesMutable, newBins, i)
                     // Since decode modifies list (removes), we need to step back to process next line correctly
                     i-- // Decrement i to stay on the match as next loop increments it
                     // break // Removed to allow parsing multiple bins 
@@ -294,7 +298,7 @@ class GpuRepository @Inject constructor(
 
     private fun decodeOpps(linesMutable: ArrayList<String>): List<Opp> {
         val newOpps = ArrayList<Opp>()
-        val pattern = ChipInfo.which.voltTablePattern ?: return emptyList()
+        val pattern = ChipInfo.which?.voltTablePattern ?: return emptyList()
         
         var i = -1
         var isInGpuTable = false
@@ -364,7 +368,7 @@ class GpuRepository @Inject constructor(
     }
 
     private fun genTableBins(): List<String> {
-        return ChipInfo.which.architecture.generateTable(_bins.value as ArrayList<Bin>)
+        return ChipInfo.which!!.architecture.generateTable(_bins.value as ArrayList<Bin>)
     }
     
     fun importFrequencyTable(lines: List<String>, description: String = "Import Frequency Table") {

@@ -41,7 +41,7 @@ class MainActivity : AppCompatActivity() {
         private const val KEY_CURRENT_TITLE = "key_current_toolbar_title"
     }
 
-    private var gpuTableEditorBackCallback: OnBackPressedCallback? = null
+    var gpuTableEditorBackCallback: OnBackPressedCallback? = null
 
     private lateinit var viewPager: ViewPager2
     private lateinit var bottomNav: BottomNavigationView
@@ -359,9 +359,7 @@ class MainActivity : AppCompatActivity() {
     /**
      * Returns the callback used by GpuTableEditor to handle back navigation.
      */
-    fun getGpuTableEditorBackCallback(): OnBackPressedCallback? {
-        return gpuTableEditorBackCallback
-    }
+
 
     private fun applyColorPalette() {
         SettingsActivity.applyThemeFromSettings(this)

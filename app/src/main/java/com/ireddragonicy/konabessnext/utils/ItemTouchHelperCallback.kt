@@ -4,7 +4,7 @@ import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.RecyclerView
 import com.ireddragonicy.konabessnext.ui.adapters.GpuFreqAdapter
 
-class ItemTouchHelperCallback(private val adapter: GpuFreqAdapter) : ItemTouchHelper.Callback() {
+open class ItemTouchHelperCallback(private val adapter: GpuFreqAdapter) : ItemTouchHelper.Callback() {
 
     override fun isLongPressDragEnabled(): Boolean {
         return true // Enable drag by long-pressing anywhere on the card

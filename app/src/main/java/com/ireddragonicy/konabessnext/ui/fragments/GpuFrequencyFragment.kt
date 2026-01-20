@@ -175,7 +175,7 @@ class GpuFrequencyFragment : Fragment() {
         super.onResume()
         reloadIfNeeded()
         if (deviceViewModel.isPrepared.value) {
-            (activity as? MainActivity)?.getGpuTableEditorBackCallback()?.isEnabled = true
+            (activity as? MainActivity)?.gpuTableEditorBackCallback?.isEnabled = true
         }
     }
 
@@ -218,7 +218,7 @@ class GpuFrequencyFragment : Fragment() {
         )
         
         // Add Action Toolbar
-        actionToolbar = com.ireddragonicy.konabessnext.ui.widget.GpuActionToolbar(requireContext())
+        actionToolbar = com.ireddragonicy.konabessnext.ui.widget.GpuActionToolbar(activity)
         actionToolbar!!.setParentViewForVolt(contentContainer)
         actionToolbar!!.build(activity)
         

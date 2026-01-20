@@ -46,6 +46,7 @@
     <string name="invalid_value">Invalid value</string>
     <string name="edit">Edit</string>
     <string name="unable_add_more">Unable to add more frequencies</string>
+    <string name="select_bin_first">Please select a bin first</string>
     <string name="new_item">New</string>
     <string name="new_desc">Add a new frequency</string>
     <string name="add_freq_top">Add frequency to top</string>
@@ -285,4 +286,10 @@
     <string name="processing">Processing</string>
     <string name="export">Export</string>
     <string name="add_frequency">Add Frequency</string>
+    <string name="curve_editor">Curve Editor</string>
+    <string name="curve_editor_desc">Edit frequency/voltage curve</string>
+    <string name="switch_chipset">Switch Chipset</string>
+    <string name="switch_chipset_confirm">Do you want to switch the chipset?</string>
+    <string name="select_chipset">Select Chipset</string>
+    <string name="edit_parameter">Edit Parameter</string>
 </resources>
