@@ -20,6 +20,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.Modifier
 
+import com.ireddragonicy.konabessnext.R
+
 /**
  * Wrapper Fragment for the Legacy GUI Editor (GpuTableEditor).
  */
@@ -39,6 +41,7 @@ class GuiEditorFragment : Fragment() {
                 val bins by sharedViewModel.bins.collectAsState()
                 // Observe GpuFrequencyViewModel for navigation state (synced with Legacy Editor)
                 val selectedBinIndex by gpuFrequencyViewModel.selectedBinIndex.collectAsState()
+                val selectedLevelIndex by gpuFrequencyViewModel.selectedLevelIndex.collectAsState()
                 val workbenchState by sharedViewModel.workbenchState.collectAsState()
                 
                 if (selectedBinIndex == -1) {
@@ -63,61 +66,97 @@ class GuiEditorFragment : Fragment() {
                             com.ireddragonicy.konabessnext.ui.compose.GpuBinList(
                                 bins = bins,
                                 onBinClick = { index ->
-                                    val activity = requireActivity()
-                                    // Sync data to Legacy Editor static field
-                                    GpuTableEditor.bins = java.util.ArrayList(bins)
-                                    
-                                    val editor = GpuTableEditor()
-                                    GpuTableEditor.currentActivity = activity
-                                    editor.onOpenLevels(index)
+                                    gpuFrequencyViewModel.selectedBinIndex.value = index
                                 }
                             )
                         }
                     }
+                } else if (selectedLevelIndex == -1) {
+                    // Level List Screen (Replaces old GpuTableEditor logic)
+                    val bin = bins.getOrNull(selectedBinIndex)
+                    if (bin != null) {
+                         com.ireddragonicy.konabessnext.ui.compose.GpuLevelList(
+                             levels = bin.levels,
+                             onLevelClick = { lvlIdx ->
+                                 gpuFrequencyViewModel.selectedLevelIndex.value = lvlIdx
+                             },
+                             onAddLevelTop = {
+                                 gpuFrequencyViewModel.addFrequency(selectedBinIndex, true)
+                             },
+                             onAddLevelBottom = {
+                                 gpuFrequencyViewModel.addFrequency(selectedBinIndex, false)
+                             },
+                             onDuplicateLevel = { lvlIdx ->
+                                 gpuFrequencyViewModel.duplicateFrequency(selectedBinIndex, lvlIdx)
+                             },
+                             onDeleteLevel = { lvlIdx ->
+                                 com.ireddragonicy.konabessnext.utils.DialogUtil.showConfirmation(
+                                     requireActivity(),
+                                     getString(R.string.remove),
+                                     "Are you sure you want to remove this frequency?",
+                                     { _, _ ->
+                                         gpuFrequencyViewModel.removeFrequency(selectedBinIndex, lvlIdx)
+                                     }
+                                 )
+                             },
+                             onReorder = { from, to ->
+                                 gpuFrequencyViewModel.reorderFrequency(selectedBinIndex, from, to)
+                             },
+                             onBack = {
+                                 gpuFrequencyViewModel.selectedBinIndex.value = -1
+                             },
+                             onOpenCurveEditor = {
+                                 (requireActivity() as MainActivity).openCurveEditor(selectedBinIndex)
+                             }
+                         )
+                    } else {
+                        // Error fallback
+                         androidx.compose.material3.Text("Bin not found")
+                    }
                 } else {
-                    // Legacy Editor Container
-                    androidx.compose.ui.viewinterop.AndroidView(
-                        factory = { context ->
-                            LinearLayout(context).apply {
-                                orientation = LinearLayout.VERTICAL
-                                layoutParams = ViewGroup.LayoutParams(
-                                    ViewGroup.LayoutParams.MATCH_PARENT,
-                                    ViewGroup.LayoutParams.WRAP_CONTENT
-                                )
-                                // Store reference so GpuTableEditor can find it?
-                                // GpuTableEditor uses 'currentPage'. We need to set it.
-                                GpuTableEditor.currentPage = this
-                                
-                                // Initial population if needed (e.g. if we navigated back or deep linked)
-                                val activity = context as? com.ireddragonicy.konabessnext.ui.MainActivity
-                                if (activity != null) {
-                                     val editor = GpuTableEditor() // or access current?
-                                     // We need to trigger generation based on current indices
-                                     // But GpuTableEditor logic usually does: "onOpenLevels -> generateLevels -> adds views to currentPage"
-                                     // Since we just set 'currentPage', we might need to re-trigger generation?
-                                     // Actually, GpuTableEditor.refreshCurrentView() does exactly this.
-                                     
-                                     // Ensure activity ref is set
-                                     GpuTableEditor.currentActivity = activity
-                                     GpuTableEditor.refreshCurrentView()
+                    // Param Editor Screen
+                    val bin = bins.getOrNull(selectedBinIndex)
+                    val level = bin?.levels?.getOrNull(selectedLevelIndex)
+                    
+                    if (level != null) {
+                        com.ireddragonicy.konabessnext.ui.compose.GpuParamEditor(
+                            level = level,
+                            onBack = {
+                                gpuFrequencyViewModel.selectedLevelIndex.value = -1
+                            },
+                            onDeleteLevel = {
+                                com.ireddragonicy.konabessnext.utils.DialogUtil.showConfirmation(
+                                     requireActivity(),
+                                     getString(R.string.remove),
+                                     "Are you sure you want to remove this frequency?",
+                                     { _, _ ->
+                                         gpuFrequencyViewModel.removeFrequency(selectedBinIndex, selectedLevelIndex)
+                                         gpuFrequencyViewModel.selectedLevelIndex.value = -1 // Go back
+                                     }
+                                 )
+                            },
+                            onUpdateParam = { lineIndex, encodedLine, historyMsg ->
+                                try {
+                                    val binIndex = gpuFrequencyViewModel.selectedBinIndex.value
+                                    val levelIndex = gpuFrequencyViewModel.selectedLevelIndex.value
+                                    
+                                    if (binIndex != -1 && levelIndex != -1) {
+                                         gpuFrequencyViewModel.updateLevelLine(
+                                            binIndex,
+                                            levelIndex,
+                                            lineIndex,
+                                            encodedLine,
+                                            historyMsg
+                                        )
+                                    }
+                                } catch (e: Exception) {
+                                    e.printStackTrace()
                                 }
                             }
-                        },
-                        update = { view ->
-                             // Ensure currentPage is always correct when recomposing/updating
-                             GpuTableEditor.currentPage = view as LinearLayout
-                             // Sync data to ensure legacy view can refresh
-                             GpuTableEditor.bins = java.util.ArrayList(bins)
-                             GpuTableEditor.currentActivity = requireActivity() // Ensure context is fresh
-                             
-                             // Force refresh if view is empty or just to be safe?
-                             // refreshCurrentView checks internal indices.
-                             GpuTableEditor.refreshCurrentView()
-                        },
-                        modifier = androidx.compose.ui.Modifier
-                            .fillMaxSize()
-                            .verticalScroll(androidx.compose.foundation.rememberScrollState())
-                    )
+                        )
+                    } else {
+                        androidx.compose.material3.Text("Level not found")
+                    }
                 }
             }
         }
@@ -128,6 +167,6 @@ class GuiEditorFragment : Fragment() {
     
     fun refresh() {
         // Trigger generic refresh
-        GpuTableEditor.refreshCurrentView()
+        // No-op for Compose
     }
 }

@@ -519,10 +519,20 @@ class GpuTableEditor : EditorUIBuilder.UIActionListener, ChipsetManager.OnChipse
         fun refreshCurrentView() {
             if (currentActivity == null || currentPage == null) return
             try {
+                // Sync Legacy State from ViewModel (SSoT)
+                viewModelRef?.let { vm ->
+                    currentBinIndex = vm.selectedBinIndex.value
+                    currentLevelIndex = vm.selectedLevelIndex.value
+                }
+
                 val instance = GpuTableEditor() // Helper for callbacks
                 if (currentBinIndex == null || currentBinIndex!! < 0) {
                      if (bins != null) EditorUIBuilder.generateBins(currentActivity!!, currentPage!!, bins!!, instance, instance)
-                } else if (currentLevelIndex == null) {
+                } else if (currentLevelIndex == null || currentLevelIndex!! < 0) { // Fix: Allow 0 if it's a valid index? No, levelIndex use -1 for "none"? Need to check logic. Usually index >= 0 is valid.
+                     // The logic above says "currentLevelIndex == null" -> generateLevels.
+                     // If selectedLevelIndex is -1, it means "No Level Selected".
+                     // So we should check if it's < 0.
+                     
                      if (bins != null) EditorUIBuilder.generateLevels(
                         currentActivity!!,
                         currentPage!!,

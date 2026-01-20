@@ -22,28 +22,36 @@ fun GpuBinList(
 ) {
     val context = LocalContext.current
 
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        itemsIndexed(bins) { index, bin ->
-            val binName = remember(bin.id) {
-                try {
-                    if (context is android.app.Activity) {
-                        KonaBessStr.convert_bins(bin.id, context)
-                    } else {
-                        "Bin ${bin.id}"
+    com.ireddragonicy.konabessnext.ui.theme.KonaBessTheme {
+        Scaffold(
+            containerColor = MaterialTheme.colorScheme.background
+        ) { paddingValues ->
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                itemsIndexed(bins) { index, bin ->
+                    val binName = remember(bin.id) {
+                        try {
+                            if (context is android.app.Activity) {
+                                KonaBessStr.convert_bins(bin.id, context)
+                            } else {
+                                "Bin ${bin.id}"
+                            }
+                        } catch (e: Exception) {
+                            context.getString(R.string.unknown_table) + bin.id
+                        }
                     }
-                } catch (e: Exception) {
-                    context.getString(R.string.unknown_table) + bin.id
+
+                    BinItemCard(
+                        name = binName,
+                        onClick = { onBinClick(index) }
+                    )
                 }
             }
-
-            BinItemCard(
-                name = binName,
-                onClick = { onBinClick(index) }
-            )
         }
     }
 }

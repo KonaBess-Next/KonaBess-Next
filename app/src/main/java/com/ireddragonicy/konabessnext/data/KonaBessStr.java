@@ -42,17 +42,17 @@ public class KonaBessStr {
         CHIP_CONVERTERS.put(ChipInfo.Type.kalamap_qcs_singleBin, new KalamaPQCSConverter());
     }
 
-    public static String convert_bins(int which, Activity activity) throws Exception {
+    public static String convert_bins(int which, android.content.Context context) throws Exception {
         ChipConverter converter = CHIP_CONVERTERS.get(ChipInfo.which);
         if (converter == null) {
             throw new Exception("Unsupported chip type: " + ChipInfo.which);
         }
-        return converter.convert(which, activity);
+        return converter.convert(which, context);
     }
 
     // Base interface for all converters
     private interface ChipConverter {
-        String convert(int which, Activity activity);
+        String convert(int which, android.content.Context context);
     }
 
     // Abstract base class with common functionality
@@ -60,12 +60,12 @@ public class KonaBessStr {
         protected final SparseArray<Integer> binMappings = new SparseArray<>();
 
         @Override
-        public String convert(int which, Activity activity) {
+        public String convert(int which, android.content.Context context) {
             Integer resourceId = binMappings.get(which);
             if (resourceId != null) {
-                return activity.getString(resourceId);
+                return context.getString(resourceId);
             }
-            return activity.getString(R.string.unknown_table) + which;
+            return context.getString(R.string.unknown_table) + which;
         }
     }
 
@@ -202,9 +202,9 @@ public class KonaBessStr {
         }
 
         @Override
-        public String convert(int which, Activity activity) {
+        public String convert(int which, android.content.Context context) {
             String result = TUNA_MAPPINGS.get(which);
-            return result != null ? result : activity.getString(R.string.unknown_table) + which;
+            return result != null ? result : context.getString(R.string.unknown_table) + which;
         }
     }
 
@@ -223,8 +223,8 @@ public class KonaBessStr {
     // Default converter for chips with no specific mappings
     private static class DefaultConverter implements ChipConverter {
         @Override
-        public String convert(int which, Activity activity) {
-            return activity.getString(R.string.unknown_table) + which;
+        public String convert(int which, android.content.Context context) {
+            return context.getString(R.string.unknown_table) + which;
         }
     }
 
@@ -235,36 +235,36 @@ public class KonaBessStr {
     private static final String BUS = "bus";
     private static final String ACD = "acd";
 
-    public static String convert_level_params(String input, Activity activity) {
+    public static String convert_level_params(String input, android.content.Context context) {
         String processed = input.replace(QCOM_PREFIX, "");
 
         if (GPU_FREQ.equals(processed)) {
-            return activity.getString(R.string.freq);
+            return context.getString(R.string.freq);
         }
         if (LEVEL.equals(processed)) {
-            return activity.getString(R.string.volt);
+            return context.getString(R.string.volt);
         }
 
         return processed;
     }
 
-    public static String help(String what, Activity activity) {
+    public static String help(String what, android.content.Context context) {
         if (what.equals(QCOM_PREFIX + GPU_FREQ)) {
-            return activity.getString(ChipInfo.which.ignoreVoltTable
+            return context.getString(ChipInfo.which.ignoreVoltTable
                     ? R.string.help_gpufreq_aio
                     : R.string.help_gpufreq);
         }
         if (what.contains(BUS)) {
-            return activity.getString(R.string.help_bus);
+            return context.getString(R.string.help_bus);
         }
         if (what.contains(ACD)) {
-            return activity.getString(R.string.help_acd);
+            return context.getString(R.string.help_acd);
         }
         return "";
     }
 
-    public static String generic_help(Activity activity) {
-        return activity.getString(ChipInfo.which.ignoreVoltTable
+    public static String generic_help(android.content.Context context) {
+        return context.getString(ChipInfo.which.ignoreVoltTable
                 ? R.string.help_msg_aio
                 : R.string.help_msg);
     }
