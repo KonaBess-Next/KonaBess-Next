@@ -22,6 +22,7 @@ import androidx.viewpager2.widget.ViewPager2
 import androidx.viewpager2.widget.ViewPager2.OnPageChangeCallback
 import com.google.android.material.appbar.AppBarLayout
 import com.google.android.material.appbar.MaterialToolbar
+import androidx.coordinatorlayout.widget.CoordinatorLayout
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.ireddragonicy.konabessnext.R
@@ -259,15 +260,21 @@ class MainActivity : AppCompatActivity() {
 
                 // Hide AppBarLayout when on GPU Frequency page (position 0)
                 // Otherwise, show it and set appropriate title
+                // Hide AppBarLayout when on GPU Frequency page (position 0)
+                // Otherwise, show it and set appropriate title
+                val params = viewPager.layoutParams as CoordinatorLayout.LayoutParams
                 if (position == 0) {
                     appBarLayout?.visibility = View.GONE
+                    params.behavior = null
                 } else {
                     appBarLayout?.visibility = View.VISIBLE
+                    params.behavior = AppBarLayout.ScrollingViewBehavior()
                     when (position) {
                         1 -> toolbar?.title = getString(R.string.import_export)
                         2 -> toolbar?.title = getString(R.string.settings)
                     }
                 }
+                viewPager.requestLayout()
 
                 if (isPageChangeFromUser) {
                     when (position) {
