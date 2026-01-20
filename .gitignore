@@ -10,6 +10,9 @@
 # Java class files
 *.class
 
+#backup
+backup_src/
+
 # Generated files
 bin/
 gen/

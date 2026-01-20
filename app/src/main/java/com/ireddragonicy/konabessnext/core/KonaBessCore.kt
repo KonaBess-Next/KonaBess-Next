@@ -124,11 +124,19 @@ object KonaBessCore {
         setupEnv(context)
         dtbs = ArrayList()
         // Grant read perms
-        filesDir?.let {
-            RootHelper.execShForOutput("chmod 644 $it/*.dts")
+        filesDir?.let { dir ->
+            RootHelper.execShForOutput("chmod 644 $dir/*.dts")
             
+            // If dtb_num is 0, try to find existing dts files
+            if (dtb_num == 0) {
+                val dtsFiles = File(dir).listFiles { _, name -> name.endsWith(".dts") }
+                if (dtsFiles != null) {
+                    dtb_num = dtsFiles.size
+                }
+            }
+
             for (i in 0 until dtb_num) {
-                val dtsFile = File(it, "$i.dts")
+                val dtsFile = File(dir, "$i.dts")
                 if (!dtsFile.exists()) continue
                 
                 val content = dtsFile.readText()

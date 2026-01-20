@@ -393,7 +393,8 @@ class GpuTableEditor : EditorUIBuilder.UIActionListener, ChipsetManager.OnChipse
                 waiting!!.dismiss()
                 showedView.removeAllViews()
 
-                EditorUIBuilder.generateToolBar(activity, showedView)
+                val instance = GpuTableEditor()
+                EditorUIBuilder.generateToolBar(activity, showedView, instance)
 
                 page = LinearLayout(activity)
                 page!!.orientation = LinearLayout.VERTICAL

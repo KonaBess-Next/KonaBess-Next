@@ -223,6 +223,10 @@ class GpuFrequencyFragment : Fragment() {
         // Toolbar
         actionToolbar = com.ireddragonicy.konabessnext.ui.widget.GpuActionToolbar(activity)
         actionToolbar!!.setParentViewForVolt(contentContainer)
+        
+        // Fix: Pass listener to enable Chipset Selector
+        actionToolbar!!.setChipsetListener(GpuTableEditor())
+        
         actionToolbar!!.build(activity)
         
         // Setup Toolbar Listeners

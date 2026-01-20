@@ -18,6 +18,8 @@ import com.ireddragonicy.konabessnext.core.GpuVoltEditor
 import com.ireddragonicy.konabessnext.core.editor.EditorStateManager
 import com.ireddragonicy.konabessnext.ui.MainActivity
 import com.ireddragonicy.konabessnext.ui.RawDtsEditorActivity
+import com.ireddragonicy.konabessnext.core.editor.ChipsetManager
+import com.ireddragonicy.konabessnext.core.KonaBessCore
 import com.ireddragonicy.konabessnext.viewmodel.SharedGpuViewModel
 
 import com.google.android.material.button.MaterialButtonToggleGroup
@@ -39,12 +41,14 @@ class GpuActionToolbar @JvmOverloads constructor(
     private var btnModeVisual: MaterialButton? = null
     
     private var btnFlash: MaterialButton? = null
+    private var btnChipset: MaterialButton? = null
     
     private var parentViewForVolt: View? = null
     private var showVolt = false
     private var showRepack = false
     
     private var onModeSelectedListener: ((SharedGpuViewModel.ViewMode) -> Unit)? = null
+    private var chipsetListener: ChipsetManager.OnChipsetSwitchedListener? = null
 
     init {
         init(context)
@@ -161,6 +165,33 @@ class GpuActionToolbar @JvmOverloads constructor(
             viewModeToggleGroup!!.layoutParams = toggleParams
             
             secondRow.addView(viewModeToggleGroup)
+            // Chipset Selector
+            // Show button if we have a listener. Data loading is handled lazily by ChipsetManager.
+            if (chipsetListener != null) {
+                // User requested icon-only button
+                btnChipset = createMaterialButton(activity, null, R.drawable.ic_developer_board)
+                btnChipset!!.setOnClickListener {
+                     if (parentViewForVolt is LinearLayout) {
+                         // Create a dummy text view to pass to manager (manager expects one to update text)
+                         // We just ignore the text updates since the button is icon-only.
+                         val dummyTextView = android.widget.TextView(activity)
+                         
+                         chipsetListener?.let { listener ->
+                             ChipsetManager.showChipsetSelectorDialog(
+                                 activity, 
+                                 parentViewForVolt as LinearLayout, 
+                                 dummyTextView, 
+                                 listener
+                             )
+                         }
+                     }
+                }
+                
+                val chipsetParams = LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
+                chipsetParams.marginEnd = chipSpacing
+                btnChipset!!.layoutParams = chipsetParams
+                secondRow.addView(btnChipset)
+            }
             
             // Flash Button
             btnFlash = createMaterialButton(activity, "Flash", R.drawable.ic_flash)
@@ -172,6 +203,10 @@ class GpuActionToolbar @JvmOverloads constructor(
             secondRow.addView(btnFlash)
             addView(secondRow)
         }
+    }
+
+    fun setChipsetListener(listener: ChipsetManager.OnChipsetSwitchedListener?) {
+        this.chipsetListener = listener
     }
     
     private fun createOutlinedButton(context: Context, text: String, iconResId: Int): MaterialButton {

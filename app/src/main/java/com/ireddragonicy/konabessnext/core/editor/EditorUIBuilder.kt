@@ -78,9 +78,16 @@ object EditorUIBuilder {
     }
 
     @JvmStatic
-    fun generateToolBar(activity: Activity, showedView: LinearLayout) {
+    fun generateToolBar(
+        activity: Activity, 
+        showedView: LinearLayout,
+        chipsetListener: ChipsetManager.OnChipsetSwitchedListener? = null
+    ) {
         val toolbar = GpuActionToolbar(activity)
         toolbar.setParentViewForVolt(showedView)
+        if (chipsetListener != null) {
+            toolbar.setChipsetListener(chipsetListener)
+        }
         toolbar.build(activity)
         showedView.addView(toolbar)
     }

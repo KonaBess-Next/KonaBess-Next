@@ -170,13 +170,32 @@ object ChipsetManager {
         chipsetNameView: TextView,
         listener: OnChipsetSwitchedListener
     ) {
-        if (KonaBessCore.dtbs.isNullOrEmpty()) {
+        if (KonaBessCore.dtbs == null) {
+            val waiting = DialogUtil.getWaitDialog(activity, R.string.processing)
+            waiting.show()
+            thread {
+                try {
+                    KonaBessCore.checkDevice(activity)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+                activity.runOnUiThread {
+                    waiting.dismiss()
+                    showChipsetSelectorDialog(activity, page, chipsetNameView, listener)
+                }
+            }
+            return
+        }
+
+        if (KonaBessCore.dtbs!!.isEmpty()) {
             Toast.makeText(activity, "No chipsets available", Toast.LENGTH_SHORT).show()
             return
         }
 
         val currentDtb = KonaBessCore.currentDtb
-
+        
+        // Find recommended index (first known chipset)
+        val recommendedIndex = KonaBessCore.dtbs!!.indexOfFirst { it.type != com.ireddragonicy.konabessnext.core.ChipInfo.Type.unknown }
 
         // Inflate custom dialog layout
         val dialogView = LayoutInflater.from(activity).inflate(R.layout.dialog_chipset_selector, null)
@@ -193,7 +212,7 @@ object ChipsetManager {
         val adapter = ChipsetSelectorAdapter(
             KonaBessCore.dtbs!!,
             activity,
-            KonaBessCore.getDtbIndex(),
+            recommendedIndex,
             currentDtb?.id,
             object : ChipsetSelectorAdapter.OnChipsetSelectedListener {
                 override fun onChipsetSelected(dtb: Dtb) {
