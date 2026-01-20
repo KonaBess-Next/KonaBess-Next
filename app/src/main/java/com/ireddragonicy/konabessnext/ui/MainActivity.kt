@@ -18,12 +18,17 @@ import androidx.fragment.app.Fragment
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import androidx.core.view.WindowCompat
+import android.graphics.Color
 import androidx.viewpager2.widget.ViewPager2
 import androidx.viewpager2.widget.ViewPager2.OnPageChangeCallback
 import com.google.android.material.appbar.AppBarLayout
 import com.google.android.material.appbar.MaterialToolbar
 import androidx.coordinatorlayout.widget.CoordinatorLayout
-import com.google.android.material.bottomnavigation.BottomNavigationView
+import androidx.compose.ui.platform.ComposeView
+import androidx.compose.runtime.mutableIntStateOf
+import com.ireddragonicy.konabessnext.ui.compose.MainNavigationBar
+import com.ireddragonicy.konabessnext.ui.theme.KonaBessTheme
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.ireddragonicy.konabessnext.R
 import kotlinx.coroutines.launch
@@ -46,7 +51,8 @@ class MainActivity : AppCompatActivity() {
     var gpuTableEditorBackCallback: OnBackPressedCallback? = null
 
     private lateinit var viewPager: ViewPager2
-    private lateinit var bottomNav: BottomNavigationView
+    private lateinit var bottomNav: ComposeView
+    private var currentTab = mutableIntStateOf(0)
     private var appBarLayout: AppBarLayout? = null
     private var toolbar: MaterialToolbar? = null
     private var isPageChangeFromUser = true
@@ -84,6 +90,11 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         // Apply color palette theme BEFORE super.onCreate()
         applyColorPalette()
+        applyColorPalette()
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        window.statusBarColor = Color.TRANSPARENT
+        // window.navigationBarColor = Color.TRANSPARENT // Optional: if we want nav bar transparent too
+        
         super.onCreate(savedInstanceState)
 
         try {
@@ -231,7 +242,7 @@ class MainActivity : AppCompatActivity() {
         appBarLayout = findViewById(R.id.app_bar_layout)
 
         viewPager = findViewById(R.id.view_pager)
-        bottomNav = findViewById(R.id.bottom_navigation)
+        bottomNav = findViewById(R.id.compose_bottom_nav)
 
         setupViewPager()
         setupBottomNavigation()
@@ -277,17 +288,7 @@ class MainActivity : AppCompatActivity() {
                 viewPager.requestLayout()
 
                 if (isPageChangeFromUser) {
-                    when (position) {
-                        0 -> {
-                            bottomNav.selectedItemId = R.id.nav_edit_freq
-                        }
-                        1 -> {
-                            bottomNav.selectedItemId = R.id.nav_import_export
-                        }
-                        2 -> {
-                            bottomNav.selectedItemId = R.id.nav_settings
-                        }
-                    }
+                    currentTab.intValue = position
                 }
             }
         })
@@ -297,18 +298,18 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupBottomNavigation() {
-        bottomNav.setOnItemSelectedListener { item ->
-            isPageChangeFromUser = false
-            val itemId = item.itemId
-            if (itemId == R.id.nav_edit_freq) {
-                viewPager.setCurrentItem(0, true)
-            } else if (itemId == R.id.nav_import_export) {
-                viewPager.setCurrentItem(1, true)
-            } else if (itemId == R.id.nav_settings) {
-                viewPager.setCurrentItem(2, true)
+        bottomNav.setContent {
+            KonaBessTheme {
+                MainNavigationBar(
+                    selectedItem = currentTab.intValue,
+                    onItemSelected = { index ->
+                        isPageChangeFromUser = false
+                        viewPager.setCurrentItem(index, true)
+                        currentTab.intValue = index
+                        isPageChangeFromUser = true
+                    }
+                )
             }
-            isPageChangeFromUser = true
-            true
         }
     }
 

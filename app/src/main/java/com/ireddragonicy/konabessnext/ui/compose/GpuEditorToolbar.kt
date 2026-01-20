@@ -51,6 +51,7 @@ fun GpuEditorToolbar(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .statusBarsPadding() // Padding inside, so background extends behind status bar
                 .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
             // Row 1: Save, Undo, Redo, History

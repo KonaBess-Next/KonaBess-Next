@@ -164,55 +164,66 @@ fun GpuLevelList(
     }
 
     com.ireddragonicy.konabessnext.ui.theme.KonaBessTheme {
-        Scaffold(
-            containerColor = MaterialTheme.colorScheme.background, // Force background
-        ) { paddingValues ->
             // Use Column + VerticalScroll for simpler Drag handling (No recycling)
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(paddingValues)
-                    .padding(16.dp)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                    .background(MaterialTheme.colorScheme.background)
             ) {
-                // Header Actions: Back & Curve Editor
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                // Sticky Header: Back & Curve Editor
+                Surface(
+                    tonalElevation = 3.dp,
+                    shadowElevation = 3.dp,
+                    modifier = Modifier
+                        .zIndex(1f)
+                        // .statusBarsPadding() // REMOVED: Caused double padding / gap
                 ) {
-                    // Back Button
-                    Button(
-                        onClick = onBack,
-                        modifier = Modifier.weight(1f),
-                        shape = MaterialTheme.shapes.medium,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                        )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text("Back")
-                    }
-                    
-                    // Curve Editor Button
-                    Button(
-                        onClick = onOpenCurveEditor,
-                        modifier = Modifier.weight(1f),
-                        shape = MaterialTheme.shapes.medium,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onTertiaryContainer
-                        )
-                    ) {
-                        Icon(Icons.Filled.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text("Curve Editor")
+                        // Back Button
+                        Button(
+                            onClick = onBack,
+                            modifier = Modifier.weight(1f),
+                            shape = MaterialTheme.shapes.medium,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                        ) {
+                            Icon(Icons.Filled.ArrowBack, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Back")
+                        }
+                        
+                        // Curve Editor Button
+                        Button(
+                            onClick = onOpenCurveEditor,
+                            modifier = Modifier.weight(1f),
+                            shape = MaterialTheme.shapes.medium,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onTertiaryContainer
+                            )
+                        ) {
+                            Icon(Icons.Filled.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Curve Editor")
+                        }
                     }
                 }
-                
-                Spacer(Modifier.height(8.dp))
+
+                // Scrollable Content
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
 
                 // Header Action: Add Top
                 OutlinedButton(
@@ -287,10 +298,10 @@ fun GpuLevelList(
                 }
                 
                 Spacer(Modifier.height(88.dp))
+                }
             }
         }
     }
-}
 
 data class IndexedLevel(
     val index: Int,

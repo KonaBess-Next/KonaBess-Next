@@ -72,8 +72,7 @@ class GpuFrequencyFragment : Fragment() {
     ): View? {
         contentContainer = LinearLayout(requireContext())
         contentContainer!!.orientation = LinearLayout.VERTICAL
-        val padding = (resources.displayMetrics.density * 16).toInt()
-        contentContainer!!.setPadding(padding, padding, padding, padding)
+        // Removed padding for edge-to-edge immersive UI
 
         loadContent()
         return contentContainer
@@ -269,7 +268,7 @@ class GpuFrequencyFragment : Fragment() {
         val toolbarParams = LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         )
-        toolbarParams.setMargins((density * 8).toInt(), (density * 8).toInt(), (density * 8).toInt(), (density * 16).toInt())
+        toolbarParams.setMargins(0, 0, 0, 0)
         gpuEditorContainer!!.addView(toolbarComposeView, toolbarParams)
 
         // Fragment Container for Frames (GUI / Text / Tree)
