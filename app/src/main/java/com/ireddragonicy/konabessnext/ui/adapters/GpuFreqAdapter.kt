@@ -109,14 +109,22 @@ class GpuFreqAdapter(
             val oldItem = oldList[oldItemPosition]
             val newItem = newList[newItemPosition]
 
-            // If both items have a tag (Level object), compare by reference/identity
-            if (oldItem.tag != null && newItem.tag != null) {
-                return oldItem.tag === newItem.tag
+            // For level items, compare by Level object identity (tag)
+            val oldTag = oldItem.tag
+            val newTag = newItem.tag
+            if (oldTag != null && newTag != null) {
+                // Use System.identityHashCode for reliable identity comparison
+                return System.identityHashCode(oldTag) == System.identityHashCode(newTag)
             }
 
-            return oldItem.actionType == newItem.actionType &&
-                    Objects.equals(oldItem.title, newItem.title) &&
-                    oldItem.frequencyHz == newItem.frequencyHz
+            // For action items (headers/footers), compare by type and position
+            if (oldItem.actionType != GpuFreqAdapter.FreqItem.ActionType.NONE || 
+                newItem.actionType != GpuFreqAdapter.FreqItem.ActionType.NONE) {
+                return oldItem.actionType == newItem.actionType
+            }
+
+            // Fallback: shouldn't reach here if tags are properly set
+            return false
         }
 
         override fun areContentsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {

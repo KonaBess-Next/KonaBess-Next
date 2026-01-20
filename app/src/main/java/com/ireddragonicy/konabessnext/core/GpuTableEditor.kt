@@ -34,12 +34,17 @@ class GpuTableEditor : EditorUIBuilder.UIActionListener, ChipsetManager.OnChipse
 
     @Throws(Exception::class)
     override fun onOpenLevels(binIndex: Int) {
+        onOpenLevels(binIndex, scrollToPosition = -1)
+    }
+
+    @Throws(Exception::class)
+    fun onOpenLevels(binIndex: Int, scrollToPosition: Int) {
         currentBinIndex = binIndex
         currentLevelIndex = null
         currentActivity?.let { restoreBackListener(it) }
         currentActivity?.let {
             if (currentPage != null && bins != null) {
-                EditorUIBuilder.generateLevels(it, currentPage!!, bins!!, binIndex, this)
+                EditorUIBuilder.generateLevels(it, currentPage!!, bins!!, binIndex, this, scrollToPosition)
             }
         }
     }
@@ -82,41 +87,68 @@ class GpuTableEditor : EditorUIBuilder.UIActionListener, ChipsetManager.OnChipse
     @Throws(Exception::class)
     override fun onAddLevelTop(binIndex: Int) {
         if (!LevelOperations.canAddNewLevel(bins, binIndex)) return
+        val bin = bins?.getOrNull(binIndex) ?: return
+        val activity = currentActivity ?: return
 
-        val freqLabel = LevelOperations.getFrequencyLabel(bins!![binIndex].levels[0], currentActivity!!)
+        val freqLabel = LevelOperations.getFrequencyLabel(bin.levels.firstOrNull() ?: return, activity)
         stateManager.applyChange(
-            currentActivity!!.getString(R.string.history_add_frequency, freqLabel),
+            activity.getString(R.string.history_add_frequency, freqLabel),
             { LevelOperations.addLevelAtTop(bins, binIndex) },
-            lines_in_dts!!, bins!!, bin_position
+            getLinesInDts(), bins!!, bin_position
         )
-
-        onOpenLevels(binIndex)
+        onOpenLevels(binIndex, scrollToPosition = 3)
     }
 
     @Throws(Exception::class)
     override fun onAddLevelBottom(binIndex: Int) {
         if (!LevelOperations.canAddNewLevel(bins, binIndex)) return
+        val bin = bins?.getOrNull(binIndex) ?: return
+        val activity = currentActivity ?: return
 
-        val offset = ChipInfo.which!!.minLevelOffset
-        val insertIndex = bins!![binIndex].levels.size - offset
-        val freqLabel = LevelOperations.getFrequencyLabel(bins!![binIndex].levels[insertIndex], currentActivity!!)
+        val offset = ChipInfo.which?.minLevelOffset ?: 0
+        val insertIndex = (bin.levels.size - offset).coerceAtLeast(0)
+        val freqLabel = bin.levels.getOrNull(insertIndex)?.let {
+            LevelOperations.getFrequencyLabel(it, activity)
+        } ?: "New Level"
 
+        // Calculate scroll position: 3 headers + insertIndex + 1 (for newly added item)
+        val scrollPos = 3 + insertIndex + 1
+        
         stateManager.applyChange(
-            currentActivity!!.getString(R.string.history_add_frequency, freqLabel),
+            activity.getString(R.string.history_add_frequency, freqLabel),
             { LevelOperations.addLevelAtBottom(bins, binIndex) },
-            lines_in_dts!!, bins!!, bin_position
+            getLinesInDts(), bins!!, bin_position
         )
+        onOpenLevels(binIndex, scrollToPosition = scrollPos)
+    }
 
+    @Throws(Exception::class)
+    override fun onDuplicateLevel(binIndex: Int, levelIndex: Int) {
+        if (!LevelOperations.canAddNewLevel(bins, binIndex)) return
+        val bin = bins?.getOrNull(binIndex) ?: return
+        val level = bin.levels.getOrNull(levelIndex) ?: return
+        val activity = currentActivity ?: return
+
+        val freqLabel = LevelOperations.getFrequencyLabel(level, activity)
+        stateManager.applyChange(
+            activity.getString(R.string.history_duplicate_frequency, freqLabel),
+            { LevelOperations.duplicateLevel(bins, binIndex, levelIndex) },
+            getLinesInDts(), bins!!, bin_position
+        )
         onOpenLevels(binIndex)
     }
 
     @Throws(Exception::class)
     override fun onRemoveLevel(binIndex: Int, levelIndex: Int) {
-        val freqLabel = LevelOperations.getFrequencyLabel(bins!![binIndex].levels[levelIndex], currentActivity!!)
+        val bin = bins?.getOrNull(binIndex) ?: return
+        val level = bin.levels.getOrNull(levelIndex) ?: return
+        val activity = currentActivity ?: return
+
+        val freqLabel = LevelOperations.getFrequencyLabel(level, activity)
         stateManager.applyChange(
-            currentActivity!!.getString(R.string.history_remove_frequency, freqLabel),
+            activity.getString(R.string.history_remove_frequency, freqLabel),
             { LevelOperations.removeLevel(bins, binIndex, levelIndex) },
-            lines_in_dts!!, bins!!, bin_position
+            getLinesInDts(), bins!!, bin_position
         )
 
         onOpenLevels(binIndex)
@@ -125,7 +157,7 @@ class GpuTableEditor : EditorUIBuilder.UIActionListener, ChipsetManager.OnChipse
     @Throws(Exception::class)
     override fun onReorderLevels(binIndex: Int, items: List<GpuFreqAdapter.FreqItem>) {
         val binsSnapshot = LevelOperations.cloneBinsList(bins)
-        val changed = LevelOperations.updateBinsFromAdapter(bins, binIndex, items, null)
+        val changed = LevelOperations.updateBinsFromAdapter(bins, binIndex, items)
 
         if (changed) {
             // Revert the change to capture state, then apply it properly via stateManager
@@ -186,17 +218,20 @@ class GpuTableEditor : EditorUIBuilder.UIActionListener, ChipsetManager.OnChipse
         rawValue: String,
         paramTitle: String
     ) {
+        val act = currentActivity ?: return
+        val currentBins = bins ?: return
+        
         ParameterEditHandler.handleParameterEdit(
-            currentActivity!!, bins!!, binIndex, levelIndex, lineIndex,
+            act, currentBins, binIndex, levelIndex, lineIndex,
             rawName, rawValue, paramTitle,
             object : ParameterEditHandler.OnParameterEditedListener {
                 override fun onEdited(lineIndex: Int, encodedLine: String, historyMessage: String) {
                     stateManager.applyChange(
                         historyMessage,
-                        { bins!![binIndex].levels[levelIndex].lines[lineIndex] = encodedLine },
-                        lines_in_dts!!, bins!!, bin_position
+                        { currentBins[binIndex].levels[levelIndex].lines[lineIndex] = encodedLine },
+                        getLinesInDts(), currentBins, bin_position
                     )
-                    Toast.makeText(currentActivity, R.string.save_success, Toast.LENGTH_SHORT).show()
+                    Toast.makeText(act, R.string.save_success, Toast.LENGTH_SHORT).show()
                 }
 
                 override fun refreshView() {
@@ -213,8 +248,11 @@ class GpuTableEditor : EditorUIBuilder.UIActionListener, ChipsetManager.OnChipse
         rawName: String,
         deltaMHz: Int
     ) {
+        val act = currentActivity ?: return
+        val currentBins = bins ?: return
+        
         ParameterEditHandler.handleFrequencyAdjust(
-            currentActivity!!, bins!!, binIndex, levelIndex, lineIndex,
+            act, currentBins, binIndex, levelIndex, lineIndex,
             rawName, deltaMHz,
             object : ParameterEditHandler.OnParameterEditedListener {
                 override fun onEdited(lineIndex: Int, encodedLine: String, historyMessage: String) {
@@ -286,11 +324,11 @@ class GpuTableEditor : EditorUIBuilder.UIActionListener, ChipsetManager.OnChipse
     }
 
     override fun getLinesInDts(): ArrayList<String> {
-        return lines_in_dts!!
+        return lines_in_dts ?: ArrayList()
     }
 
     override fun getBins(): ArrayList<Bin> {
-        return bins!!
+        return bins ?: ArrayList()
     }
 
     override fun getBinPosition(): Int {
@@ -450,8 +488,8 @@ class GpuTableEditor : EditorUIBuilder.UIActionListener, ChipsetManager.OnChipse
 
         @JvmStatic
         fun genBack(table: List<String>?): List<String> {
-            val new_dts = ArrayList(lines_in_dts)
-            new_dts.addAll(bin_position, table!!)
+            val new_dts = (lines_in_dts?.toMutableList() ?: mutableListOf())
+            new_dts.addAll(bin_position, table.orEmpty())
             return new_dts
         }
 
@@ -564,16 +602,20 @@ class GpuTableEditor : EditorUIBuilder.UIActionListener, ChipsetManager.OnChipse
 
         @JvmStatic
         fun handleUndo() {
+            val act = currentActivity ?: return
+            val currentBins = bins ?: return
             stateManager.handleUndo(
-                lines_in_dts!!, bins!!,
+                lines_in_dts ?: ArrayList(), currentBins,
                 { bin_position },
                 { pos -> bin_position = pos })
         }
 
         @JvmStatic
         fun handleRedo() {
+            val act = currentActivity ?: return
+            val currentBins = bins ?: return
             stateManager.handleRedo(
-                lines_in_dts!!, bins!!,
+                lines_in_dts ?: ArrayList(), currentBins,
                 { bin_position },
                 { pos -> bin_position = pos })
         }

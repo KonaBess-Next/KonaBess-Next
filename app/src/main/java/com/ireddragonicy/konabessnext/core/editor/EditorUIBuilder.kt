@@ -53,6 +53,9 @@ object EditorUIBuilder {
         fun onRemoveLevel(binIndex: Int, levelIndex: Int)
 
         @Throws(Exception::class)
+        fun onDuplicateLevel(binIndex: Int, levelIndex: Int)
+
+        @Throws(Exception::class)
         fun onReorderLevels(binIndex: Int, items: List<GpuFreqAdapter.FreqItem>)
 
         @Throws(Exception::class)
@@ -184,7 +187,7 @@ object EditorUIBuilder {
     @Throws(Exception::class)
     fun generateLevels(
         activity: Activity, page: LinearLayout, bins: ArrayList<Bin>, binIndex: Int,
-        listener: UIActionListener
+        listener: UIActionListener, scrollToPosition: Int = -1
     ) {
         val bin = bins[binIndex]
 
@@ -229,17 +232,19 @@ object EditorUIBuilder {
             )
             item.originalPosition = i
             item.frequencyHz = freq
+            item.tag = lvl // Store Level reference for DiffUtil to identify unique items
 
             try {
                 for (line in lvl.lines) {
                     val paramName = DtsHelper.decode_hex_line(line).name
                     val `val` = DtsHelper.decode_int_line(line).value
 
-                    if ("qcom,bus-max" == paramName) item.busMax = `val`.toString()
-                    else if ("qcom,bus-min" == paramName) item.busMin = `val`.toString()
-                    else if ("qcom,bus-freq" == paramName) item.busFreq = `val`.toString()
-                    else if ("qcom,level" == paramName || "qcom,cx-level" == paramName)
-                        item.voltageLevel = GpuVoltEditor.levelint2str(`val`.toLong())
+                    when (paramName) {
+                        "qcom,bus-max" -> item.busMax = `val`.toString()
+                        "qcom,bus-min" -> item.busMin = `val`.toString()
+                        "qcom,bus-freq" -> item.busFreq = `val`.toString()
+                        "qcom,level", "qcom,cx-level" -> item.voltageLevel = GpuVoltEditor.levelint2str(`val`)
+                    }
                 }
             } catch (ignored: Exception) {
             }
@@ -284,6 +289,14 @@ object EditorUIBuilder {
             page.addView(recyclerView)
         }
 
+        // Scroll to position if requested (e.g., after adding level at top)
+        if (scrollToPosition >= 0 && scrollToPosition < items.size) {
+            // Use postDelayed to allow DiffUtil animation to start first
+            recyclerView.postDelayed({
+                recyclerView.scrollToPosition(scrollToPosition)
+            }, 50)
+        }
+
         // Listeners
         adapter.setOnItemClickListener { position: Int ->
             val item = items[position]
@@ -293,15 +306,15 @@ object EditorUIBuilder {
                 } catch (ignored: Exception) {
                 }
 
-                GpuFreqAdapter.FreqItem.ActionType.ADD_TOP -> try {
+                GpuFreqAdapter.FreqItem.ActionType.ADD_TOP -> runCatching {
                     listener.onAddLevelTop(binIndex)
-                } catch (e: Exception) {
+                }.onFailure {
                     DialogUtil.showError(activity, R.string.error_occur)
                 }
 
-                GpuFreqAdapter.FreqItem.ActionType.ADD_BOTTOM -> try {
+                GpuFreqAdapter.FreqItem.ActionType.ADD_BOTTOM -> runCatching {
                     listener.onAddLevelBottom(binIndex)
-                } catch (e: Exception) {
+                }.onFailure {
                     DialogUtil.showError(activity, R.string.error_occur)
                 }
 
@@ -325,28 +338,46 @@ object EditorUIBuilder {
             }
         }
 
-        adapter.setOnDeleteClickListener { position: Int ->
-            if (bin.levels.size == 1) {
-                Toast.makeText(activity, R.string.unable_add_more, Toast.LENGTH_SHORT).show()
-            } else {
-                val levelPos = position - 3 // Offset headers
-                try {
-                    val freqMsg = LevelOperations.getFrequencyLabel(bin.levels[levelPos], activity)
-                    MaterialAlertDialogBuilder(activity)
+        adapter.setOnDuplicateClickListener { position ->
+            val item = adapter.items.getOrNull(position) ?: return@setOnDuplicateClickListener
+            if (item.isLevelItem) {
+                val lvlIdx = adapter.items.take(position).count { it.isLevelItem }
+                runCatching { listener.onDuplicateLevel(binIndex, lvlIdx) }
+                    .onFailure { DialogUtil.showError(activity, R.string.error_occur) }
+            }
+        }
+
+        adapter.setOnDeleteClickListener { position ->
+             // Fix logic to calculate level index correctly
+             val item = adapter.items[position]
+             if (item.isLevelItem) {
+                 var lvlIdx = 0
+                 for (k in 0 until position) {
+                     if (adapter.items[k].isLevelItem) lvlIdx++
+                 }
+                 
+                 try {
+                     // Get label for confirmation message
+                     // We need the level to get the frequency, using our calculated index
+                     val level = bin.levels[lvlIdx] 
+                     val freqMsg = LevelOperations.getFrequencyLabel(level, activity)
+                     
+                     MaterialAlertDialogBuilder(activity)
                         .setTitle(R.string.remove)
                         .setMessage(activity.getString(R.string.remove_frequency_message, freqMsg))
                         .setPositiveButton(R.string.yes) { _, _ ->
                             try {
-                                listener.onRemoveLevel(binIndex, levelPos)
+                                listener.onRemoveLevel(binIndex, lvlIdx)
                             } catch (e: Exception) {
                                 DialogUtil.showError(activity, R.string.error_occur)
                             }
                         }
                         .setNegativeButton(R.string.no, null)
-                        .create().show()
-                } catch (ignored: Exception) {
+                        .show()
+                } catch (e: Exception) {
+                     DialogUtil.showError(activity, R.string.error_occur)
                 }
-            }
+             }
         }
 
         recyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() {
