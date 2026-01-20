@@ -16,16 +16,84 @@ import java.util.Deque
 import javax.inject.Inject
 import javax.inject.Singleton
 
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.flowOn
+
 @Singleton
 class GpuRepository @Inject constructor(
     private val deviceRepository: DeviceRepository
 ) {
+    sealed class ParseResult {
+        object Loading : ParseResult()
+        data class Success(val bins: List<Bin>) : ParseResult()
+        data class Error(val message: String) : ParseResult()
+    }
 
+    private val repoScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+
+    private val _dtsContent = MutableStateFlow("")
+    val dtsContent: StateFlow<String> = _dtsContent.asStateFlow()
+
+    private val _parsedResult = MutableStateFlow<ParseResult>(ParseResult.Loading)
+    val parsedResult: StateFlow<ParseResult> = _parsedResult.asStateFlow()
+
+    // Bins are now derived from parsedResult for consistency, 
+    // but we allow immediate updates from GUI to avoid lag.
     private val _bins = MutableStateFlow<List<Bin>>(emptyList())
     val bins: StateFlow<List<Bin>> = _bins.asStateFlow()
-
+    
+    // Opps for voltage control
     private val _opps = MutableStateFlow<List<Opp>>(emptyList())
     val opps: StateFlow<List<Opp>> = _opps.asStateFlow()
+
+    // Helper to avoid circular loop when updating from GUI
+    private var isUpdatingFromGui = false
+
+    init {
+        // Live Synchronization: Text -> Bins
+        _dtsContent
+            .debounce(300) // Debounce text input
+            .onEach { content ->
+                if (!isUpdatingFromGui && content.isNotEmpty()) {
+                    parseContentPartial(content)
+                }
+                isUpdatingFromGui = false
+            }
+            .flowOn(Dispatchers.Default)
+            .launchIn(repoScope)
+    }
+
+    private suspend fun parseContentPartial(content: String) {
+        _parsedResult.value = ParseResult.Loading
+        try {
+            val lines = content.split("\n")
+            val linesMutable = ArrayList(lines)
+            
+            // Only re-parse if architecture is known
+            if (ChipInfo.which != null) {
+                // Reset positions if needed, though they might shift in text editor
+                binPosition = -1 
+                val newBins = decodeBins(linesMutable)
+                
+                // Update bins without triggering generation
+                _bins.value = newBins
+                _parsedResult.value = ParseResult.Success(newBins)
+                
+                // Also update Opps if needed
+                 val newOpps = decodeOpps(ArrayList(lines))
+                 _opps.value = newOpps
+                 
+                 _linesInDts.value = lines
+            }
+        } catch (e: Exception) {
+            _parsedResult.value = ParseResult.Error(e.message ?: "Parse error")
+        }
+    }
+
 
     private val _linesInDts = MutableStateFlow<List<String>>(emptyList())
     val linesInDts: StateFlow<List<String>> = _linesInDts.asStateFlow()
@@ -52,35 +120,46 @@ class GpuRepository @Inject constructor(
     val isDirty: StateFlow<Boolean> = _isDirty.asStateFlow()
 
     suspend fun loadTable() = withContext(Dispatchers.IO) {
-        val path = deviceRepository.dtsPath ?: throw IOException("DTS Path not set")
-        val lines = FileUtil.readLines(path)
-        
-        // Use a mutable list to strip lines as we decode
-        val linesMutable = ArrayList(lines)
-        
-        // Reset positions
-        binPosition = -1
-        oppPosition = -1
-        
-        // Decode Freq Table (Bins) - This removes lines from linesMutable
-        val newBins = decodeBins(linesMutable)
-        _bins.value = newBins
-        
-        // Synchronize with static GpuTableEditor.bins for legacy code
-        com.ireddragonicy.konabessnext.core.GpuTableEditor.bins = ArrayList(newBins)
-        com.ireddragonicy.konabessnext.core.GpuTableEditor.bin_position = binPosition
-        
-        // Decode Voltage Table (Opps) - This removes lines from linesMutable
-        val newOpps = decodeOpps(linesMutable)
-        _opps.value = newOpps
-        
-        _linesInDts.value = linesMutable
-        
-        // Reset history
-        undoStack.clear()
-        redoStack.clear()
-        updateHistoryState()
-        _isDirty.value = false
+        _parsedResult.value = ParseResult.Loading
+        try {
+            val path = deviceRepository.dtsPath ?: throw IOException("DTS Path not set")
+            val lines = FileUtil.readLines(path)
+            
+            // Initial content
+            _dtsContent.value = lines.joinToString("\n")
+
+            // Use a mutable list to strip lines as we decode
+            val linesMutable = ArrayList(lines)
+            
+            // Reset positions
+            binPosition = -1
+            oppPosition = -1
+            
+            // Decode Freq Table (Bins) - This removes lines from linesMutable
+            val newBins = decodeBins(linesMutable)
+            _bins.value = newBins
+            
+            // Synchronize with static GpuTableEditor.bins for legacy code
+            com.ireddragonicy.konabessnext.core.GpuTableEditor.bins = ArrayList(newBins)
+            com.ireddragonicy.konabessnext.core.GpuTableEditor.bin_position = binPosition
+            
+            // Decode Voltage Table (Opps) - This removes lines from linesMutable
+            val newOpps = decodeOpps(linesMutable)
+            _opps.value = newOpps
+            
+            _linesInDts.value = linesMutable
+            
+            // Reset history
+            undoStack.clear()
+            redoStack.clear()
+            updateHistoryState()
+            _isDirty.value = false
+            
+            _parsedResult.value = ParseResult.Success(newBins)
+        } catch (e: Exception) {
+            _parsedResult.value = ParseResult.Error(e.message ?: "Failed to load table")
+            throw e
+        }
     }
 
     private fun decode(lines: List<String>) {
@@ -184,7 +263,13 @@ class GpuRepository @Inject constructor(
         return newDts
     }
 
+
     // --- State Management ---
+    
+    private fun updateGeneratedContent() {
+        val newDts = genBack()
+        _dtsContent.value = newDts.joinToString("\n")
+    }
 
     fun captureState(): EditorState {
         return EditorState(
@@ -200,14 +285,7 @@ class GpuRepository @Inject constructor(
         pushUndoState(captureState(), description)
         redoStack.clear()
         updateHistoryState()
-    }
-
-    fun modifyBins(newBins: List<Bin>, description: String = "Modify Bins") {
-        pushUndoState(captureState(), description)
-        _bins.value = ArrayList(newBins)
-        _isDirty.value = true
-        redoStack.clear()
-        updateHistoryState()
+        updateGeneratedContent()
     }
 
     fun modifyOpps(newOpps: List<Opp>, description: String = "Modify Opps") {
@@ -216,14 +294,40 @@ class GpuRepository @Inject constructor(
         _isDirty.value = true
         redoStack.clear()
         updateHistoryState()
+        updateGeneratedContent()
+    }
+
+    fun updateDtsContent(content: String, description: String) {
+        // Called from Text Editor
+        // We push state before changing
+        pushUndoState(captureState(), description)
+        _dtsContent.value = content
+        _isDirty.value = true
+        redoStack.clear()
+        updateHistoryState()
+    }
+    
+    fun updateBins(newBins: List<Bin>, description: String) {
+        modifyBins(newBins, description)
+    }
+
+    fun modifyBins(newBins: List<Bin>, description: String = "Modify Bins") {
+        // Called from GUI Editor
+        pushUndoState(captureState(), description)
+        
+        isUpdatingFromGui = true
+        _bins.value = ArrayList(newBins) // Optimistic update
+        _parsedResult.value = ParseResult.Success(_bins.value)
+        updateGeneratedContent() // Generates string -> updates _dtsContent
+        
+        _isDirty.value = true
+        redoStack.clear()
+        updateHistoryState()
     }
 
     fun undo() {
         if (undoStack.isEmpty()) return
         val currentSnapshot = captureState()
-        // If we undo, we push current state to redo stack with "Undo" description?
-        // Usually redo stack keeps the description of the action we undid.
-        // Let's pop from undo stack (which has state BEFORE action).
         
         val previous = undoStack.pop()
         val description = previous.second
@@ -254,8 +358,10 @@ class GpuRepository @Inject constructor(
         binPosition = state.binPosition
         _opps.value = state.oppsSnapshot
         oppPosition = state.oppPosition
+        updateGeneratedContent()
+        _parsedResult.value = ParseResult.Success(_bins.value)
     }
-
+    
     private fun pushUndoState(state: EditorState, description: String) {
         undoStack.push(state to description)
         while (undoStack.size > MAX_HISTORY_SIZE) {

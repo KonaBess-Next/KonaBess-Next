@@ -430,15 +430,18 @@ class EditorStateManager private constructor() {
         if (historyButtonRef == null) return
         runOnMainThread {
             if (historyButtonRef == null) return@runOnMainThread
-            if (currentActivity == null) {
-                historyButtonRef!!.text = "History${if (changeHistory.isEmpty()) "" else " (${changeHistory.size})"}"
-                return@runOnMainThread
-            }
-            if (changeHistory.isEmpty()) {
-                historyButtonRef!!.text = currentActivity!!.getString(R.string.history)
+            // Icon-only button - update content description for accessibility
+            val count = changeHistory.size
+            val description = if (currentActivity != null) {
+                if (count == 0) {
+                    currentActivity!!.getString(R.string.history)
+                } else {
+                    currentActivity!!.getString(R.string.history_with_count, count)
+                }
             } else {
-                historyButtonRef!!.text = currentActivity!!.getString(R.string.history_with_count, changeHistory.size)
+                "History${if (count == 0) "" else " ($count)"}"
             }
+            historyButtonRef!!.contentDescription = description
         }
     }
 

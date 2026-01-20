@@ -34,6 +34,7 @@ import com.ireddragonicy.konabessnext.utils.RootHelper
 import com.ireddragonicy.konabessnext.viewmodel.DeviceViewModel
 import com.ireddragonicy.konabessnext.viewmodel.GpuFrequencyViewModel
 import com.ireddragonicy.konabessnext.viewmodel.UiState
+import com.ireddragonicy.konabessnext.viewmodel.SharedGpuViewModel
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -55,6 +56,7 @@ class GpuFrequencyFragment : Fragment() {
     // Wait, original code used: deviceViewModel = activity.getDeviceViewModel() and gpu = ViewModelProvider(requireActivity())...
     // activityViewModels() is the correct Hilt/Jetpack way for shared ViewModels.
     private val gpuFrequencyViewModel: GpuFrequencyViewModel by activityViewModels()
+    private val sharedViewModel: com.ireddragonicy.konabessnext.viewmodel.SharedGpuViewModel by activityViewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -87,6 +89,8 @@ class GpuFrequencyFragment : Fragment() {
                     if (isPrepared) {
                         // Load GPU table data when prepared
                         gpuFrequencyViewModel.loadData()
+                        // Ensure SharedViewModel (New Architecture) also synced/loaded
+                        sharedViewModel.loadData()
                     } else {
                         // Not prepared logic
                     }
@@ -204,23 +208,27 @@ class GpuFrequencyFragment : Fragment() {
     private var actionToolbar: com.ireddragonicy.konabessnext.ui.widget.GpuActionToolbar? = null
 
     private fun showGpuEditor(activity: MainActivity) {
-        if (!isAdded) {
-            return
-        }
+        if (!isAdded) return
+
         contentContainer!!.removeAllViews()
         contentContainer!!.gravity = Gravity.NO_GRAVITY
         
-        // Main editor layout container
+        // Root Workbench Container
         gpuEditorContainer = LinearLayout(requireContext())
         gpuEditorContainer!!.orientation = LinearLayout.VERTICAL
         gpuEditorContainer!!.layoutParams = LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
         )
         
-        // Add Action Toolbar
+        // Toolbar
         actionToolbar = com.ireddragonicy.konabessnext.ui.widget.GpuActionToolbar(activity)
         actionToolbar!!.setParentViewForVolt(contentContainer)
         actionToolbar!!.build(activity)
+        
+        // Setup Toolbar Listeners
+        actionToolbar!!.setOnModeSelectedListener { mode ->
+            updateViewMode(mode)
+        }
         
         val density = resources.displayMetrics.density
         val toolbarParams = LinearLayout.LayoutParams(
@@ -229,18 +237,90 @@ class GpuFrequencyFragment : Fragment() {
         toolbarParams.setMargins((density * 8).toInt(), (density * 8).toInt(), (density * 8).toInt(), (density * 16).toInt())
         gpuEditorContainer!!.addView(actionToolbar, toolbarParams)
 
-        // Data Area where bins/levels will be rendered
-        dataArea = LinearLayout(requireContext())
-        dataArea!!.orientation = LinearLayout.VERTICAL
-        val dataAreaParams = LinearLayout.LayoutParams(
+        // Fragment Container for Frames (GUI / Text / Tree)
+        val fragmentContainer = android.widget.FrameLayout(requireContext())
+        fragmentContainer.id = View.generateViewId()
+        val containerParams = LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, 0, 1.0f
         )
-        gpuEditorContainer!!.addView(dataArea, dataAreaParams)
+        gpuEditorContainer!!.addView(fragmentContainer, containerParams)
 
         contentContainer!!.addView(gpuEditorContainer)
 
-        // Data is already loaded by isPrepared collector, just generate UI in the data area
-        GpuTableEditor.generateBins(activity, dataArea!!)
+        // Initialize Fragments
+        val fm = childFragmentManager
+        val transaction = fm.beginTransaction()
+        
+        // Define tags
+        val TAG_GUI = "TAG_GUI"
+        val TAG_TEXT = "TAG_TEXT"
+        val TAG_TREE = "TAG_TREE"
+        
+        // Check if already added to avoid duplication on config change
+        var guiFragment = fm.findFragmentByTag(TAG_GUI)
+        var textFragment = fm.findFragmentByTag(TAG_TEXT)
+        var treeFragment = fm.findFragmentByTag(TAG_TREE)
+        
+        if (guiFragment == null) {
+            guiFragment = com.ireddragonicy.konabessnext.ui.fragments.GuiEditorFragment()
+            transaction.add(fragmentContainer.id, guiFragment, TAG_GUI)
+        }
+        
+        if (textFragment == null) {
+            textFragment = com.ireddragonicy.konabessnext.ui.fragments.UnifiedRawDtsFragment.newInstance()
+            transaction.add(fragmentContainer.id, textFragment, TAG_TEXT)
+        }
+        
+        if (treeFragment == null) {
+            treeFragment = com.ireddragonicy.konabessnext.ui.fragments.VisualTreeFragment.newInstance()
+            transaction.add(fragmentContainer.id, treeFragment, TAG_TREE)
+        }
+        
+        // Default State: Show GUI, Hide others.
+        transaction.show(guiFragment!!)
+        if (textFragment != null) transaction.hide(textFragment)
+        if (treeFragment != null) transaction.hide(treeFragment)
+        
+        transaction.commitNow()
+        
+        // Sync ViewModel state (default)
+        sharedViewModel.switchViewMode(com.ireddragonicy.konabessnext.viewmodel.SharedGpuViewModel.ViewMode.MAIN_EDITOR)
+    }
+
+    private fun updateViewMode(mode: com.ireddragonicy.konabessnext.viewmodel.SharedGpuViewModel.ViewMode) {
+        val fm = childFragmentManager
+        val gui = fm.findFragmentByTag("TAG_GUI")
+        val text = fm.findFragmentByTag("TAG_TEXT")
+        val tree = fm.findFragmentByTag("TAG_TREE")
+        
+        val transaction = fm.beginTransaction()
+        
+        sharedViewModel.switchViewMode(mode)
+        
+        // Hide all first
+        if (gui != null) transaction.hide(gui)
+        if (text != null) transaction.hide(text)
+        if (tree != null) transaction.hide(tree)
+        
+        // Show selected
+        when (mode) {
+            com.ireddragonicy.konabessnext.viewmodel.SharedGpuViewModel.ViewMode.MAIN_EDITOR -> if (gui != null) transaction.show(gui)
+            com.ireddragonicy.konabessnext.viewmodel.SharedGpuViewModel.ViewMode.TEXT_ADVANCED -> if (text != null) transaction.show(text)
+            com.ireddragonicy.konabessnext.viewmodel.SharedGpuViewModel.ViewMode.VISUAL_TREE -> if (tree != null) transaction.show(tree)
+        }
+        transaction.commit()
+    }
+    
+    private fun toggleSearch() {
+        val fm = childFragmentManager
+        val textFragment = fm.findFragmentByTag("TAG_TEXT") as? com.ireddragonicy.konabessnext.ui.fragments.UnifiedRawDtsFragment
+        
+        // Only toggle if Text Fragment is visible
+        if (textFragment != null && textFragment.isVisible) {
+             textFragment.showSearchBar()
+        } else {
+             Toast.makeText(requireContext(), "Search available in Text Mode", Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun showPromptState(activity: MainActivity) {

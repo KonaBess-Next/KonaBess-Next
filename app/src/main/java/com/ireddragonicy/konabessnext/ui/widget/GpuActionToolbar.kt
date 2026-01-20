@@ -18,6 +18,9 @@ import com.ireddragonicy.konabessnext.core.GpuVoltEditor
 import com.ireddragonicy.konabessnext.core.editor.EditorStateManager
 import com.ireddragonicy.konabessnext.ui.MainActivity
 import com.ireddragonicy.konabessnext.ui.RawDtsEditorActivity
+import com.ireddragonicy.konabessnext.viewmodel.SharedGpuViewModel
+
+import com.google.android.material.button.MaterialButtonToggleGroup
 
 class GpuActionToolbar @JvmOverloads constructor(
     context: Context,
@@ -28,15 +31,27 @@ class GpuActionToolbar @JvmOverloads constructor(
     private var btnUndo: MaterialButton? = null
     private var btnRedo: MaterialButton? = null
     private var btnHistory: MaterialButton? = null
-    private var btnVolt: MaterialButton? = null
-    private var btnDtsEditor: MaterialButton? = null
-    private var btnRepack: MaterialButton? = null
+    
+    // Toggle Group for View Modes
+    private var viewModeToggleGroup: MaterialButtonToggleGroup? = null
+    private var btnModeGui: MaterialButton? = null
+    private var btnModeText: MaterialButton? = null
+    private var btnModeVisual: MaterialButton? = null
+    
+    private var btnFlash: MaterialButton? = null
+    
     private var parentViewForVolt: View? = null
     private var showVolt = false
     private var showRepack = false
+    
+    private var onModeSelectedListener: ((SharedGpuViewModel.ViewMode) -> Unit)? = null
 
     init {
         init(context)
+    }
+    
+    fun setOnModeSelectedListener(listener: (SharedGpuViewModel.ViewMode) -> Unit) {
+        this.onModeSelectedListener = listener
     }
 
     private fun init(context: Context) {
@@ -58,11 +73,13 @@ class GpuActionToolbar @JvmOverloads constructor(
         val chipSpacing = (density * 8).toInt()
         val rowSpacing = (density * 12).toInt()
 
-        // Row 1: Save, Undo, Redo, History
+        // Row 1: Save, Undo, Redo, History (Standard Actions)
         val firstRow = LinearLayout(activity)
         firstRow.orientation = HORIZONTAL
-        firstRow.layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+        val firstRowParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+        firstRow.layoutParams = firstRowParams
 
+        // Build Row 1 contents
         btnSave = createMaterialButton(activity, "Save", R.drawable.ic_save)
         btnSave!!.setOnClickListener {
             GpuTableEditor.saveFrequencyTable(
@@ -81,7 +98,7 @@ class GpuActionToolbar @JvmOverloads constructor(
         btnHistory = createMaterialButton(activity, null, R.drawable.ic_history)
         btnHistory!!.setOnClickListener { GpuTableEditor.showHistoryDialog(activity) }
 
-        // Layout Params Configuration
+        // Layout Params
         val mainActionParams = LayoutParams(0, LayoutParams.WRAP_CONTENT, 1.0f)
         mainActionParams.marginEnd = chipSpacing
         btnSave!!.layoutParams = mainActionParams
@@ -90,9 +107,7 @@ class GpuActionToolbar @JvmOverloads constructor(
         iconActionParams.marginEnd = chipSpacing
         btnUndo!!.layoutParams = iconActionParams
         btnRedo!!.layoutParams = iconActionParams
-
-        val lastActionParams = LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
-        btnHistory!!.layoutParams = lastActionParams
+        btnHistory!!.layoutParams = iconActionParams
 
         firstRow.addView(btnSave)
         firstRow.addView(btnUndo)
@@ -100,88 +115,81 @@ class GpuActionToolbar @JvmOverloads constructor(
         firstRow.addView(btnHistory)
 
         GpuTableEditor.registerToolbarButtons(btnSave, btnUndo, btnRedo, btnHistory)
+        
+        // Add Row 1 First (As requested)
         addView(firstRow)
 
-        // Row 2: DTS Editor, Curve Editor, Volt, Repack
+        // Row 2: View Mode Switcher + Flash
         if (showRepack && activity is MainActivity) {
             val secondRow = LinearLayout(activity)
             secondRow.orientation = HORIZONTAL
             val secondRowParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
             secondRowParams.topMargin = rowSpacing
             secondRow.layoutParams = secondRowParams
-
-            btnDtsEditor = createMaterialButton(activity, null, R.drawable.ic_code)
-            btnDtsEditor!!.setOnClickListener {
-                MaterialAlertDialogBuilder(activity)
-                    .setTitle(R.string.raw_dts_editor_warning_title)
-                    .setMessage(R.string.raw_dts_editor_warning_msg)
-                    .setPositiveButton(R.string.confirm) { _, _ ->
-                        activity.startActivity(
-                            Intent(
-                                activity,
-                                RawDtsEditorActivity::class.java
-                            )
-                        )
-                    }
-                    .setNegativeButton(R.string.cancel, null)
-                    .show()
-            }
-
-            val dtsParams = LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
-            dtsParams.marginEnd = chipSpacing
-            btnDtsEditor!!.layoutParams = dtsParams
-            secondRow.addView(btnDtsEditor)
-
-            // Curve Editor button
-            val btnCurveEditor = createMaterialButton(activity, null, R.drawable.ic_frequency)
-            btnCurveEditor.setOnClickListener {
-                // Get the current bin index from GpuTableEditor
-                val binIndex = GpuTableEditor.getSelectedBinIndex()
-                if (binIndex != null && binIndex >= 0) {
-                    (activity as MainActivity).openCurveEditor(binIndex)
-                } else {
-                    Toast.makeText(activity, R.string.select_bin_first, Toast.LENGTH_SHORT).show()
-                }
-            }
-
-            val curveParams = LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
-            curveParams.marginEnd = chipSpacing
-            btnCurveEditor.layoutParams = curveParams
-            secondRow.addView(btnCurveEditor)
-
-            if (showVolt) {
-                btnVolt = createMaterialButton(activity, "Volt", R.drawable.ic_voltage)
-                btnVolt!!.setText(R.string.edit_gpu_volt_table)
-                btnVolt!!.setOnClickListener {
-                    if (parentViewForVolt != null) {
-                        GpuVoltEditor.gpuVoltLogic(activity as MainActivity, parentViewForVolt as LinearLayout).start()
-                    } else {
-                        Toast.makeText(
-                            activity,
-                            "Error: Parent view not set for Voltage Editor",
-                            Toast.LENGTH_SHORT
-                        ).show()
+            
+            // Toggle Group
+            viewModeToggleGroup = MaterialButtonToggleGroup(activity, null, com.google.android.material.R.attr.materialButtonToggleGroupStyle)
+            viewModeToggleGroup!!.isSingleSelection = true
+            viewModeToggleGroup!!.isSelectionRequired = true
+            
+            btnModeGui = createOutlinedButton(activity, "GUI", R.drawable.ic_edit)
+            btnModeText = createOutlinedButton(activity, "Text", R.drawable.ic_code)
+            btnModeVisual = createOutlinedButton(activity, "Tree", R.drawable.ic_developer_board) 
+            
+            btnModeGui!!.id = View.generateViewId()
+            btnModeText!!.id = View.generateViewId()
+            btnModeVisual!!.id = View.generateViewId()
+            
+            viewModeToggleGroup!!.addView(btnModeGui)
+            viewModeToggleGroup!!.addView(btnModeText)
+            viewModeToggleGroup!!.addView(btnModeVisual)
+            
+            viewModeToggleGroup!!.check(btnModeGui!!.id)
+            
+            viewModeToggleGroup!!.addOnButtonCheckedListener { group, checkedId, isChecked ->
+                if (isChecked) {
+                    when (checkedId) {
+                        btnModeGui!!.id -> onModeSelectedListener?.invoke(SharedGpuViewModel.ViewMode.MAIN_EDITOR)
+                        btnModeText!!.id -> onModeSelectedListener?.invoke(SharedGpuViewModel.ViewMode.TEXT_ADVANCED)
+                        btnModeVisual!!.id -> onModeSelectedListener?.invoke(SharedGpuViewModel.ViewMode.VISUAL_TREE)
                     }
                 }
-
-                val voltParams = LayoutParams(0, LayoutParams.WRAP_CONTENT, 1.0f)
-                voltParams.marginEnd = chipSpacing
-                btnVolt!!.layoutParams = voltParams
-                secondRow.addView(btnVolt)
             }
-
-            btnRepack = createMaterialButton(activity, "Flash", R.drawable.ic_flash)
-            btnRepack!!.setOnClickListener {
+            
+            val toggleParams = LayoutParams(0, LayoutParams.WRAP_CONTENT, 1.0f)
+            toggleParams.marginEnd = chipSpacing
+            viewModeToggleGroup!!.layoutParams = toggleParams
+            
+            secondRow.addView(viewModeToggleGroup)
+            
+            // Flash Button
+            btnFlash = createMaterialButton(activity, "Flash", R.drawable.ic_flash)
+            btnFlash!!.setOnClickListener {
                 (activity as MainActivity).startRepack()
             }
-
-            val repackParams = LayoutParams(0, LayoutParams.WRAP_CONTENT, 1.0f)
-            btnRepack!!.layoutParams = repackParams
-            secondRow.addView(btnRepack)
-
+            btnFlash!!.layoutParams = LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
+            
+            secondRow.addView(btnFlash)
             addView(secondRow)
         }
     }
+    
+    private fun createOutlinedButton(context: Context, text: String, iconResId: Int): MaterialButton {
+        val button = MaterialButton(context, null, com.google.android.material.R.attr.materialButtonOutlinedStyle)
+        button.text = text
+        button.setIconResource(iconResId)
+        button.iconGravity = MaterialButton.ICON_GRAVITY_TEXT_START
+        button.setPadding(
+            (context.resources.displayMetrics.density * 12).toInt(), 
+            0, 
+            (context.resources.displayMetrics.density * 12).toInt(), 
+            0
+        )
+        button.minWidth = 0
+        button.minHeight = (context.resources.displayMetrics.density * 48).toInt()
+        return button
+    }
+
 
     private fun createMaterialButton(context: Context, text: String?, iconResId: Int): MaterialButton {
         val button = MaterialButton(context)

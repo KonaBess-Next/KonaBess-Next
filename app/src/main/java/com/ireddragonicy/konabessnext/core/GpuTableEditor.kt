@@ -489,7 +489,12 @@ class GpuTableEditor : EditorUIBuilder.UIActionListener, ChipsetManager.OnChipse
         @JvmStatic
         fun genBack(table: List<String>?): List<String> {
             val new_dts = (lines_in_dts?.toMutableList() ?: mutableListOf())
-            new_dts.addAll(bin_position, table.orEmpty())
+            val insertPos = if (bin_position >= 0) {
+                 bin_position.coerceAtMost(new_dts.size)
+            } else {
+                 new_dts.size // Append if position invalid
+            }
+            new_dts.addAll(insertPos, table.orEmpty())
             return new_dts
         }
 
@@ -585,8 +590,11 @@ class GpuTableEditor : EditorUIBuilder.UIActionListener, ChipsetManager.OnChipse
         @JvmStatic
         fun saveFrequencyTable(context: Context?, showToast: Boolean, historyMessage: String?) {
             try {
-                writeOut(genBack(genTable()))
-                stateManager.markStateSaved(genBack(genTable()))
+                val table = genTable()
+                val content = genBack(table)
+                
+                writeOut(content)
+                stateManager.markStateSaved(content)
                 if (historyMessage != null) {
                     stateManager.addHistoryEntry(historyMessage)
                 }
@@ -594,6 +602,7 @@ class GpuTableEditor : EditorUIBuilder.UIActionListener, ChipsetManager.OnChipse
                     Toast.makeText(context, R.string.save_success, Toast.LENGTH_SHORT).show()
                 }
             } catch (e: Exception) {
+                e.printStackTrace()
                 if (context is Activity) {
                     DialogUtil.showError(context, R.string.save_failed)
                 }

@@ -28,7 +28,7 @@ object GpuVoltEditor {
     @JvmStatic
     @Throws(Exception::class)
     fun levelint2int(level: Long): Int {
-        val levels = ChipInfo.rpmh_levels!!.levels()
+        val levels = ChipInfo.rpmh_levels?.levels() ?: return 0
         for (i in levels.indices) {
             if (levels[i].toLong() == level) return i
         }
@@ -49,12 +49,10 @@ object GpuVoltEditor {
     @JvmStatic
     fun getLevelList(): List<String> {
         val list = ArrayList<String>()
-        if (ChipInfo.rpmh_levels != null) {
-            val levels = ChipInfo.rpmh_levels!!.levels()
-            val levelStrs = ChipInfo.rpmh_levels!!.level_str()
-            for (i in levels.indices) {
-                list.add("LEVEL ${levels[i]} - ${levelStrs[i]}")
-            }
+        val levels = ChipInfo.rpmh_levels?.levels() ?: return list
+        val levelStrs = ChipInfo.rpmh_levels!!.level_str()
+        for (i in levels.indices) {
+            list.add("LEVEL ${levels[i]} - ${levelStrs[i]}")
         }
         return list
     }
@@ -253,15 +251,18 @@ object GpuVoltEditor {
                     }
                 }
             } else if (position == 2) { // Edit Volt
-                DialogUtil.showSingleChoiceDialog(
-                    activity,
-                    activity.getString(R.string.edit),
-                    ChipInfo.rpmh_levels.level_str(),
-                    getLevelIndex(opp.volt)
-                ) { dialog, which ->
-                    opp.volt = ChipInfo.rpmh_levels.levels()[which].toLong()
-                    dialog.dismiss()
-                    generateAVolt(activity, page, index)
+                val rpmh = ChipInfo.rpmh_levels
+                if (rpmh != null) {
+                    DialogUtil.showSingleChoiceDialog(
+                        activity,
+                        activity.getString(R.string.edit),
+                        rpmh.level_str(),
+                        getLevelIndex(opp.volt)
+                    ) { dialog, which ->
+                        opp.volt = rpmh.levels()[which].toLong()
+                        dialog.dismiss()
+                        generateAVolt(activity, page, index)
+                    }
                 }
             }
         }
@@ -278,7 +279,7 @@ object GpuVoltEditor {
     }
 
     private fun getLevelIndex(level: Long): Int {
-        val levels = ChipInfo.rpmh_levels!!.levels()
+        val levels = ChipInfo.rpmh_levels?.levels() ?: return 0
         for (i in levels.indices) {
             if (levels[i].toLong() == level) return i
         }
@@ -287,6 +288,6 @@ object GpuVoltEditor {
 
     private fun getLevelStr(level: Long): String {
         val idx = getLevelIndex(level)
-        return ChipInfo.rpmh_levels!!.level_str()[idx]
+        return ChipInfo.rpmh_levels?.level_str()?.get(idx) ?: "Unknown"
     }
 }
