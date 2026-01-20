@@ -258,7 +258,16 @@ class MainActivity : AppCompatActivity() {
                 gpuTableEditorBackCallback?.isEnabled = false
 
                 // Hide AppBarLayout when on GPU Frequency page (position 0)
-                appBarLayout?.visibility = if (position == 0) View.GONE else View.VISIBLE
+                // Otherwise, show it and set appropriate title
+                if (position == 0) {
+                    appBarLayout?.visibility = View.GONE
+                } else {
+                    appBarLayout?.visibility = View.VISIBLE
+                    when (position) {
+                        1 -> toolbar?.title = getString(R.string.import_export)
+                        2 -> toolbar?.title = getString(R.string.settings)
+                    }
+                }
 
                 if (isPageChangeFromUser) {
                     when (position) {
