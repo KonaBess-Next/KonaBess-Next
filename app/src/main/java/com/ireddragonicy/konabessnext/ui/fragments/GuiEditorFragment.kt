@@ -67,7 +67,6 @@ class GuiEditorFragment : Fragment() {
                                 com.ireddragonicy.konabessnext.ui.compose.GpuBinList(
                                     bins = bins,
                                     onBinClick = { index ->
-                                        com.ireddragonicy.konabessnext.utils.DebugTimer.start("Open Bin $index")
                                         gpuFrequencyViewModel.selectedBinIndex.value = index
                                     }
                                 )

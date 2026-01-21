@@ -89,7 +89,6 @@ class SharedGpuViewModel @Inject constructor(
     private fun precalculateUiModels(bins: List<Bin>) {
         viewModelScope.launch(Dispatchers.Default) {
             try {
-                com.ireddragonicy.konabessnext.utils.DebugTimer.mark("ViewModel: Start Precalc")
                 val context = application.applicationContext
                 val newMap = bins.mapIndexed { binIndex, bin ->
                     val uiList = bin.levels.mapIndexedNotNull { lvlIndex, level ->
@@ -98,7 +97,6 @@ class SharedGpuViewModel @Inject constructor(
                     binIndex to uiList
                 }.toMap()
                 _binUiModels.value = newMap
-                com.ireddragonicy.konabessnext.utils.DebugTimer.mark("ViewModel: End Precalc (Items: ${newMap.size})")
             } catch (e: Exception) {
                 e.printStackTrace()
             }
