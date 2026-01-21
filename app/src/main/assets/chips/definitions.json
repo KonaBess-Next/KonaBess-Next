@@ -566,7 +566,7 @@
   },
   {
     "id": "tuna",
-    "name": "Snapdragon 7s Gen 2 / 8s Gen 4",
+    "name": "Snapdragon 8s Gen 4 (Tuna)",
     "maxTableLevels": 16,
     "ignoreVoltTable": true,
     "minLevelOffset": 1,
@@ -874,7 +874,7 @@
   },
   {
     "id": "montague",
-    "name": "Snapdragon 7 Gen 3",
+    "name": "Snapdragon 7s Gen 2 (Montague)",
     "maxTableLevels": 16,
     "ignoreVoltTable": true,
     "minLevelOffset": 1,
@@ -901,12 +901,46 @@
       "415": "416 - TURBO_L1"
     },
     "models": [
-      "Montague"
+      "Montague",
+      "SM7435"
+    ]
+  },
+  {
+    "id": "montaguep",
+    "name": "Snapdragon 4 Gen 2 (MontagueP)",
+    "maxTableLevels": 16,
+    "ignoreVoltTable": true,
+    "minLevelOffset": 1,
+    "strategyType": "MULTI_BIN",
+    "voltTablePattern": null,
+    "levelCount": 416,
+    "levels": {
+      "15": "16 - RETENTION",
+      "47": "48 - MIN_SVS",
+      "55": "56 - LOW_SVS_D1",
+      "63": "64 - LOW_SVS",
+      "79": "80 - LOW_SVS_L1",
+      "95": "96 - LOW_SVS_L2",
+      "127": "128 - SVS",
+      "143": "144 - SVS_L0",
+      "191": "192 - SVS_L1",
+      "223": "224 - SVS_L2",
+      "255": "256 - NOM",
+      "319": "320 - NOM_L1",
+      "335": "336 - NOM_L2",
+      "351": "352 - NOM_L3",
+      "383": "384 - TURBO",
+      "399": "400 - TURBO_L0",
+      "415": "416 - TURBO_L1"
+    },
+    "models": [
+      "MontagueP",
+      "SM4450"
     ]
   },
   {
     "id": "parrot",
-    "name": "Snapdragon 6 Gen 1",
+    "name": "Snapdragon 6 Gen 1 / 4 Gen 1 (Parrot)",
     "maxTableLevels": 16,
     "ignoreVoltTable": true,
     "minLevelOffset": 1,
@@ -933,12 +967,15 @@
       "415": "416 - TURBO_L1"
     },
     "models": [
-      "Parrot"
+      "Parrot",
+      "ParrotP",
+      "SM6450",
+      "SM4375"
     ]
   },
   {
     "id": "ravelin",
-    "name": "Snapdragon 4 Gen 2",
+    "name": "Snapdragon 4 Gen 2 (Ravelin)",
     "maxTableLevels": 16,
     "ignoreVoltTable": true,
     "minLevelOffset": 1,
@@ -965,7 +1002,41 @@
       "415": "416 - TURBO_L1"
     },
     "models": [
-      "Ravelin"
+      "Ravelin",
+      "SM4450"
+    ]
+  },
+  {
+    "id": "ravelinp",
+    "name": "Snapdragon 4 Gen 2 (RavelinP)",
+    "maxTableLevels": 16,
+    "ignoreVoltTable": true,
+    "minLevelOffset": 1,
+    "strategyType": "MULTI_BIN",
+    "voltTablePattern": null,
+    "levelCount": 416,
+    "levels": {
+      "15": "16 - RETENTION",
+      "47": "48 - MIN_SVS",
+      "55": "56 - LOW_SVS_D1",
+      "63": "64 - LOW_SVS",
+      "79": "80 - LOW_SVS_L1",
+      "95": "96 - LOW_SVS_L2",
+      "127": "128 - SVS",
+      "143": "144 - SVS_L0",
+      "191": "192 - SVS_L1",
+      "223": "224 - SVS_L2",
+      "255": "256 - NOM",
+      "319": "320 - NOM_L1",
+      "335": "336 - NOM_L2",
+      "351": "352 - NOM_L3",
+      "383": "384 - TURBO",
+      "399": "400 - TURBO_L0",
+      "415": "416 - TURBO_L1"
+    },
+    "models": [
+      "RavelinP",
+      "SM4450"
     ]
   }
 ]

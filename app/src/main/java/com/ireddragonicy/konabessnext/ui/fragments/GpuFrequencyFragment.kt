@@ -44,6 +44,7 @@ import java.net.URLEncoder
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -292,52 +293,79 @@ class GpuFrequencyFragment : Fragment() {
                                     Text("No history yet.", style = MaterialTheme.typography.bodyMedium)
                                 }
                             } else if (sheetType == "CHIPSET") {
+                                val detectionState by deviceViewModel.detectionState.collectAsState()
+                                val selectedDtb by deviceViewModel.selectedChipset.collectAsState()
+                                
                                 Text(
-                                    text = "Select Chipset",
+                                    text = "Select Data Source (DTS)",
                                     style = MaterialTheme.typography.headlineSmall,
-                                    modifier = Modifier.padding(bottom = 16.dp)
+                                    modifier = Modifier.padding(bottom = 8.dp)
                                 )
-                                LazyColumn(
-                                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    items(definitions) { chip ->
-                                        val isSelected = chip.id == currentChip?.id
-                                        Card(
-                                            onClick = {
-                                               if (!isSelected) {
-                                                   gpuFrequencyViewModel.save(false)
-                                                   chipRepository.setCurrentChip(chip)
-                                                   gpuFrequencyViewModel.loadData()
-                                                   sharedViewModel.loadData()
-                                               }
-                                               showSheet = false
-                                            },
-                                            modifier = Modifier.fillMaxWidth(),
-                                            colors = CardDefaults.cardColors(
-                                                containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer 
-                                                                else MaterialTheme.colorScheme.surfaceContainerHigh
-                                            )
-                                        ) {
-                                            Row(
-                                                modifier = Modifier.padding(16.dp),
-                                                verticalAlignment = Alignment.CenterVertically
+                                Text(
+                                    text = "Multi-DTS device detected. Please select which configuration to edit.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    modifier = Modifier.padding(bottom = 16.dp),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+
+                                val dtbs = (detectionState as? UiState.Success)?.data ?: emptyList()
+                                
+                                if (detectionState is UiState.Loading) {
+                                    Box(modifier = Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
+                                        CircularProgressIndicator()
+                                    }
+                                } else if (dtbs.isEmpty()) {
+                                    // Trigger detection if list is missing and not loading
+                                    LaunchedEffect(Unit) {
+                                        deviceViewModel.detectChipset()
+                                    }
+                                    Box(modifier = Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
+                                        Text("Reading boot image...", style = MaterialTheme.typography.bodyMedium)
+                                    }
+                                } else {
+                                    LazyColumn(
+                                        modifier = Modifier.heightIn(max = 400.dp),
+                                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        items(dtbs) { dtb ->
+                                            val isSelected = dtb.id == selectedDtb?.id
+                                            Card(
+                                                onClick = {
+                                                   if (!isSelected) {
+                                                       gpuFrequencyViewModel.save(false)
+                                                       deviceViewModel.selectChipset(dtb)
+                                                       gpuFrequencyViewModel.loadData()
+                                                       sharedViewModel.loadData()
+                                                   }
+                                                   showSheet = false
+                                                },
+                                                modifier = Modifier.fillMaxWidth(),
+                                                colors = CardDefaults.cardColors(
+                                                    containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer 
+                                                                    else MaterialTheme.colorScheme.surfaceContainerHigh
+                                                )
                                             ) {
-                                                Column(modifier = Modifier.weight(1f)) {
-                                                    Text(
-                                                        text = chip.name,
-                                                        style = MaterialTheme.typography.titleMedium
-                                                    )
-                                                    Text(
-                                                        text = "ID: ${chip.id}",
-                                                        style = MaterialTheme.typography.bodySmall
-                                                    )
-                                                }
-                                                if (isSelected) {
-                                                    Icon(
-                                                        painter = painterResource(R.drawable.ic_check),
-                                                        contentDescription = null,
-                                                        tint = MaterialTheme.colorScheme.primary
-                                                    )
+                                                Row(
+                                                    modifier = Modifier.padding(16.dp),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Column(modifier = Modifier.weight(1f)) {
+                                                        Text(
+                                                            text = "DTS ${dtb.id}: ${dtb.type.name}",
+                                                            style = MaterialTheme.typography.titleMedium
+                                                        )
+                                                        Text(
+                                                            text = "ID: ${dtb.type.id}",
+                                                            style = MaterialTheme.typography.bodySmall
+                                                        )
+                                                    }
+                                                    if (isSelected) {
+                                                        Icon(
+                                                            painter = painterResource(R.drawable.ic_check),
+                                                            contentDescription = null,
+                                                            tint = MaterialTheme.colorScheme.primary
+                                                        )
+                                                    }
                                                 }
                                             }
                                         }

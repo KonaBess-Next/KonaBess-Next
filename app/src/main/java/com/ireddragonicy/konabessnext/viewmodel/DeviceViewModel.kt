@@ -20,7 +20,8 @@ import javax.inject.Inject
 
 @HiltViewModel
 class DeviceViewModel @Inject constructor(
-    private val repository: DeviceRepository
+    private val repository: DeviceRepository,
+    private val chipRepository: com.ireddragonicy.konabessnext.repository.ChipRepository
 ) : ViewModel() {
 
     private val _detectionState = MutableStateFlow<UiState<List<Dtb>>?>(null)
@@ -40,6 +41,7 @@ class DeviceViewModel @Inject constructor(
         if (repository.prepared) {
             _selectedChipset.value = repository.currentDtb
             _isPrepared.value = true
+            chipRepository.setCurrentChip(repository.currentDtb?.type)
         }
     }
 
@@ -78,6 +80,7 @@ class DeviceViewModel @Inject constructor(
 
     fun selectChipset(dtb: Dtb) {
         repository.chooseTarget(dtb)
+        chipRepository.setCurrentChip(dtb.type)
         _selectedChipset.value = dtb
         _recommendedIndex.value = null  // Clear recommendation to prevent selection UI from showing again
         _isPrepared.value = true
@@ -90,6 +93,7 @@ class DeviceViewModel @Inject constructor(
                 repository.currentDtb?.let {
                     _selectedChipset.value = it
                     _isPrepared.value = true
+                    chipRepository.setCurrentChip(it.type)
                 }
             }
         }
