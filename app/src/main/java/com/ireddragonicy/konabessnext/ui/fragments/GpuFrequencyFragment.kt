@@ -147,7 +147,7 @@ class GpuFrequencyFragment : Fragment() {
                     if (state is UiState.Loading) {
                         showLoadingState()
                     } else if (state is UiState.Error) {
-                        showErrorState(activity)
+                        showErrorState(activity, state.message)
                     } else if (state is UiState.Success) {
                         // Success handled
                     }
@@ -575,7 +575,7 @@ class GpuFrequencyFragment : Fragment() {
         )
     }
 
-    private fun showErrorState(activity: MainActivity) {
+    private fun showErrorState(activity: MainActivity, customMessage: String? = null) {
         contentContainer!!.removeAllViews()
         contentContainer!!.gravity = Gravity.CENTER
 
@@ -626,7 +626,7 @@ class GpuFrequencyFragment : Fragment() {
 
         // Add error message
         val message = TextView(requireContext())
-        message.setText(R.string.gpu_prep_failed)
+        message.text = customMessage ?: getString(R.string.gpu_prep_failed)
         message.textSize = 15f
         message.textAlignment = View.TEXT_ALIGNMENT_CENTER
         message.alpha = 0.85f

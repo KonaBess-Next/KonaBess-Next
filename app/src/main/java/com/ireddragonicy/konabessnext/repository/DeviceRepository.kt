@@ -109,7 +109,8 @@ class DeviceRepository @Inject constructor(
 
     suspend fun cleanEnv() = withContext(Dispatchers.IO) {
         resetState()
-        shellRepository.execForOutput("rm -rf $filesDir/*")
+        // Aggressive cleanup with root to ensure no root-owned files block the app
+        shellRepository.exec("rm -f $filesDir/*.dtb", "rm -f $filesDir/*.dts", "rm -f $filesDir/boot.img", "rm -f $filesDir/boot_new.img", "rm -f $filesDir/kernel_dtb", "rm -f $filesDir/dtb")
     }
 
     private fun resetState() {
@@ -227,27 +228,37 @@ class DeviceRepository @Inject constructor(
         setupEnv()
         dtbs.clear()
         
-        // Optimize: verify logic is same as core
-        shellRepository.execForOutput("chmod 644 $filesDir/*.dts")
+        // Ensure all extracted files are accessible and writable by the app process
+        shellRepository.exec("chmod -R 777 $filesDir")
         
         Log.d(TAG, "Checking device with dtbNum: $dtbNum")
+        if (dtbNum == 0) {
+            Log.e(TAG, "dtbNum is 0, no DTBs to check!")
+        }
         for (i in 0 until dtbNum) {
             val dtsFile = File(filesDir, "$i.dts")
-            if (!dtsFile.exists()) continue
+            if (!dtsFile.exists()) {
+                Log.w(TAG, "DTS file $i.dts NOT FOUND at $filesDir")
+                continue
+            }
             
-            val content = readFileToString(dtsFile)
-            val chipId = detectChipType(content, i)
-            
-            Log.d(TAG, "DTB $i detection result: $chipId")
-            
-            if (chipId != null) {
-                val def = ChipInfo.getById(chipId)
-                if (def != null) {
-                    Log.d(TAG, "Mapped to definition: ${def.name}")
-                    dtbs.add(Dtb(i, def))
-                } else {
-                    Log.e(TAG, "Definition not found for ID: $chipId")
+            try {
+                val content = readFileToString(dtsFile)
+                val chipId = detectChipType(content, i)
+                
+                Log.d(TAG, "DTB $i detection result: $chipId")
+                
+                if (chipId != null) {
+                    val def = ChipInfo.getById(chipId)
+                    if (def != null) {
+                        Log.d(TAG, "Mapped to definition: ${def.name}")
+                        dtbs.add(Dtb(i, def))
+                    } else {
+                        Log.e(TAG, "Definition not found for ID: $chipId")
+                    }
                 }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error checking DTB $i: ${e.message}", e)
             }
         }
     }
@@ -266,7 +277,7 @@ class DeviceRepository @Inject constructor(
         }
 
         for ((key, baseId) in chipMappings) {
-            if (modelContent.contains(key)) {
+            if (modelContent.contains(key, ignoreCase = true)) {
                 Log.d(TAG, "Matched key '$key' to ID '$baseId'")
                 if (baseId == "kona" || baseId == "msmnile" || baseId == "lahaina") {
                     return determineChipVariant(index, baseId, content)
@@ -297,6 +308,8 @@ class DeviceRepository @Inject constructor(
         unpackBootImage()
         dtbNum = dtbSplit()
         
+        Log.d(TAG, "bootImage2dts: dtbNum after split: $dtbNum")
+        
         val batchCmd = StringBuilder()
         batchCmd.append("cd $filesDir")
         
@@ -305,15 +318,24 @@ class DeviceRepository @Inject constructor(
                      .append(i).append(".dtb -o ").append(i).append(".dts")
                      .append(" && rm -f ").append(i).append(".dtb")
         }
-        val output = shellRepository.execForOutput(batchCmd.toString())
+        val cmdStr = batchCmd.toString()
+        Log.d(TAG, "Executing batch conversion: $cmdStr")
+        val output = shellRepository.execForOutput(cmdStr)
         
         if (dtbNum > 0 && !File(filesDir, "${dtbNum - 1}.dts").exists()) {
+             Log.e(TAG, "DTS conversion failed. Magiskboot output could be useful here.")
              throw IOException("DTB to DTS batch conversion failed: " + output.joinToString("\n"))
         }
     }
     
     private suspend fun unpackBootImage() {
-        shellRepository.execForOutput("cd $filesDir && ./magiskboot unpack boot.img")
+        Log.d(TAG, "Unpacking boot image at $filesDir")
+        val output = shellRepository.execForOutput("cd $filesDir && ./magiskboot unpack boot.img")
+        Log.d(TAG, "Magiskboot output: ${output.joinToString("\n")}")
+        
+        // CRITICAL: Magiskboot creates files as root. We MUST grant 777 to allow app read/write/delete.
+        shellRepository.exec("chmod -R 777 $filesDir")
+        
         determineDtbType()
     }
     
@@ -328,18 +350,31 @@ class DeviceRepository @Inject constructor(
         } else if (hasDtb) {
             dtbType = DtbType.DTB
         } else {
+            Log.e(TAG, "No DTB or kernel_dtb found in filesDir after unpack!")
+            val filesList = File(filesDir).list()?.joinToString(", ")
+            Log.d(TAG, "Files present: $filesList")
             throw IOException("No DTB found in boot image")
         }
+        Log.d(TAG, "Determined dtbType: $dtbType")
     }
     
     private fun dtbSplit(): Int {
         val dtbFile = getDtbFile()
+        Log.d(TAG, "Splitting DTB file: ${dtbFile.name} (size: ${dtbFile.length()})")
+        
         if (dtbType == DtbType.BOTH) {
             File(filesDir, "kernel_dtb").delete()
         }
         
+        if (dtbFile.length() == 0L) {
+            Log.e(TAG, "DTB file is EMPTY!")
+            return 0
+        }
+
         val dtbBytes = Files.readAllBytes(dtbFile.toPath())
         val offsets = findDtbOffsets(dtbBytes)
+        
+        Log.d(TAG, "Found ${offsets.size} DTB offsets via magic search")
         
         writeDtbChunks(dtbBytes, offsets)
         dtbFile.delete()
@@ -383,7 +418,12 @@ class DeviceRepository @Inject constructor(
         for (i in offsets.indices) {
             val start = offsets[i]
             val end = if (i + 1 < offsets.size) offsets[i + 1] else data.size
-            Files.write(Paths.get(filesDir, "$i.dtb"), Arrays.copyOfRange(data, start, end))
+            val chunkPath = Paths.get(filesDir, "$i.dtb")
+            
+            // Delete existing file with root just in case it's root-owned and Files.write would fail
+            File(chunkPath.toString()).delete() 
+            
+            Files.write(chunkPath, Arrays.copyOfRange(data, start, end))
         }
     }
     

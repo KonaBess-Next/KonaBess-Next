@@ -69,6 +69,7 @@ class DeviceViewModel @Inject constructor(
                     _recommendedIndex.value = recommended
                 }
             } catch (e: Exception) {
+                Log.e("KonaBessDet", "Detection failed with exception", e)
                 _detectionState.value = UiState.Error("Detection failed: ${e.message}", e)
                 _isPrepared.value = false
             }
