@@ -4,6 +4,7 @@ plugins {
     id 'org.jetbrains.kotlin.plugin.compose'
     id 'com.google.devtools.ksp'
     id 'com.google.dagger.hilt.android'
+    id 'org.jetbrains.kotlin.plugin.serialization'
 }
 
 android {
@@ -166,4 +167,7 @@ dependencies {
     implementation 'androidx.compose.runtime:runtime'
     implementation 'androidx.compose.foundation:foundation'
     debugImplementation 'androidx.compose.ui:ui-tooling'
+
+    // JSON Serialization
+    implementation 'org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3'
 }

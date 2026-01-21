@@ -1,5 +1,6 @@
 package com.ireddragonicy.konabessnext.ui.compose
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -7,10 +8,8 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -20,8 +19,8 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.ireddragonicy.konabessnext.R
-import com.ireddragonicy.konabessnext.data.KonaBessStr
 import com.ireddragonicy.konabessnext.model.Level
+import com.ireddragonicy.konabessnext.utils.ChipStringHelper
 import com.ireddragonicy.konabessnext.utils.DtsHelper
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -35,13 +34,12 @@ fun GpuParamEditor(
     val context = LocalContext.current
     
     // Parse lines into displayable items
-    // Parse lines into displayable items
     val params = remember(level) {
         level.lines.mapIndexed { index, line ->
             val decoded = DtsHelper.decode_hex_line(line)
             val name = decoded.name ?: ""
             val rawValue = decoded.value ?: ""
-            val title = KonaBessStr.convert_level_params(name, context)
+            val title = ChipStringHelper.convertLevelParams(name, context)
             
             // Format value for display
             val displayValue = try {
@@ -187,7 +185,7 @@ fun EditParamSheetContent(
         Spacer(Modifier.height(8.dp))
         
         Text(
-            text = KonaBessStr.help(param.rawName, context),
+            text = ChipStringHelper.help(param.rawName, context),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -484,4 +482,3 @@ fun HeaderParamBox(
         }
     }
 }
-

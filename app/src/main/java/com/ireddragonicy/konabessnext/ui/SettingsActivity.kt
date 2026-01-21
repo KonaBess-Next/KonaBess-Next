@@ -12,7 +12,7 @@ import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.ui.platform.ComposeView
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.ireddragonicy.konabessnext.R
-import com.ireddragonicy.konabessnext.data.KonaBessStr
+import com.ireddragonicy.konabessnext.utils.ChipStringHelper
 import com.ireddragonicy.konabessnext.ui.compose.SettingsScreen
 import com.ireddragonicy.konabessnext.utils.LocaleUtil
 import dagger.hilt.android.AndroidEntryPoint
@@ -212,7 +212,7 @@ class SettingsActivity : AppCompatActivity() {
     private fun showHelpDialog() {
         MaterialAlertDialogBuilder(this)
             .setTitle(getString(R.string.help))
-            .setMessage(KonaBessStr.generic_help(this))
+            .setMessage(ChipStringHelper.genericHelp(this))
             .setPositiveButton(getString(R.string.ok), null)
             .setNeutralButton(getString(R.string.about)) { _, _ ->
                 MaterialAlertDialogBuilder(this)

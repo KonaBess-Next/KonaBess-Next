@@ -12,7 +12,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import com.ireddragonicy.konabessnext.R
-import com.ireddragonicy.konabessnext.data.KonaBessStr
+import com.ireddragonicy.konabessnext.utils.ChipStringHelper
 import com.ireddragonicy.konabessnext.model.Bin
 
 @Composable
@@ -37,7 +37,7 @@ fun GpuBinList(
                     val binName = remember(bin.id) {
                         try {
                             if (context is android.app.Activity) {
-                                KonaBessStr.convert_bins(bin.id, context)
+                                ChipStringHelper.convertBins(bin.id, context)
                             } else {
                                 "Bin ${bin.id}"
                             }

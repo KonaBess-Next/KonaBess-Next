@@ -16,6 +16,7 @@ import kotlinx.coroutines.launch
 import org.json.JSONObject
 import java.io.File
 import javax.inject.Inject
+import com.ireddragonicy.konabessnext.model.ChipDefinition
 
 @HiltViewModel
 class ImportExportViewModel @Inject constructor(
@@ -48,7 +49,7 @@ class ImportExportViewModel @Inject constructor(
     fun exportConfig(desc: String): String? {
        return try {
            val json = JSONObject()
-           json.put("chip", ChipInfo.which?.name ?: "Unknown")
+           json.put("chip", ChipInfo.current?.id ?: "Unknown")
            json.put("desc", desc)
            
            val freqData = StringBuilder()
@@ -56,7 +57,7 @@ class ImportExportViewModel @Inject constructor(
            // Safe call in case bins are empty or not ready
            if (bins.isEmpty()) throw IllegalStateException("No GPU table data to export")
            
-           val tableLines = ChipInfo.which!!.architecture.generateTable(java.util.ArrayList(bins))
+           val tableLines = ChipInfo.getArchitecture(ChipInfo.current).generateTable(java.util.ArrayList(bins))
            
            for (line in tableLines) {
                freqData.append(line).append("\n")
@@ -88,7 +89,7 @@ class ImportExportViewModel @Inject constructor(
             try {
                 val json = JSONObject(jsonString)
                 val chip = json.getString("chip")
-                if (chip != ChipInfo.which?.name) {
+                if (chip != ChipInfo.current?.id) {
                     _errorEvent.emit("Incompatible chip: $chip")
                     return@launch
                 }

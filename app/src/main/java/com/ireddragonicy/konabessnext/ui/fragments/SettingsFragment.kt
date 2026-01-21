@@ -19,7 +19,7 @@ import androidx.fragment.app.viewModels
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.ireddragonicy.konabessnext.BuildConfig
 import com.ireddragonicy.konabessnext.R
-import com.ireddragonicy.konabessnext.data.KonaBessStr
+import com.ireddragonicy.konabessnext.utils.ChipStringHelper
 import com.ireddragonicy.konabessnext.ui.SettingsActivity
 import com.ireddragonicy.konabessnext.ui.compose.SettingsScreen
 import com.ireddragonicy.konabessnext.viewmodel.SettingsViewModel
@@ -169,7 +169,7 @@ class SettingsFragment : Fragment() {
     private fun showHelpDialog() {
         MaterialAlertDialogBuilder(requireContext())
             .setTitle(getString(R.string.help))
-            .setMessage(KonaBessStr.generic_help(requireActivity()))
+            .setMessage(ChipStringHelper.genericHelp(requireActivity()))
             .setPositiveButton(getString(R.string.ok), null)
             .setNeutralButton(getString(R.string.about)) { _, _ ->
                 MaterialAlertDialogBuilder(requireContext())

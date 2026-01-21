@@ -61,7 +61,7 @@ class GpuActionToolbar @JvmOverloads constructor(
         orientation = VERTICAL
         if (context is MainActivity) {
             showRepack = true
-            showVolt = ChipInfo.which != null && !ChipInfo.which!!.ignoreVoltTable
+            showVolt = ChipInfo.current != null && !ChipInfo.current!!.ignoreVoltTable
         }
     }
 

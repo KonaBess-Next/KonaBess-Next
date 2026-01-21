@@ -329,7 +329,7 @@ class RawDtsFragment : Fragment() {
                 val exportFile = File(exportDir, finalFilename)
                 BufferedWriter(FileWriter(exportFile)).use { it.write(content) }
 
-                val chipType = ChipInfo.which?.takeIf { it != ChipInfo.Type.unknown }?.name ?: "Unknown"
+                val chipType = ChipInfo.current?.id ?: "Unknown"
                 exportHistoryManager.addExport(finalFilename, "Raw DTS Export", exportFile.absolutePath, chipType)
 
                 Toast.makeText(context, "Exported to ${exportFile.name}", Toast.LENGTH_LONG).show()

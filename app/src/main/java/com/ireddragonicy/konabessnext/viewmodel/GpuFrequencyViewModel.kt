@@ -276,10 +276,11 @@ class GpuFrequencyViewModel @Inject constructor(
 
     private fun isLitoOrLagoon(): Boolean {
         try {
-            val which = com.ireddragonicy.konabessnext.core.ChipInfo.which
-            return which == com.ireddragonicy.konabessnext.core.ChipInfo.Type.lito_v1 ||
-                   which == com.ireddragonicy.konabessnext.core.ChipInfo.Type.lito_v2 ||
-                   which == com.ireddragonicy.konabessnext.core.ChipInfo.Type.lagoon
+            val current = com.ireddragonicy.konabessnext.core.ChipInfo.current
+            val id = current?.id ?: return false
+            return id == "lito_v1" ||
+                   id == "lito_v2" ||
+                   id == "lagoon"
         } catch (e: Exception) {
             return false
         }

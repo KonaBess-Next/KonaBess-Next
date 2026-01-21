@@ -106,7 +106,7 @@ object ChipsetManager {
         // Chipset name
         val currentDtb = KonaBessCore.currentDtb
         if (currentDtb != null) {
-            chipsetNameView.text = "${currentDtb.id} ${currentDtb.type.getDescription(activity)}"
+            chipsetNameView.text = "${currentDtb.id} ${currentDtb.type.name}"
         } else {
             chipsetNameView.text = "Unknown"
         }
@@ -180,7 +180,7 @@ object ChipsetManager {
         val currentDtb = KonaBessCore.currentDtb
         
         // Find recommended index (first known chipset)
-        val recommendedIndex = KonaBessCore.dtbs!!.indexOfFirst { it.type != com.ireddragonicy.konabessnext.core.ChipInfo.Type.unknown }
+        val recommendedIndex = if (KonaBessCore.dtbs!!.isNotEmpty()) 0 else -1
 
         // Inflate custom dialog layout
         val dialogView = LayoutInflater.from(activity).inflate(R.layout.dialog_chipset_selector, null)
@@ -233,7 +233,7 @@ object ChipsetManager {
         listener: OnChipsetSwitchedListener
     ) {
          // UI Update first
-         chipsetNameView.text = "${newDtb.id} ${newDtb.type.getDescription(activity)}"
+         chipsetNameView.text = "${newDtb.id} ${newDtb.type.name}"
          // Notify listener to handle logic (save, load, refresh)
          listener.onChipsetSwitched(newDtb)
     }

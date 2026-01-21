@@ -181,9 +181,9 @@ object LevelOperations {
 
         val template = bin.levels[0]
         bin.levels.add(0, cloneLevel(template))
-        
+
         offsetInitialLevel(bins, binId, 1)
-        if (isLitoOrLagoon()) offsetCaTargetLevel(bins, binId, 1)
+        if (ChipInfo.current?.needsCaTargetOffset == true) offsetCaTargetLevel(bins, binId, 1)
     }
 
     @JvmStatic
@@ -194,19 +194,19 @@ object LevelOperations {
 
         // Always append to the end as requested by user
         val insertIndex = bin.levels.size
-        
+
         // Use the level AT insertIndex as template if available (copying "down" logic), 
         // OR the last available level if we are at the end.
         // This ensures if we insert before retention levels (offset > 0), we copy the retention level (which the user sees as bottom).
         val templateIndex = if (insertIndex < bin.levels.size) insertIndex else bin.levels.lastIndex
         val template = bin.levels[templateIndex.coerceAtLeast(0)]
-        
+
         bin.levels.add(insertIndex, cloneLevel(template))
-        
+
         // Only offset if we inserted at 0 (effectively addAtTop behavior)
         if (insertIndex == 0) {
             offsetInitialLevel(bins, binId, 1)
-            if (isLitoOrLagoon()) offsetCaTargetLevel(bins, binId, 1)
+            if (ChipInfo.current?.needsCaTargetOffset == true) offsetCaTargetLevel(bins, binId, 1)
         }
     }
 
@@ -220,7 +220,7 @@ object LevelOperations {
         bin.levels.add(levelIndex + 1, cloneLevel(template))
 
         offsetInitialLevel(bins, binId, 1)
-        if (isLitoOrLagoon()) offsetCaTargetLevel(bins, binId, 1)
+        if (ChipInfo.current?.needsCaTargetOffset == true) offsetCaTargetLevel(bins, binId, 1)
     }
 
     @JvmStatic
@@ -230,14 +230,9 @@ object LevelOperations {
         if (bin.levels.size <= 1 || levelIndex !in bin.levels.indices) return
 
         bin.levels.removeAt(levelIndex)
-        
-        offsetInitialLevel(bins, binId, -1)
-        if (isLitoOrLagoon()) offsetCaTargetLevel(bins, binId, -1)
-    }
 
-    private fun isLitoOrLagoon(): Boolean {
-        val type = ChipInfo.which ?: return false
-        return type == ChipInfo.Type.lito_v1 || type == ChipInfo.Type.lito_v2 || type == ChipInfo.Type.lagoon
+        offsetInitialLevel(bins, binId, -1)
+        if (ChipInfo.current?.needsCaTargetOffset == true) offsetCaTargetLevel(bins, binId, -1)
     }
 
     @JvmStatic

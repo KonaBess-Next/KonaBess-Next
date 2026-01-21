@@ -41,7 +41,7 @@ class ChipsetSelectorAdapter(
         val dtb = dtbList[position]
 
         // Set chipset name
-        val chipsetName = "${dtb.id} ${dtb.type.getDescription(activity)}"
+        val chipsetName = "${dtb.id} ${dtb.type.name}"
         holder.chipsetName.text = chipsetName
 
         // Set subtitle

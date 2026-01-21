@@ -1,8 +1,8 @@
 package com.ireddragonicy.konabessnext.model
 
-import com.ireddragonicy.konabessnext.core.ChipInfo
+import com.ireddragonicy.konabessnext.model.ChipDefinition
 
 data class Dtb(
     @JvmField val id: Int,
-    @JvmField val type: ChipInfo.Type
+    @JvmField val type: ChipDefinition
 )

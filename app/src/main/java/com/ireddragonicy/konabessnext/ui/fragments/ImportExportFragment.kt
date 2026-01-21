@@ -195,7 +195,7 @@ class ImportExportFragment : Fragment() {
                     fos.write(content.toByteArray(Charsets.ISO_8859_1))
                     fos.close()
                     
-                    importExportViewModel.addToHistory(filename, desc, file.absolutePath, deviceViewModel.currentChipType?.name ?: "Unknown")
+                    importExportViewModel.addToHistory(filename, desc, file.absolutePath, deviceViewModel.currentChipType?.id ?: "Unknown")
                     
                     withContext(Dispatchers.Main) {
                         DialogUtil.showDetailedError(requireActivity(), R.string.success_export_to, file.absolutePath)

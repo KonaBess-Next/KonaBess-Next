@@ -6,7 +6,6 @@ import com.ireddragonicy.konabessnext.model.Dtb
 import com.ireddragonicy.konabessnext.model.DtbType
 import com.ireddragonicy.konabessnext.utils.AssetsUtil
 import com.ireddragonicy.konabessnext.utils.RootHelper
-import com.ireddragonicy.konabessnext.core.ChipInfo.Type
 import java.io.File
 import java.io.IOException
 import java.nio.file.Files
@@ -24,40 +23,40 @@ object KonaBessCore {
     // Regex patterns
     private val MODEL_PROPERTY = Pattern.compile("model\\s*=\\s*\"([^\"]+)\"")
 
-    // Chip mappings
+    // Chip mappings (Model string -> Chip ID)
     private val CHIP_MAPPINGS = mapOf(
-        "kona v2.1" to Type.kona,
-        "kona v2" to Type.kona,
-        "SM8150 v2" to Type.msmnile,
-        "Lahaina V2.1" to Type.lahaina,
-        "Lahaina v2.1" to Type.lahaina,
-        "Lito" to Type.lito_v1,
-        "Lito v2" to Type.lito_v2,
-        "Lagoon" to Type.lagoon,
-        "Shima" to Type.shima,
-        "Yupik" to Type.yupik,
-        "Waipio" to Type.waipio_singleBin,
-        "Waipio v2" to Type.waipio_singleBin,
-        "Cape" to Type.cape_singleBin,
-        "Kalama v2" to Type.kalama,
-        "KalamaP v2" to Type.kalama,
-        "Diwali" to Type.diwali,
-        "Ukee" to Type.ukee_singleBin,
-        "Pineapple v2" to Type.pineapple,
-        "PineappleP v2" to Type.pineapple,
-        "Cliffs SoC" to Type.cliffs_singleBin,
-        "Cliffs 7 SoC" to Type.cliffs_7_singleBin,
-        "KalamaP SG SoC" to Type.kalama_sg_singleBin,
-        "Sun v2 SoC" to Type.sun,
-        "Sun Alt. Thermal Profile v2 SoC" to Type.sun,
-        "SunP v2 SoC" to Type.sun,
-        "SunP v2 Alt. Thermal Profile SoC" to Type.sun,
-        "Canoe v2 SoC" to Type.canoe,
-        "CanoeP v2 SoC" to Type.canoe,
-        "Tuna 7 SoC" to Type.tuna,
-        "Tuna SoC" to Type.tuna,
-        "PineappleP SG" to Type.pineapple_sg,
-        "KalamaP QCS" to Type.kalamap_qcs_singleBin
+        "kona v2.1" to "kona",
+        "kona v2" to "kona",
+        "SM8150 v2" to "msmnile",
+        "Lahaina V2.1" to "lahaina",
+        "Lahaina v2.1" to "lahaina",
+        "Lito" to "lito_v1",
+        "Lito v2" to "lito_v2",
+        "Lagoon" to "lagoon",
+        "Shima" to "shima",
+        "Yupik" to "yupik",
+        "Waipio" to "waipio_singleBin",
+        "Waipio v2" to "waipio_singleBin",
+        "Cape" to "cape_singleBin",
+        "Kalama v2" to "kalama",
+        "KalamaP v2" to "kalama",
+        "Diwali" to "diwali",
+        "Ukee" to "ukee_singleBin",
+        "Pineapple v2" to "pineapple",
+        "PineappleP v2" to "pineapple",
+        "Cliffs SoC" to "cliffs_singleBin",
+        "Cliffs 7 SoC" to "cliffs_7_singleBin",
+        "KalamaP SG SoC" to "kalama_sg_singleBin",
+        "Sun v2 SoC" to "sun",
+        "Sun Alt. Thermal Profile v2 SoC" to "sun",
+        "SunP v2 SoC" to "sun",
+        "SunP v2 Alt. Thermal Profile SoC" to "sun",
+        "Canoe v2 SoC" to "canoe",
+        "CanoeP v2 SoC" to "canoe",
+        "Tuna 7 SoC" to "tuna",
+        "Tuna SoC" to "tuna",
+        "PineappleP SG" to "pineapple_sg",
+        "KalamaP QCS" to "kalamap_qcs_singleBin"
     )
 
     private val PROPERTY_CACHE = ConcurrentHashMap<String, String>()
@@ -108,6 +107,11 @@ object KonaBessCore {
     @JvmStatic
     @Throws(IOException::class)
     fun setupEnv(context: Context) {
+        // Ensure definitions are loaded
+        if (ChipInfo.definitions.isEmpty()) {
+            ChipInfo.loadDefinitions(context)
+        }
+
         filesDir = context.filesDir.absolutePath
         for (binary in REQUIRED_BINARIES) {
             val file = File(filesDir, binary)
@@ -140,16 +144,19 @@ object KonaBessCore {
                 if (!dtsFile.exists()) continue
                 
                 val content = dtsFile.readText()
-                val chipType = detectChipType(content, i)
+                val chipId = detectChipType(content, i)
                 
-                if (chipType != Type.unknown) {
-                    dtbs?.add(Dtb(i, chipType))
+                if (chipId != null) {
+                    val def = ChipInfo.getById(chipId)
+                    if (def != null) {
+                        dtbs?.add(Dtb(i, def))
+                    }
                 }
             }
         }
     }
 
-    private fun detectChipType(content: String, index: Int): Type {
+    private fun detectChipType(content: String, index: Int): String? {
         val m = MODEL_PROPERTY.matcher(content)
         var modelContent = ""
         if (m.find()) {
@@ -157,31 +164,27 @@ object KonaBessCore {
         }
 
         if ("OP4A79" == getCurrent("device") && modelContent.contains("kona v2")) {
-            return if (isSingleBin(content)) Type.kona_singleBin else Type.kona
+            return if (isSingleBin(content)) "kona_singleBin" else "kona"
         }
 
-        for ((key, baseType) in CHIP_MAPPINGS) {
+        for ((key, baseId) in CHIP_MAPPINGS) {
             if (modelContent.contains(key)) {
-                if (baseType == Type.kona || baseType == Type.msmnile || baseType == Type.lahaina) {
-                     return determineChipVariant(index, baseType, content)
+                if (baseId == "kona" || baseId == "msmnile" || baseId == "lahaina") {
+                     return determineChipVariant(index, baseId, content)
                 }
-                return baseType
+                return baseId
             }
         }
-        return Type.unknown
+        return null
     }
 
     private fun isSingleBin(content: String): Boolean {
         return content.contains("qcom,gpu-pwrlevels {")
     }
 
-    private fun determineChipVariant(index: Int, regular: Type, content: String): Type {
-         return try {
-             val singleBin = Type.valueOf(regular.name + "_singleBin")
-             if (isSingleBin(content)) singleBin else regular
-         } catch (e: IllegalArgumentException) {
-             regular
-         }
+    private fun determineChipVariant(index: Int, regularId: String, content: String): String {
+         val singleBinId = regularId + "_singleBin"
+         return if (isSingleBin(content)) singleBinId else regularId
     }
 
     @JvmStatic
@@ -314,17 +317,17 @@ object KonaBessCore {
     fun chooseTarget(dtb: Dtb, activity: Activity) {
         filesDir = activity.filesDir.absolutePath
         dts_path = "$filesDir/${dtb.id}.dts"
-        ChipInfo.which = dtb.type
+        ChipInfo.current = dtb.type
         currentDtb = dtb
         prepared = true
-        saveLastChipset(activity, dtb.id, dtb.type.name)
+        saveLastChipset(activity, dtb.id, dtb.type.id)
     }
 
-    private fun saveLastChipset(activity: Activity, dtbId: Int, chipType: String) {
+    private fun saveLastChipset(activity: Activity, dtbId: Int, chipId: String) {
         val prefs = activity.getSharedPreferences(PREFS_NAME, Activity.MODE_PRIVATE)
         prefs.edit()
             .putInt(KEY_LAST_DTB_ID, dtbId)
-            .putString(KEY_LAST_CHIP_TYPE, chipType)
+            .putString(KEY_LAST_CHIP_TYPE, chipId)
             .apply()
     }
 
@@ -338,21 +341,27 @@ object KonaBessCore {
     fun tryRestoreLastChipset(activity: Activity): Boolean {
         if (!hasLastChipset(activity)) return false
         
+        // Ensure definitions are loaded
+        if (ChipInfo.definitions.isEmpty()) {
+            ChipInfo.loadDefinitions(activity)
+        }
+
         val prefs = activity.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val dtbId = prefs.getInt(KEY_LAST_DTB_ID, -1)
-        val chipTypeName = prefs.getString(KEY_LAST_CHIP_TYPE, null)
+        val chipId = prefs.getString(KEY_LAST_CHIP_TYPE, null)
 
-        if (dtbId < 0 || chipTypeName == null) return false
+        if (dtbId < 0 || chipId == null) return false
 
         return try {
-            val chipType = Type.valueOf(chipTypeName)
+            val def = ChipInfo.getById(chipId) ?: return false
+
             filesDir = activity.filesDir.absolutePath
             val dtsFile = File(filesDir, "$dtbId.dts")
             
             if (dtsFile.exists()) {
                 dts_path = dtsFile.absolutePath
-                ChipInfo.which = chipType
-                currentDtb = Dtb(dtbId, chipType)
+                ChipInfo.current = def
+                currentDtb = Dtb(dtbId, def)
                 prepared = true
                 true
             } else {
@@ -366,7 +375,7 @@ object KonaBessCore {
 
     @JvmStatic
     fun isPrepared(): Boolean {
-        return prepared && dts_path != null && File(dts_path).exists() && ChipInfo.which != Type.unknown
+        return prepared && dts_path != null && File(dts_path).exists() && ChipInfo.current != null
     }
     
     // System props

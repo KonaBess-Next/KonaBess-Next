@@ -14,7 +14,7 @@ import android.widget.TextView
 import android.widget.Toast
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.ireddragonicy.konabessnext.R
-import com.ireddragonicy.konabessnext.data.KonaBessStr
+import com.ireddragonicy.konabessnext.utils.ChipStringHelper
 import com.ireddragonicy.konabessnext.model.Bin
 import com.ireddragonicy.konabessnext.ui.SettingsActivity
 import com.ireddragonicy.konabessnext.utils.DialogUtil
@@ -172,7 +172,7 @@ object FrequencyDialogHelper {
         MaterialAlertDialogBuilder(activity)
             .setTitle(activity.getString(R.string.edit) + " \"" + paramTitle + "\"")
             .setView(container)
-            .setMessage(KonaBessStr.help(rawName, activity))
+            .setMessage(ChipStringHelper.help(rawName, activity))
             .setPositiveButton(R.string.save) { dialog, which ->
                 try {
                     val hzValue = parseFrequencyToHz(

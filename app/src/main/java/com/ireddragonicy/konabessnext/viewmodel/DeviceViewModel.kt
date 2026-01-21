@@ -1,10 +1,13 @@
 package com.ireddragonicy.konabessnext.viewmodel
 
+
 import android.content.Context
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ireddragonicy.konabessnext.core.ChipInfo
 import com.ireddragonicy.konabessnext.model.Dtb
+import com.ireddragonicy.konabessnext.model.ChipDefinition
 import com.ireddragonicy.konabessnext.repository.DeviceRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -50,6 +53,7 @@ class DeviceViewModel @Inject constructor(
                 repository.checkDevice()
 
                 val dtbs = repository.dtbs
+                Log.d("KonaBessDet", "ViewModel detected ${dtbs.size} compatible chipsets")
                 if (dtbs.isEmpty()) {
                     _detectionState.value = UiState.Error("No compatible chipset found")
                     _isPrepared.value = false
@@ -109,10 +113,10 @@ class DeviceViewModel @Inject constructor(
     }
 
     private fun findRecommendedIndex(dtbs: List<Dtb>): Int {
-        return dtbs.indexOfFirst { it.type != ChipInfo.Type.unknown }.takeIf { it != -1 } ?: 0
+        return if (dtbs.isNotEmpty()) 0 else -1
     }
 
-    val currentChipType: ChipInfo.Type?
+    val currentChipType: ChipDefinition?
         get() = _selectedChipset.value?.type
 
     private val _repackState = MutableStateFlow<UiState<String>?>(null)

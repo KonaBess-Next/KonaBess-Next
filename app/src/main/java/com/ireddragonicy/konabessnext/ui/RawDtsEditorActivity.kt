@@ -410,11 +410,11 @@ class RawDtsEditorActivity : AppCompatActivity() {
                 writer.close()
 
                 // Add to history
-                // We use ChipInfo.which.name() if available, or "Unknown"
+                // We use ChipInfo.current.id if available, or "Unknown"
                 var chipType = "Unknown"
-                val which = ChipInfo.which
-                if (which != null && which != ChipInfo.Type.unknown) {
-                    chipType = which.name
+                val current = ChipInfo.current
+                if (current != null) {
+                    chipType = current.id
                 }
 
                 val historyManager = ExportHistoryManager(this@RawDtsEditorActivity)

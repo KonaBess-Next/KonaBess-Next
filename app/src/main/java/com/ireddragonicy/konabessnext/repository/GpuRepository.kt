@@ -74,7 +74,7 @@ class GpuRepository @Inject constructor(
             val linesMutable = ArrayList(lines)
             
             // Only re-parse if architecture is known
-            if (ChipInfo.which != null) {
+            if (ChipInfo.current != null) {
                 // Reset positions if needed, though they might shift in text editor
                 binPosition = -1 
                 val newBins = decodeBins(linesMutable)
@@ -217,9 +217,9 @@ class GpuRepository @Inject constructor(
         while (++i < linesMutable.size) {
             val thisLine = linesMutable[i].trim()
             try {
-                if (ChipInfo.which?.architecture?.isStartLine(thisLine) == true) {
+                if (ChipInfo.getArchitecture(ChipInfo.current).isStartLine(thisLine)) {
                     if (binPosition < 0) binPosition = i
-                    ChipInfo.which!!.architecture.decode(linesMutable, newBins, i)
+                    ChipInfo.getArchitecture(ChipInfo.current).decode(linesMutable, newBins, i)
                     // Logic in original code: i-- because decode consumes lines? 
                     // Wait, ChipArchitecture.decode usually parses multiple lines.
                     // The loop continues. If decode advanced logic, great.
@@ -447,9 +447,9 @@ class GpuRepository @Inject constructor(
         while (++i < linesMutable.size) {
             val thisLine = linesMutable[i].trim()
             try {
-                if (ChipInfo.which?.architecture?.isStartLine(thisLine) == true) {
+                if (ChipInfo.getArchitecture(ChipInfo.current).isStartLine(thisLine)) {
                     if (binPosition < 0) binPosition = i
-                    ChipInfo.which!!.architecture.decode(linesMutable, newBins, i)
+                    ChipInfo.getArchitecture(ChipInfo.current).decode(linesMutable, newBins, i)
                     // Since decode modifies list (removes), we need to step back to process next line correctly
                     i-- // Decrement i to stay on the match as next loop increments it
                     // break // Removed to allow parsing multiple bins 
@@ -463,7 +463,7 @@ class GpuRepository @Inject constructor(
 
     private fun decodeOpps(linesMutable: ArrayList<String>): List<Opp> {
         val newOpps = ArrayList<Opp>()
-        val pattern = ChipInfo.which?.voltTablePattern ?: return emptyList()
+        val pattern = ChipInfo.current?.voltTablePattern ?: return emptyList()
         
         var i = -1
         var isInGpuTable = false
@@ -533,7 +533,7 @@ class GpuRepository @Inject constructor(
     }
 
     private fun genTableBins(): List<String> {
-        return ChipInfo.which!!.architecture.generateTable(_bins.value as ArrayList<Bin>)
+        return ChipInfo.getArchitecture(ChipInfo.current).generateTable(_bins.value as ArrayList<Bin>)
     }
     
     fun importFrequencyTable(lines: List<String>, description: String = "Import Frequency Table") {
