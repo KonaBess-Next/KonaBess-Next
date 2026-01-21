@@ -10,7 +10,8 @@
 # Java class files
 *.class
 
-#backup
+backup/
+backup
 backup_src/
 
 # Generated files
