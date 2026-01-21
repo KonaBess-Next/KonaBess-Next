@@ -50,9 +50,17 @@ class ExportHistoryManager(context: Context) {
                 val json = jsonArray.getJSONObject(i)
                 val item = ExportHistoryItem.fromJSON(json)
 
-                // Only add if file still exists
-                val file = File(item.filePath)
-                if (file.exists()) {
+                // Only check existence if it's a physical local file path
+                val path = item.filePath
+                val isLocalFile = path != null && path.startsWith("/") && !path.startsWith("/content:") && !path.startsWith("content:")
+                
+                if (isLocalFile) {
+                    val file = File(path)
+                    if (file.exists()) {
+                        history.add(item)
+                    }
+                } else {
+                    // Keep SAF URIs, Clipboard items, etc.
                     history.add(item)
                 }
             }

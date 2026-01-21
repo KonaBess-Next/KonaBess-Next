@@ -1,8 +1,9 @@
 package com.ireddragonicy.konabessnext.viewmodel
 
-import androidx.lifecycle.LiveData
-import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.launch
 
 /**
  * ViewModel for the Raw DTS Editor.
@@ -11,66 +12,70 @@ import androidx.lifecycle.ViewModel
 class RawDtsEditorViewModel : ViewModel() {
 
     // Content state
-    private val _content = MutableLiveData<String>()
-    private val _isDirty = MutableLiveData(false)
-    private val _isLoading = MutableLiveData(false)
+    private val _contentLines = MutableStateFlow<List<String>>(emptyList())
+    val contentLines: StateFlow<List<String>> = _contentLines.asStateFlow()
+
+    private val _isDirty = MutableStateFlow(false)
+    val isDirty: StateFlow<Boolean> = _isDirty.asStateFlow()
+
+    private val _isLoading = MutableStateFlow(false)
+    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
     // Search state
-    private val _searchQuery = MutableLiveData("")
-    private val _searchResults = MutableLiveData<List<SearchResult>>(ArrayList())
-    private val _currentSearchIndex = MutableLiveData(-1)
+    data class SearchState(
+        val query: String = "",
+        val results: List<LineSearchResult> = emptyList(),
+        val currentIndex: Int = -1
+    )
+    
+    data class LineSearchResult(val lineIndex: Int, val startIndex: Int, val length: Int)
 
-    // Editor state
-    private val _cursorPosition = MutableLiveData(0)
-    private val _scrollPosition = MutableLiveData(0)
+    private val _searchState = MutableStateFlow(SearchState())
+    val searchState: StateFlow<SearchState> = _searchState.asStateFlow()
+
+    // Navigation and cursor state
+    private val _cursorPosition = MutableStateFlow(0)
+    val cursorPosition: StateFlow<Int> = _cursorPosition.asStateFlow()
+
+    private val _scrollPosition = MutableStateFlow(0)
+    val scrollPosition: StateFlow<Int> = _scrollPosition.asStateFlow()
 
     // Events
-    private val _saveEvent = MutableLiveData<Event<String>>()
-    private val _errorEvent = MutableLiveData<Event<String>>()
+    private val _saveEvent = MutableSharedFlow<String>()
+    val saveEvent = _saveEvent.asSharedFlow()
 
-    private var originalContent: String = ""
+    private val _errorEvent = MutableSharedFlow<String>()
+    val errorEvent = _errorEvent.asSharedFlow()
 
-    // ========================================================================
-    // LiveData Getters
-    // ========================================================================
-
-    val content: LiveData<String> get() = _content
-    val isDirty: LiveData<Boolean> get() = _isDirty
-    val isLoading: LiveData<Boolean> get() = _isLoading
-
-    val searchQuery: LiveData<String> get() = _searchQuery
-    val searchResults: LiveData<List<SearchResult>> get() = _searchResults
-    val currentSearchIndex: LiveData<Int> get() = _currentSearchIndex
-
-    val saveEvent: LiveData<Event<String>> get() = _saveEvent
-    val errorEvent: LiveData<Event<String>> get() = _errorEvent
+    private var originalLines: List<String> = emptyList()
 
     // ========================================================================
     // Content Operations
     // ========================================================================
 
     /**
-     * Load content from DTS file.
+     * Load content from DTS string.
      */
     fun loadContent(dtsContent: String?) {
-        originalContent = dtsContent ?: ""
-        _content.value = originalContent
+        val lines = dtsContent?.split("\n") ?: emptyList()
+        originalLines = ArrayList(lines)
+        _contentLines.value = lines
         _isDirty.value = false
     }
 
     /**
-     * Update content from editor.
+     * Update content from editor (debounced by editor logic or this).
      */
-    fun updateContent(newContent: String) {
-        _content.value = newContent
-        _isDirty.value = newContent != originalContent
+    fun updateContent(newLines: List<String>) {
+        _contentLines.value = newLines
+        _isDirty.value = newLines != originalLines
     }
 
     /**
      * Mark content as saved.
      */
     fun markAsSaved() {
-        originalContent = _content.value ?: ""
+        originalLines = ArrayList(_contentLines.value)
         _isDirty.value = false
     }
 
@@ -78,7 +83,7 @@ class RawDtsEditorViewModel : ViewModel() {
      * Check if content has unsaved changes.
      */
     fun hasUnsavedChanges(): Boolean {
-        return _isDirty.value == true
+        return _isDirty.value
     }
 
     // ========================================================================
@@ -86,83 +91,59 @@ class RawDtsEditorViewModel : ViewModel() {
     // ========================================================================
 
     /**
-     * Perform search in content.
+     * Perform search in content lines.
      */
     fun search(query: String?) {
-        _searchQuery.value = query
-
         if (query.isNullOrEmpty()) {
-            _searchResults.value = ArrayList()
-            _currentSearchIndex.value = -1
+            _searchState.value = SearchState()
             return
         }
 
-        val text = _content.value ?: return
-
-        val results = ArrayList<SearchResult>()
-        var index = 0
-        while (text.indexOf(query, index).also { index = it } != -1) {
-            results.add(SearchResult(index, query.length))
-            index += query.length
+        val results = mutableListOf<LineSearchResult>()
+        val lines = _contentLines.value
+        
+        lines.forEachIndexed { lineIdx, line ->
+            var startIdx = 0
+            while (line.indexOf(query, startIdx).also { startIdx = it } != -1) {
+                results.add(LineSearchResult(lineIdx, startIdx, query.length))
+                startIdx += query.length
+            }
         }
 
-        _searchResults.value = results
-        if (results.isNotEmpty()) {
-            _currentSearchIndex.value = 0
-        } else {
-            _currentSearchIndex.value = -1
-        }
+        _searchState.value = SearchState(
+            query = query,
+            results = results,
+            currentIndex = if (results.isNotEmpty()) 0 else -1
+        )
     }
 
     /**
      * Navigate to next search result.
      */
     fun nextSearchResult() {
-        val results = _searchResults.value
-        val current = _currentSearchIndex.value
+        val state = _searchState.value
+        if (state.results.isEmpty()) return
 
-        if (results.isNullOrEmpty() || current == null) {
-            return
-        }
-
-        val next = (current + 1) % results.size
-        _currentSearchIndex.value = next
+        val next = (state.currentIndex + 1) % state.results.size
+        _searchState.value = state.copy(currentIndex = next)
     }
 
     /**
      * Navigate to previous search result.
      */
     fun previousSearchResult() {
-        val results = _searchResults.value
-        val current = _currentSearchIndex.value
+        val state = _searchState.value
+        if (state.results.isEmpty()) return
 
-        if (results.isNullOrEmpty() || current == null) {
-            return
-        }
-
-        val prev = (current - 1 + results.size) % results.size
-        _currentSearchIndex.value = prev
+        val prev = (state.currentIndex - 1 + state.results.size) % state.results.size
+        _searchState.value = state.copy(currentIndex = prev)
     }
 
     /**
      * Clear search.
      */
     fun clearSearch() {
-        _searchQuery.value = ""
-        _searchResults.value = ArrayList()
-        _currentSearchIndex.value = -1
-    }
-
-    /**
-     * Get current search result for highlighting.
-     */
-    fun getCurrentResult(): SearchResult? {
-        val results = _searchResults.value ?: return null
-        val current = _currentSearchIndex.value ?: return null
-
-        return if (results.isNotEmpty() && current >= 0 && current < results.size) {
-            results[current]
-        } else null
+        _searchState.value = SearchState()
     }
 
     // ========================================================================
@@ -173,19 +154,7 @@ class RawDtsEditorViewModel : ViewModel() {
         _cursorPosition.value = position
     }
 
-    val cursorPositionValue: Int
-        get() = _cursorPosition.value ?: 0
-
     fun setScrollPosition(position: Int) {
         _scrollPosition.value = position
     }
-
-    val scrollPositionValue: Int
-        get() = _scrollPosition.value ?: 0
-
-    // ========================================================================
-    // Search Result Model
-    // ========================================================================
-
-    data class SearchResult(val startIndex: Int, val length: Int)
 }

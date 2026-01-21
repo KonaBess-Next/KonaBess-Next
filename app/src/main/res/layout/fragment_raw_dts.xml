@@ -94,9 +94,9 @@
 
     </LinearLayout>
 
-    <!-- Custom Virtualized Editor -->
-    <com.ireddragonicy.konabessnext.editor.core.CodeEditor
-        android:id="@+id/editor_content"
+    <!-- FrameLayout for Compose Editor -->
+    <FrameLayout
+        android:id="@+id/editor_content_container"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:layout_marginTop="48dp"

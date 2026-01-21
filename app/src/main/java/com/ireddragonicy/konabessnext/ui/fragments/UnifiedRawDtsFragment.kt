@@ -34,6 +34,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 
 /**
  * Raw DTS Text Editor Fragment (Unified Workbench).
@@ -44,7 +46,6 @@ class UnifiedRawDtsFragment : Fragment() {
 
     private val sharedViewModel: SharedGpuViewModel by activityViewModels()
 
-    private lateinit var editorContent: CodeEditor
     private lateinit var loadingState: LinearLayout
     private lateinit var lineCountText: TextView
     
@@ -157,11 +158,26 @@ class UnifiedRawDtsFragment : Fragment() {
         root.addView(loadingState)
 
         // --- Editor Content ---
-        editorContent = CodeEditor(context).apply {
+        val composeView = androidx.compose.ui.platform.ComposeView(context).apply {
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1.0f)
-            id = View.generateViewId() 
+            setContent {
+                com.ireddragonicy.konabessnext.ui.theme.KonaBessTheme {
+                    val dtsLines by sharedViewModel.dtsLines.collectAsState()
+                    val searchState by sharedViewModel.searchState.collectAsState()
+                    
+                    com.ireddragonicy.konabessnext.ui.compose.DtsEditor(
+                        lines = dtsLines,
+                        onLinesChanged = { newLines ->
+                            sharedViewModel.updateFromText(newLines.joinToString("\n"), "Text edit")
+                        },
+                        searchQuery = searchState.query,
+                        searchResultIndex = searchState.currentIndex,
+                        searchResults = emptyList() // TODO: Map SharedGpuViewModel.SearchResult to LineSearchResult if needed
+                    )
+                }
+            }
         }
-        root.addView(editorContent)
+        root.addView(composeView)
 
         // --- Status Bar (Line Count) ---
         val statusBar = LinearLayout(context).apply {
@@ -225,25 +241,11 @@ class UnifiedRawDtsFragment : Fragment() {
     }
 
     private fun setupEditor() {
-         editorContent.setOnTextChangedListener {
-            if (!isUserEditing) return@setOnTextChangedListener
-            
-            lineCountText.text = "Lines: ${editorContent.lines.size}"
-            
-            // Debounce text updates to repository
-            textUpdateJob?.cancel()
-            textUpdateJob = viewLifecycleOwner.lifecycleScope.launch {
-                delay(TEXT_UPDATE_DEBOUNCE_MS)
-                val newContent = editorContent.text.toString()
-                if (newContent != sharedViewModel.dtsContent.value) {
-                     sharedViewModel.updateFromText(newContent, "Text edit")
-                }
-            }
-        }
+        // Line count update is now handled via ViewModel observation or Compose
     }
     
     private fun copyAllToClipboard() {
-        val content = editorContent.text.toString()
+        val content = sharedViewModel.dtsContent.value
         val clipboard = requireContext().getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         val clip = ClipData.newPlainText("DTS Content", content)
         clipboard.setPrimaryClip(clip)
@@ -293,7 +295,6 @@ class UnifiedRawDtsFragment : Fragment() {
         searchBar.visibility = View.GONE
         sharedViewModel.clearSearch()
         searchInput.setText("")
-        editorContent.clearSearch()
         val imm = requireContext().getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
         imm?.hideSoftInputFromWindow(searchInput.windowToken, 0)
     }
@@ -304,13 +305,13 @@ class UnifiedRawDtsFragment : Fragment() {
                 // DTS Content
                 launch {
                     sharedViewModel.dtsContent.collectLatest { content ->
-                        val currentText = editorContent.text.toString()
-                        if (currentText != content) {
-                            isUserEditing = false
-                            editorContent.setText(content)
-                            lineCountText.text = "Lines: ${editorContent.lines.size}"
-                            isUserEditing = true
-                        }
+                        // Content updated automatically in ComposeView
+                    }
+                }
+                
+                launch {
+                    sharedViewModel.dtsLines.collectLatest { lines ->
+                        lineCountText.text = "Lines: ${lines.size}"
                     }
                 }
 
@@ -320,11 +321,9 @@ class UnifiedRawDtsFragment : Fragment() {
                          when (state) {
                              is SharedGpuViewModel.WorkbenchState.Loading -> {
                                  loadingState.visibility = View.VISIBLE
-                                 editorContent.visibility = View.GONE
                              }
                              is SharedGpuViewModel.WorkbenchState.Ready -> {
                                  loadingState.visibility = View.GONE
-                                 editorContent.visibility = View.VISIBLE
                              }
                              else -> {}
                          }
@@ -335,8 +334,6 @@ class UnifiedRawDtsFragment : Fragment() {
                 launch {
                     sharedViewModel.searchState.collectLatest { state ->
                         if (state.query.isNotEmpty()) {
-                             editorContent.searchAndSelect(state.query)
-                             
                              if (state.results.isNotEmpty() && state.currentIndex >= 0) {
                                   searchResultCount.visibility = View.VISIBLE
                                   searchResultCount.text = "${state.currentIndex + 1}/${state.results.size}"
@@ -345,7 +342,6 @@ class UnifiedRawDtsFragment : Fragment() {
                                   searchResultCount.text = "0/0"
                              }
                         } else {
-                            editorContent.clearSearch()
                             searchResultCount.visibility = View.GONE
                         }
                     }

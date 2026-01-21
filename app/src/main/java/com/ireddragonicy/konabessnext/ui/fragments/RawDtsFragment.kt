@@ -40,6 +40,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import java.io.BufferedWriter
 import java.io.File
 import java.io.FileWriter
@@ -58,7 +60,6 @@ class RawDtsFragment : Fragment() {
     @Inject
     lateinit var exportHistoryManager: ExportHistoryManager
 
-    private lateinit var editorContent: CodeEditor
     private lateinit var loadingState: LinearLayout
     private lateinit var lineCountText: TextView
 
@@ -95,9 +96,27 @@ class RawDtsFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
 
         // Initialize views
-        editorContent = view.findViewById(R.id.editor_content)
         loadingState = view.findViewById(R.id.editor_loading_state)
         lineCountText = view.findViewById(R.id.line_count_text)
+
+        val composeContainer = view.findViewById<android.widget.FrameLayout>(R.id.editor_content_container)
+        val composeView = androidx.compose.ui.platform.ComposeView(requireContext()).apply {
+            setContent {
+                val dtsLines by sharedViewModel.dtsLines.collectAsState()
+                val searchState by sharedViewModel.searchState.collectAsState()
+                
+                com.ireddragonicy.konabessnext.ui.compose.DtsEditor(
+                    lines = dtsLines,
+                    onLinesChanged = { newLines ->
+                        sharedViewModel.updateFromText(newLines.joinToString("\n"), "Text edit")
+                    },
+                    searchQuery = searchState.query,
+                    searchResultIndex = searchState.currentIndex,
+                    searchResults = emptyList()
+                )
+            }
+        }
+        composeContainer.addView(composeView)
 
         // Initialize Visual Editor
         visualRecycler = view.findViewById(R.id.visual_editor_recycler)
@@ -121,19 +140,7 @@ class RawDtsFragment : Fragment() {
     }
 
     private fun setupEditor() {
-        editorContent.setOnTextChangedListener {
-            if (!isUserEditing) return@setOnTextChangedListener
-            
-            updateLineCount()
-            
-            // Debounce text updates to repository
-            textUpdateJob?.cancel()
-            textUpdateJob = viewLifecycleOwner.lifecycleScope.launch {
-                delay(TEXT_UPDATE_DEBOUNCE_MS)
-                val newContent = editorContent.text.toString()
-                sharedViewModel.updateFromText(newContent, "Text edit")
-            }
-        }
+        // Handled by Compose
     }
 
     private fun setupSearchBar() {
@@ -176,11 +183,10 @@ class RawDtsFragment : Fragment() {
                         when (state) {
                             is SharedGpuViewModel.WorkbenchState.Loading -> {
                                 loadingState.visibility = View.VISIBLE
-                                editorContent.visibility = View.GONE
+                                // editorContent removed, handled by container or compose state
                             }
                             is SharedGpuViewModel.WorkbenchState.Ready -> {
                                 loadingState.visibility = View.GONE
-                                editorContent.visibility = View.VISIBLE
                             }
                             is SharedGpuViewModel.WorkbenchState.Error -> {
                                 loadingState.visibility = View.GONE
@@ -194,9 +200,6 @@ class RawDtsFragment : Fragment() {
                 launch {
                     sharedViewModel.searchState.collectLatest { state ->
                         if (state.query.isNotEmpty() && state.results.isNotEmpty() && state.currentIndex >= 0) {
-                            val result = state.results[state.currentIndex]
-                            // Scroll to result position (CodeEditor doesn't have setSelection)
-                            editorContent.searchAndSelect(state.query)
                             searchResultCount?.text = "${state.currentIndex + 1}/${state.results.size}"
                             searchResultCount?.visibility = View.VISIBLE
                         } else if (state.query.isNotEmpty() && state.results.isEmpty()) {
@@ -226,14 +229,7 @@ class RawDtsFragment : Fragment() {
     }
 
     private fun updateEditorContent(content: String) {
-        val currentContent = editorContent.text.toString()
-        if (currentContent != content) {
-            // Temporarily disable user editing flag to prevent feedback loop
-            isUserEditing = false
-            editorContent.setText(content)
-            updateLineCount()
-            isUserEditing = true
-        }
+        // Automatically handled by Compose State observation
     }
 
     // ===== Public Actions (called from toolbar/parent) =====
@@ -247,14 +243,12 @@ class RawDtsFragment : Fragment() {
 
     fun hideSearchBar() {
         searchBar?.visibility = View.GONE
-        editorContent.clearSearch()
         visualAdapter.clearSearch()
         sharedViewModel.clearSearch()
         searchResultCount?.visibility = View.GONE
 
         val imm = requireContext().getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
         imm?.hideSoftInputFromWindow(searchInput?.windowToken, 0)
-        editorContent.requestFocus()
     }
 
     fun performUndo() {
@@ -272,7 +266,7 @@ class RawDtsFragment : Fragment() {
     }
 
     fun copyAllToClipboard() {
-        val content = editorContent.text.toString()
+        val content = sharedViewModel.dtsContent.value
         val clipboard = requireContext().getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         val clip = ClipData.newPlainText("DTS Content", content)
         clipboard.setPrimaryClip(clip)
@@ -283,11 +277,11 @@ class RawDtsFragment : Fragment() {
         if (isVisualMode) {
             syncVisualToText()
             visualRecycler?.visibility = View.GONE
-            editorContent.visibility = View.VISIBLE
+            // ComposeView handles visibility via its container or state
             isVisualMode = false
         } else {
             syncTextToVisual()
-            editorContent.visibility = View.GONE
+            // Hide Compose container if needed
             visualRecycler?.visibility = View.VISIBLE
             if (searchBar?.visibility == View.VISIBLE) hideSearchBar()
             isVisualMode = true
@@ -319,7 +313,7 @@ class RawDtsFragment : Fragment() {
         var finalFilename = filename
         if (!finalFilename.endsWith(".dts")) finalFilename += ".dts"
 
-        val content = editorContent.text.toString()
+        val content = sharedViewModel.dtsContent.value
 
         viewLifecycleOwner.lifecycleScope.launch {
             try {
@@ -344,14 +338,13 @@ class RawDtsFragment : Fragment() {
 
     private fun syncTextToVisual() {
         try {
-            val content = editorContent.text.toString()
+            val content = sharedViewModel.dtsContent.value
             currentRootNode = DtsTreeHelper.parse(content)
             currentRootNode?.let { visualAdapter.setRootNode(it) }
         } catch (e: Throwable) {
             e.printStackTrace()
             Toast.makeText(context, "Error parsing DTS: ${e.message}", Toast.LENGTH_SHORT).show()
             isVisualMode = false
-            editorContent.visibility = View.VISIBLE
             visualRecycler?.visibility = View.GONE
         }
     }
@@ -360,7 +353,7 @@ class RawDtsFragment : Fragment() {
         currentRootNode?.let { node ->
             try {
                 val content = DtsTreeHelper.generate(node)
-                editorContent.setText(content)
+                sharedViewModel.updateFromText(content, "Visual edit sync")
             } catch (e: Exception) {
                 e.printStackTrace()
                 Toast.makeText(context, "Error generating DTS: ${e.message}", Toast.LENGTH_SHORT).show()
@@ -369,7 +362,7 @@ class RawDtsFragment : Fragment() {
     }
 
     private fun updateLineCount() {
-        lineCountText.text = getString(R.string.line_count, editorContent.lines.size)
+        lineCountText.text = getString(R.string.line_count, sharedViewModel.dtsLines.value.size)
     }
 
     override fun onResume() {

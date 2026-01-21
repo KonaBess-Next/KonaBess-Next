@@ -46,6 +46,19 @@ import java.util.Date
 import java.util.Locale
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 
 @AndroidEntryPoint
 class GpuFrequencyFragment : Fragment() {
@@ -54,15 +67,18 @@ class GpuFrequencyFragment : Fragment() {
     private var needsReload = false
 
     // MVVM ViewModels - shared with Activity
-    private val deviceViewModel: DeviceViewModel by activityViewModels() // Scoped to Activity in logic? Hilt 'activityViewModels' does that.
-    // Wait, original code used: deviceViewModel = activity.getDeviceViewModel() and gpu = ViewModelProvider(requireActivity())...
-    // activityViewModels() is the correct Hilt/Jetpack way for shared ViewModels.
+    private val deviceViewModel: DeviceViewModel by activityViewModels()
     private val gpuFrequencyViewModel: GpuFrequencyViewModel by activityViewModels()
     private val sharedViewModel: com.ireddragonicy.konabessnext.viewmodel.SharedGpuViewModel by activityViewModels()
+    
+    // Inject ChipRepository if needed for setup definitions
+    @javax.inject.Inject
+    lateinit var chipRepository: com.ireddragonicy.konabessnext.repository.ChipRepository
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // ViewModel handles logic directly now.
+        // Ensure definitions are loaded
+        chipRepository.loadDefinitions()
     }
 
     override fun onCreateView(
@@ -202,6 +218,7 @@ class GpuFrequencyFragment : Fragment() {
     private var gpuEditorContainer: LinearLayout? = null
     private var dataArea: LinearLayout? = null
 
+    @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
     private fun showGpuEditor(activity: MainActivity) {
         if (!isAdded) return
 
@@ -218,24 +235,119 @@ class GpuFrequencyFragment : Fragment() {
         // Compose Toolbar (replaces legacy GpuActionToolbar)
         val toolbarComposeView = androidx.compose.ui.platform.ComposeView(requireContext())
         toolbarComposeView.setContent {
-            val context = androidx.compose.ui.platform.LocalContext.current
-            val darkTheme = androidx.compose.foundation.isSystemInDarkTheme()
-            val dynamicColor = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S
-            
-            val colorScheme = when {
-                dynamicColor && darkTheme -> androidx.compose.material3.dynamicDarkColorScheme(context)
-                dynamicColor && !darkTheme -> androidx.compose.material3.dynamicLightColorScheme(context)
-                darkTheme -> androidx.compose.material3.darkColorScheme()
-                else -> androidx.compose.material3.lightColorScheme()
-            }
-            
-            androidx.compose.material3.MaterialTheme(colorScheme = colorScheme) {
+            com.ireddragonicy.konabessnext.ui.theme.KonaBessTheme {
                 val isDirty by gpuFrequencyViewModel.isDirty.collectAsState()
                 val canUndo by gpuFrequencyViewModel.canUndo.collectAsState()
                 val canRedo by gpuFrequencyViewModel.canRedo.collectAsState()
                 val history by gpuFrequencyViewModel.history.collectAsState()
                 val currentMode by sharedViewModel.viewMode.collectAsState()
-                
+                val definitions by sharedViewModel.definitions.collectAsState()
+                val currentChip by sharedViewModel.currentChip.collectAsState()
+
+                var showSheet by remember { mutableStateOf(false) }
+                var sheetType by remember { mutableStateOf("NONE") }
+                @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+                val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+                if (showSheet) {
+                    ModalBottomSheet(
+                        onDismissRequest = { showSheet = false },
+                        sheetState = sheetState,
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+                        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                        tonalElevation = 8.dp
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 24.dp)
+                                .padding(bottom = 32.dp)
+                                .navigationBarsPadding()
+                        ) {
+                            if (sheetType == "HISTORY") {
+                                Text(
+                                    text = "Edit History",
+                                    style = MaterialTheme.typography.headlineSmall,
+                                    modifier = Modifier.padding(bottom = 16.dp)
+                                )
+                                LazyColumn(
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    items(history) { item ->
+                                        Card(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            colors = CardDefaults.cardColors(
+                                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                                            )
+                                        ) {
+                                            Text(
+                                                text = item,
+                                                modifier = Modifier.padding(16.dp),
+                                                style = MaterialTheme.typography.bodyMedium
+                                            )
+                                        }
+                                    }
+                                }
+                                if (history.isEmpty()) {
+                                    Text("No history yet.", style = MaterialTheme.typography.bodyMedium)
+                                }
+                            } else if (sheetType == "CHIPSET") {
+                                Text(
+                                    text = "Select Chipset",
+                                    style = MaterialTheme.typography.headlineSmall,
+                                    modifier = Modifier.padding(bottom = 16.dp)
+                                )
+                                LazyColumn(
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    items(definitions) { chip ->
+                                        val isSelected = chip.id == currentChip?.id
+                                        Card(
+                                            onClick = {
+                                               if (!isSelected) {
+                                                   gpuFrequencyViewModel.save(false)
+                                                   chipRepository.setCurrentChip(chip)
+                                                   gpuFrequencyViewModel.loadData()
+                                                   sharedViewModel.loadData()
+                                               }
+                                               showSheet = false
+                                            },
+                                            modifier = Modifier.fillMaxWidth(),
+                                            colors = CardDefaults.cardColors(
+                                                containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer 
+                                                                else MaterialTheme.colorScheme.surfaceContainerHigh
+                                            )
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(16.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Text(
+                                                        text = chip.name,
+                                                        style = MaterialTheme.typography.titleMedium
+                                                    )
+                                                    Text(
+                                                        text = "ID: ${chip.id}",
+                                                        style = MaterialTheme.typography.bodySmall
+                                                    )
+                                                }
+                                                if (isSelected) {
+                                                    Icon(
+                                                        painter = painterResource(R.drawable.ic_check),
+                                                        contentDescription = null,
+                                                        tint = MaterialTheme.colorScheme.primary
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
                 com.ireddragonicy.konabessnext.ui.compose.GpuEditorToolbar(
                     isDirty = isDirty,
                     canUndo = canUndo,
@@ -247,31 +359,13 @@ class GpuFrequencyFragment : Fragment() {
                     onUndo = { gpuFrequencyViewModel.undo() },
                     onRedo = { gpuFrequencyViewModel.redo() },
                     onShowHistory = { 
-                        val history = gpuFrequencyViewModel.history.value
-                        MaterialAlertDialogBuilder(activity)
-                           .setTitle("History")
-                           .setItems(history.toTypedArray(), null)
-                           .setPositiveButton("OK", null)
-                           .show()
+                        sheetType = "HISTORY"
+                        showSheet = true
                     },
                     onViewModeChanged = { mode -> updateViewMode(mode) },
                     onChipsetClick = {
-                        val listener = object : com.ireddragonicy.konabessnext.core.editor.ChipsetManager.OnChipsetSwitchedListener {
-                             override fun onChipsetSwitched(dtb: com.ireddragonicy.konabessnext.model.Dtb) {
-                                 // Save current state (optional, assuming ViewModel/Repo handles persistence/caching on load)
-                                 gpuFrequencyViewModel.save(false)
-                                 
-                                 // Switch global target
-                                 com.ireddragonicy.konabessnext.core.KonaBessCore.chooseTarget(dtb, activity)
-                                 
-                                 // Reload data for new target
-                                 gpuFrequencyViewModel.loadData()
-                                 sharedViewModel.loadData()
-                             }
-                        }
-                        com.ireddragonicy.konabessnext.core.editor.ChipsetManager.showChipsetSelectorDialog(
-                            activity, contentContainer!!, android.widget.TextView(activity), listener
-                        )
+                        sheetType = "CHIPSET"
+                        showSheet = true
                     },
                     onFlashClick = { activity.startRepack() }
                 )

@@ -25,7 +25,8 @@ import kotlinx.coroutines.flow.flowOn
 
 @Singleton
 class GpuRepository @Inject constructor(
-    private val deviceRepository: DeviceRepository
+    private val deviceRepository: DeviceRepository,
+    private val chipRepository: ChipRepository
 ) {
     sealed class ParseResult {
         object Loading : ParseResult()
@@ -37,6 +38,9 @@ class GpuRepository @Inject constructor(
 
     private val _dtsContent = MutableStateFlow("")
     val dtsContent: StateFlow<String> = _dtsContent.asStateFlow()
+
+    private val _dtsLines = MutableStateFlow<List<String>>(emptyList())
+    val dtsLines: StateFlow<List<String>> = _dtsLines.asStateFlow()
 
     private val _parsedResult = MutableStateFlow<ParseResult>(ParseResult.Loading)
     val parsedResult: StateFlow<ParseResult> = _parsedResult.asStateFlow()
@@ -74,7 +78,8 @@ class GpuRepository @Inject constructor(
             val linesMutable = ArrayList(lines)
             
             // Only re-parse if architecture is known
-            if (ChipInfo.current != null) {
+            val currentChip = chipRepository.currentChip.value
+            if (currentChip != null) {
                 // Reset positions if needed, though they might shift in text editor
                 binPosition = -1 
                 val newBins = decodeBins(linesMutable)
@@ -217,9 +222,11 @@ class GpuRepository @Inject constructor(
         while (++i < linesMutable.size) {
             val thisLine = linesMutable[i].trim()
             try {
-                if (ChipInfo.getArchitecture(ChipInfo.current).isStartLine(thisLine)) {
+                val currentChip = chipRepository.currentChip.value
+                val arch = ChipInfo.getArchitecture(currentChip)
+                if (arch.isStartLine(thisLine)) {
                     if (binPosition < 0) binPosition = i
-                    ChipInfo.getArchitecture(ChipInfo.current).decode(linesMutable, newBins, i)
+                    arch.decode(linesMutable, newBins, i)
                     // Logic in original code: i-- because decode consumes lines? 
                     // Wait, ChipArchitecture.decode usually parses multiple lines.
                     // The loop continues. If decode advanced logic, great.
@@ -320,6 +327,7 @@ class GpuRepository @Inject constructor(
     
     private fun updateGeneratedContent() {
         val newDts = genBack()
+        _dtsLines.value = newDts
         _dtsContent.value = newDts.joinToString("\n")
     }
 
@@ -447,12 +455,13 @@ class GpuRepository @Inject constructor(
         while (++i < linesMutable.size) {
             val thisLine = linesMutable[i].trim()
             try {
-                if (ChipInfo.getArchitecture(ChipInfo.current).isStartLine(thisLine)) {
+                val currentChip = chipRepository.currentChip.value
+                val arch = ChipInfo.getArchitecture(currentChip)
+                if (arch.isStartLine(thisLine)) {
                     if (binPosition < 0) binPosition = i
-                    ChipInfo.getArchitecture(ChipInfo.current).decode(linesMutable, newBins, i)
+                    arch.decode(linesMutable, newBins, i)
                     // Since decode modifies list (removes), we need to step back to process next line correctly
                     i-- // Decrement i to stay on the match as next loop increments it
-                    // break // Removed to allow parsing multiple bins 
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -463,7 +472,8 @@ class GpuRepository @Inject constructor(
 
     private fun decodeOpps(linesMutable: ArrayList<String>): List<Opp> {
         val newOpps = ArrayList<Opp>()
-        val pattern = ChipInfo.current?.voltTablePattern ?: return emptyList()
+        val currentChip = chipRepository.currentChip.value
+        val pattern = currentChip?.voltTablePattern ?: return emptyList()
         
         var i = -1
         var isInGpuTable = false
@@ -533,7 +543,8 @@ class GpuRepository @Inject constructor(
     }
 
     private fun genTableBins(): List<String> {
-        return ChipInfo.getArchitecture(ChipInfo.current).generateTable(_bins.value as ArrayList<Bin>)
+        val currentChip = chipRepository.currentChip.value
+        return ChipInfo.getArchitecture(currentChip).generateTable(_bins.value as ArrayList<Bin>)
     }
     
     fun importFrequencyTable(lines: List<String>, description: String = "Import Frequency Table") {

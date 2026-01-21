@@ -204,7 +204,7 @@ class DeviceRepository @Inject constructor(
         }
     }
     
-    suspend fun backupBootImage() = withContext(Dispatchers.IO) {
+    fun getBootImageFile(): File {
         val name = bootName ?: run {
             // Try to detect if not set
             if (File("$filesDir/vendor_boot.img").exists()) "vendor_boot"
@@ -218,16 +218,7 @@ class DeviceRepository @Inject constructor(
         if (!File(source).exists()) {
              throw IOException("Boot image not found in working directory. Please detect chipset first.")
         }
-
-        val destDir = File(Environment.getExternalStorageDirectory(), "KonaBess/Backup")
-        if (!destDir.exists()) {
-            destDir.mkdirs()
-        }
-        val dest = "${destDir.absolutePath}/$name.img"
-        shellRepository.execForOutput("cp -f $source $dest")
-        
-        // Return dest path for UI
-        dest
+        return File(source)
     }
 
     // --- Device Detection ---
@@ -464,10 +455,10 @@ class DeviceRepository @Inject constructor(
         }
         return false
     }
-    suspend fun exportDtsFile(destPath: String) = withContext(Dispatchers.IO) {
+    fun getDtsFile(): File {
         if (dtsPath == null || !File(dtsPath!!).exists()) {
              throw IOException("DTS file not found. Please detect chipset first.")
         }
-        shellRepository.execForOutput("cp -f $dtsPath $destPath")
+        return File(dtsPath!!)
     }
 }

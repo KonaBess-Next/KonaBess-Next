@@ -15,34 +15,32 @@ object ChipInfo {
     private val MULTI_BIN: ChipArchitecture = MultiBinStrategy()
     private val SINGLE_BIN: ChipArchitecture = SingleBinStrategy()
 
+    @JvmStatic
     var definitions: List<ChipDefinition> = emptyList()
         private set
 
+    @JvmStatic
     var current: ChipDefinition? = null
         set(value) {
             field = value
             recomputeLevels()
         }
 
-    // Deprecated 'which' property for backward compatibility (where possible)
-    // Note: This relies on the new system being initialized
-    // We cannot easily map back to the old enum, so usages of 'which' should be updated.
-    // However, for compilation safety, we might need a temporary shim if we don't fix all call sites immediately.
-    // Ideally, we refactor all call sites. But to satisfy "Refactor ChipInfo" we will remove the enum.
-    
     // Cached values for the current chip
     private var cachedLevels: IntArray = IntArray(0)
     private var cachedLevelStrings: Array<String> = emptyArray()
 
+    @JvmStatic
     fun loadDefinitions(context: Context) {
         definitions = ChipLoader.loadDefinitions(context)
     }
     
+    @JvmStatic
     fun getArchitecture(def: ChipDefinition?): ChipArchitecture {
         return if (def?.strategyType == "SINGLE_BIN") SINGLE_BIN else MULTI_BIN
     }
     
-    // Helper to find definition by ID
+    @JvmStatic
     fun getById(id: String): ChipDefinition? {
         return definitions.find { it.id == id }
     }

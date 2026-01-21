@@ -15,8 +15,14 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 import java.io.File
+import java.io.FileOutputStream
+import java.io.InputStream
+import java.io.OutputStream
 import javax.inject.Inject
 import com.ireddragonicy.konabessnext.model.ChipDefinition
+import android.net.Uri
+import java.lang.StringBuilder
+import java.util.ArrayList
 
 @HiltViewModel
 class ImportExportViewModel @Inject constructor(
@@ -41,6 +47,9 @@ class ImportExportViewModel @Inject constructor(
 
     private val _errorEvent = MutableSharedFlow<String>()
     val errorEvent: SharedFlow<String> = _errorEvent.asSharedFlow()
+
+    private val _lastExportedContent = MutableSharedFlow<String>()
+    val lastExportedContent: SharedFlow<String> = _lastExportedContent.asSharedFlow()
 
     fun updateExportAvailability() {
         // Logic to check if export is available (e.g. data loaded)
@@ -116,10 +125,17 @@ class ImportExportViewModel @Inject constructor(
         }
     }
 
+    fun notifyExportResult(content: String) {
+        viewModelScope.launch {
+            _lastExportedContent.emit(content)
+        }
+    }
+
     fun exportRawDts(destPath: String) {
         viewModelScope.launch {
              try {
-                 deviceRepository.exportDtsFile(destPath)
+                 val dtsFile = deviceRepository.getDtsFile()
+                 dtsFile.copyTo(File(destPath), overwrite = true)
                  _messageEvent.emit("Exported Raw DTS to $destPath")
              } catch (e: Exception) {
                  _errorEvent.emit("Export Raw DTS failed: ${e.message}")
@@ -129,5 +145,99 @@ class ImportExportViewModel @Inject constructor(
 
     fun getHistoryManager(): com.ireddragonicy.konabessnext.utils.ExportHistoryManager {
         return exportHistoryManager
+    }
+
+    fun importConfigFromUri(context: Context, uri: Uri) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val inputStream: InputStream? = context.contentResolver.openInputStream(uri)
+                val bytes = inputStream?.readBytes()
+                inputStream?.close()
+
+                if (bytes != null) {
+                    val decompressed = GzipUtils.uncompress(bytes)
+                    if (decompressed != null) {
+                        importConfig(decompressed)
+                    } else {
+                        val text = String(bytes)
+                        if (text.trim().startsWith("{")) {
+                            importConfig(text)
+                        } else {
+                            _errorEvent.emit("Failed decoding: File format not recognized")
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                _errorEvent.emit("Import failed: ${e.message}")
+            }
+        }
+    }
+
+    fun exportConfigToUri(context: Context, uri: Uri, desc: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val content = exportConfig(desc)
+            if (content != null) {
+                try {
+                    val outputStream: OutputStream? = context.contentResolver.openOutputStream(uri)
+                    outputStream?.write(content.toByteArray(Charsets.ISO_8859_1))
+                    outputStream?.close()
+
+                    // Add to history with URI as path
+                    val filename = "config_${System.currentTimeMillis()}.txt"
+                    addToHistory(filename, desc, uri.toString(), ChipInfo.current?.id ?: "Unknown")
+                    _messageEvent.emit("Successfully exported config")
+                } catch (e: Exception) {
+                    _errorEvent.emit("Export failed: ${e.message}")
+                }
+            }
+        }
+    }
+
+    fun exportRawDtsToUri(context: Context, uri: Uri) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val dtsFile = deviceRepository.getDtsFile()
+                val inputStream = dtsFile.inputStream()
+                val outputStream = context.contentResolver.openOutputStream(uri)
+                
+                if (outputStream != null) {
+                    inputStream.copyTo(outputStream)
+                    outputStream.close()
+                }
+                inputStream.close()
+                
+                // Add to history
+                val filename = "dts_dump_${System.currentTimeMillis()}.txt"
+                addToHistory(filename, "Raw DTS Export", uri.toString(), ChipInfo.current?.id ?: "Unknown")
+                
+                _messageEvent.emit("Successfully exported Raw DTS")
+            } catch (e: Exception) {
+                _errorEvent.emit("Export Raw DTS failed: ${e.message}")
+            }
+        }
+    }
+
+    fun backupBootToUri(context: Context, uri: Uri) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val bootFile = deviceRepository.getBootImageFile()
+                val inputStream = bootFile.inputStream()
+                val outputStream = context.contentResolver.openOutputStream(uri)
+                
+                if (outputStream != null) {
+                    inputStream.copyTo(outputStream)
+                    outputStream.close()
+                }
+                inputStream.close()
+                
+                // Add to history
+                val filename = "boot_backup_${System.currentTimeMillis()}.img"
+                addToHistory(filename, "System Boot Backup", uri.toString(), "N/A")
+                
+                _messageEvent.emit("Successfully backed up boot image")
+            } catch (e: Exception) {
+                _errorEvent.emit("Backup failed: ${e.message}")
+            }
+        }
     }
 }

@@ -27,6 +27,7 @@ import javax.inject.Inject
 @HiltViewModel
 class SharedGpuViewModel @Inject constructor(
     private val repository: GpuRepository,
+    private val chipRepository: com.ireddragonicy.konabessnext.repository.ChipRepository,
     private val savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -38,9 +39,13 @@ class SharedGpuViewModel @Inject constructor(
 
     // ===== Core State from Repository =====
     val dtsContent: StateFlow<String> = repository.dtsContent
+    val dtsLines: StateFlow<List<String>> = repository.dtsLines
     val parsedResult: StateFlow<GpuRepository.ParseResult> = repository.parsedResult
     val bins: StateFlow<List<Bin>> = repository.bins
     val opps: StateFlow<List<Opp>> = repository.opps
+
+    val definitions = chipRepository.definitions
+    val currentChip = chipRepository.currentChip
     
     val isDirty: StateFlow<Boolean> = repository.isDirty
     val canUndo: StateFlow<Boolean> = repository.canUndo
@@ -344,13 +349,9 @@ class SharedGpuViewModel @Inject constructor(
     }
 
     private fun isLitoOrLagoon(): Boolean {
-        return try {
-            val current = com.ireddragonicy.konabessnext.core.ChipInfo.current
-            val id = current?.id
-            id == "lito_v1" ||
-            id == "lito_v2" ||
-            id == "lagoon"
-        } catch (e: Exception) { false }
+        val current = chipRepository.currentChip.value
+        val id = current?.id
+        return id == "lito_v1" || id == "lito_v2" || id == "lagoon"
     }
 
     fun getCurrentBins(): List<Bin> = bins.value

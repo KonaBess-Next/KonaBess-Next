@@ -38,124 +38,126 @@ class GuiEditorFragment : Fragment() {
     ): View {
         return androidx.compose.ui.platform.ComposeView(requireContext()).apply {
             setContent {
-                val bins by sharedViewModel.bins.collectAsState()
-                // Observe GpuFrequencyViewModel for navigation state (synced with Legacy Editor)
-                val selectedBinIndex by gpuFrequencyViewModel.selectedBinIndex.collectAsState()
-                val selectedLevelIndex by gpuFrequencyViewModel.selectedLevelIndex.collectAsState()
-                val workbenchState by sharedViewModel.workbenchState.collectAsState()
-                
-                if (selectedBinIndex == -1) {
-                    when (workbenchState) {
-                        is com.ireddragonicy.konabessnext.viewmodel.SharedGpuViewModel.WorkbenchState.Loading -> {
-                             androidx.compose.foundation.layout.Box(
-                                modifier = androidx.compose.ui.Modifier.fillMaxSize(),
-                                contentAlignment = androidx.compose.ui.Alignment.Center
-                            ) {
-                                androidx.compose.material3.CircularProgressIndicator()
+                com.ireddragonicy.konabessnext.ui.theme.KonaBessTheme {
+                    val bins by sharedViewModel.bins.collectAsState()
+                    // Observe GpuFrequencyViewModel for navigation state (synced with Legacy Editor)
+                    val selectedBinIndex by gpuFrequencyViewModel.selectedBinIndex.collectAsState()
+                    val selectedLevelIndex by gpuFrequencyViewModel.selectedLevelIndex.collectAsState()
+                    val workbenchState by sharedViewModel.workbenchState.collectAsState()
+                    
+                    if (selectedBinIndex == -1) {
+                        when (workbenchState) {
+                            is com.ireddragonicy.konabessnext.viewmodel.SharedGpuViewModel.WorkbenchState.Loading -> {
+                                 androidx.compose.foundation.layout.Box(
+                                    modifier = androidx.compose.ui.Modifier.fillMaxSize(),
+                                    contentAlignment = androidx.compose.ui.Alignment.Center
+                                ) {
+                                    androidx.compose.material3.CircularProgressIndicator()
+                                }
+                            }
+                            is com.ireddragonicy.konabessnext.viewmodel.SharedGpuViewModel.WorkbenchState.Error -> {
+                                androidx.compose.foundation.layout.Box(
+                                    modifier = androidx.compose.ui.Modifier.fillMaxSize(),
+                                    contentAlignment = androidx.compose.ui.Alignment.Center
+                                ) {
+                                    androidx.compose.material3.Text("Error loading table")
+                                }
+                            }
+                            else -> {
+                                com.ireddragonicy.konabessnext.ui.compose.GpuBinList(
+                                    bins = bins,
+                                    onBinClick = { index ->
+                                        gpuFrequencyViewModel.selectedBinIndex.value = index
+                                    }
+                                )
                             }
                         }
-                        is com.ireddragonicy.konabessnext.viewmodel.SharedGpuViewModel.WorkbenchState.Error -> {
-                            androidx.compose.foundation.layout.Box(
-                                modifier = androidx.compose.ui.Modifier.fillMaxSize(),
-                                contentAlignment = androidx.compose.ui.Alignment.Center
-                            ) {
-                                androidx.compose.material3.Text("Error loading table")
-                            }
+                    } else if (selectedLevelIndex == -1) {
+                        // Level List Screen (Replaces old GpuTableEditor logic)
+                        val bin = bins.getOrNull(selectedBinIndex)
+                        if (bin != null) {
+                             com.ireddragonicy.konabessnext.ui.compose.GpuLevelList(
+                                 levels = bin.levels,
+                                 onLevelClick = { lvlIdx ->
+                                     gpuFrequencyViewModel.selectedLevelIndex.value = lvlIdx
+                                 },
+                                 onAddLevelTop = {
+                                     gpuFrequencyViewModel.addFrequency(selectedBinIndex, true)
+                                 },
+                                 onAddLevelBottom = {
+                                     gpuFrequencyViewModel.addFrequency(selectedBinIndex, false)
+                                 },
+                                 onDuplicateLevel = { lvlIdx ->
+                                     gpuFrequencyViewModel.duplicateFrequency(selectedBinIndex, lvlIdx)
+                                 },
+                                 onDeleteLevel = { lvlIdx ->
+                                     com.ireddragonicy.konabessnext.utils.DialogUtil.showConfirmation(
+                                         requireActivity(),
+                                         getString(R.string.remove),
+                                         "Are you sure you want to remove this frequency?",
+                                         { _, _ ->
+                                             gpuFrequencyViewModel.removeFrequency(selectedBinIndex, lvlIdx)
+                                         }
+                                     )
+                                 },
+                                 onReorder = { from, to ->
+                                     gpuFrequencyViewModel.reorderFrequency(selectedBinIndex, from, to)
+                                 },
+                                 onBack = {
+                                     gpuFrequencyViewModel.selectedBinIndex.value = -1
+                                 },
+                                 onOpenCurveEditor = {
+                                     (requireActivity() as MainActivity).openCurveEditor(selectedBinIndex)
+                                 }
+                             )
+                        } else {
+                            // Error fallback
+                             androidx.compose.material3.Text("Bin not found")
                         }
-                        else -> {
-                            com.ireddragonicy.konabessnext.ui.compose.GpuBinList(
-                                bins = bins,
-                                onBinClick = { index ->
-                                    gpuFrequencyViewModel.selectedBinIndex.value = index
+                    } else {
+                        // Param Editor Screen
+                        val bin = bins.getOrNull(selectedBinIndex)
+                        val level = bin?.levels?.getOrNull(selectedLevelIndex)
+                        
+                        if (level != null) {
+                            com.ireddragonicy.konabessnext.ui.compose.GpuParamEditor(
+                                level = level,
+                                onBack = {
+                                    gpuFrequencyViewModel.selectedLevelIndex.value = -1
+                                },
+                                onDeleteLevel = {
+                                    com.ireddragonicy.konabessnext.utils.DialogUtil.showConfirmation(
+                                         requireActivity(),
+                                         getString(R.string.remove),
+                                         "Are you sure you want to remove this frequency?",
+                                         { _, _ ->
+                                             gpuFrequencyViewModel.removeFrequency(selectedBinIndex, selectedLevelIndex)
+                                             gpuFrequencyViewModel.selectedLevelIndex.value = -1 // Go back
+                                         }
+                                     )
+                                },
+                                onUpdateParam = { lineIndex, encodedLine, historyMsg ->
+                                    try {
+                                        val binIndex = gpuFrequencyViewModel.selectedBinIndex.value
+                                        val levelIndex = gpuFrequencyViewModel.selectedLevelIndex.value
+                                        
+                                        if (binIndex != -1 && levelIndex != -1) {
+                                             gpuFrequencyViewModel.updateLevelLine(
+                                                binIndex,
+                                                levelIndex,
+                                                lineIndex,
+                                                encodedLine,
+                                                historyMsg
+                                            )
+                                        }
+                                    } catch (e: Exception) {
+                                        e.printStackTrace()
+                                    }
                                 }
                             )
+                        } else {
+                            androidx.compose.material3.Text("Level not found")
                         }
-                    }
-                } else if (selectedLevelIndex == -1) {
-                    // Level List Screen (Replaces old GpuTableEditor logic)
-                    val bin = bins.getOrNull(selectedBinIndex)
-                    if (bin != null) {
-                         com.ireddragonicy.konabessnext.ui.compose.GpuLevelList(
-                             levels = bin.levels,
-                             onLevelClick = { lvlIdx ->
-                                 gpuFrequencyViewModel.selectedLevelIndex.value = lvlIdx
-                             },
-                             onAddLevelTop = {
-                                 gpuFrequencyViewModel.addFrequency(selectedBinIndex, true)
-                             },
-                             onAddLevelBottom = {
-                                 gpuFrequencyViewModel.addFrequency(selectedBinIndex, false)
-                             },
-                             onDuplicateLevel = { lvlIdx ->
-                                 gpuFrequencyViewModel.duplicateFrequency(selectedBinIndex, lvlIdx)
-                             },
-                             onDeleteLevel = { lvlIdx ->
-                                 com.ireddragonicy.konabessnext.utils.DialogUtil.showConfirmation(
-                                     requireActivity(),
-                                     getString(R.string.remove),
-                                     "Are you sure you want to remove this frequency?",
-                                     { _, _ ->
-                                         gpuFrequencyViewModel.removeFrequency(selectedBinIndex, lvlIdx)
-                                     }
-                                 )
-                             },
-                             onReorder = { from, to ->
-                                 gpuFrequencyViewModel.reorderFrequency(selectedBinIndex, from, to)
-                             },
-                             onBack = {
-                                 gpuFrequencyViewModel.selectedBinIndex.value = -1
-                             },
-                             onOpenCurveEditor = {
-                                 (requireActivity() as MainActivity).openCurveEditor(selectedBinIndex)
-                             }
-                         )
-                    } else {
-                        // Error fallback
-                         androidx.compose.material3.Text("Bin not found")
-                    }
-                } else {
-                    // Param Editor Screen
-                    val bin = bins.getOrNull(selectedBinIndex)
-                    val level = bin?.levels?.getOrNull(selectedLevelIndex)
-                    
-                    if (level != null) {
-                        com.ireddragonicy.konabessnext.ui.compose.GpuParamEditor(
-                            level = level,
-                            onBack = {
-                                gpuFrequencyViewModel.selectedLevelIndex.value = -1
-                            },
-                            onDeleteLevel = {
-                                com.ireddragonicy.konabessnext.utils.DialogUtil.showConfirmation(
-                                     requireActivity(),
-                                     getString(R.string.remove),
-                                     "Are you sure you want to remove this frequency?",
-                                     { _, _ ->
-                                         gpuFrequencyViewModel.removeFrequency(selectedBinIndex, selectedLevelIndex)
-                                         gpuFrequencyViewModel.selectedLevelIndex.value = -1 // Go back
-                                     }
-                                 )
-                            },
-                            onUpdateParam = { lineIndex, encodedLine, historyMsg ->
-                                try {
-                                    val binIndex = gpuFrequencyViewModel.selectedBinIndex.value
-                                    val levelIndex = gpuFrequencyViewModel.selectedLevelIndex.value
-                                    
-                                    if (binIndex != -1 && levelIndex != -1) {
-                                         gpuFrequencyViewModel.updateLevelLine(
-                                            binIndex,
-                                            levelIndex,
-                                            lineIndex,
-                                            encodedLine,
-                                            historyMsg
-                                        )
-                                    }
-                                } catch (e: Exception) {
-                                    e.printStackTrace()
-                                }
-                            }
-                        )
-                    } else {
-                        androidx.compose.material3.Text("Level not found")
                     }
                 }
             }

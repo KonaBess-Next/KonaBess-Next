@@ -48,16 +48,21 @@ class ImportExportFragment : Fragment() {
         return ComposeView(requireContext()).apply {
             setContent {
                 val isPrepared by deviceViewModel.isPrepared.collectAsState(initial = false)
+                val lastExportedResult by importExportViewModel.lastExportedContent.collectAsState(initial = null)
                 
                 ImportExportScreen(
                     isPrepared = isPrepared,
                     onExportHistory = { startActivity(Intent(requireActivity(), ExportHistoryActivity::class.java)) },
-                    onImportFromFile = { importFileLauncher.launch("*/*") },
-                    onExportToFile = { showExportToFileDialog() },
-                    onImportFromClipboard = { showImportFromClipboardDialog() },
-                    onExportToClipboard = { showExportToClipboardDialog() },
-                    onExportRawDts = { handleExportRawDts() },
-                    onBackupBootImage = { showBackupBootImageDialog() }
+                    onImportFromFile = { importConfigLauncher.launch(arrayOf("*/*")) },
+                    onExportToFile = { desc -> 
+                        pendingExportDesc = desc
+                        exportConfigLauncher.launch("config_${System.currentTimeMillis()}.txt")
+                    },
+                    onImportFromClipboard = { text -> importExportViewModel.importConfig(text) },
+                    onExportToClipboard = { desc -> handleExportToClipboard(desc) },
+                    onExportRawDts = { exportRawDtsLauncher.launch("dts_dump_${System.currentTimeMillis()}.txt") },
+                    onBackupBootImage = { backupBootLauncher.launch("boot_backup_${System.currentTimeMillis()}.img") },
+                    lastExportedResult = lastExportedResult
                 )
             }
         }
@@ -80,135 +85,24 @@ class ImportExportFragment : Fragment() {
         }
     }
     
-    // File Picker for Import
-    private val importFileLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
-        uri?.let { handleImportFile(it) }
+    // SAF Launchers
+    private val importConfigLauncher = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        uri?.let { importExportViewModel.importConfigFromUri(requireContext(), it) }
     }
 
-    private fun showExportToFileDialog() {
-        val activity = requireActivity() as MainActivity
-        DialogUtil.showEditDialog(activity, R.string.export_to_file, R.string.export_data_msg) { desc ->
-            if (desc.isNotEmpty()) {
-                activity.runWithStoragePermission {
-                    handleExportToFile(desc)
-                }
-            }
-        }
+    private var pendingExportDesc: String = ""
+    private val exportConfigLauncher = registerForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri: Uri? ->
+        uri?.let { importExportViewModel.exportConfigToUri(requireContext(), it, pendingExportDesc) }
     }
 
-    private fun showImportFromClipboardDialog() {
-        val activity = requireActivity() as MainActivity
-        DialogUtil.showEditDialog(activity, R.string.import_from_clipboard, R.string.paste_here) { text ->
-            if (text.isNotEmpty()) {
-                handleImportFromText(text)
-            }
-        }
+    private val exportRawDtsLauncher = registerForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri: Uri? ->
+        uri?.let { importExportViewModel.exportRawDtsToUri(requireContext(), it) }
     }
 
-    private fun showExportToClipboardDialog() {
-        val activity = requireActivity() as MainActivity
-        DialogUtil.showEditDialog(activity, R.string.export_to_clipboard, R.string.export_data_msg) { desc ->
-            if (desc.isNotEmpty()) {
-                handleExportToClipboard(desc)
-            }
-        }
+    private val backupBootLauncher = registerForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri: Uri? ->
+        uri?.let { importExportViewModel.backupBootToUri(requireContext(), it) }
     }
 
-    private fun handleExportRawDts() {
-        val activity = requireActivity() as MainActivity
-        activity.runWithStoragePermission {
-            val destPath = Environment.getExternalStorageDirectory().absolutePath + "/KonaBess/dts_dump.dts"
-            File(destPath).parentFile?.mkdirs()
-            importExportViewModel.exportRawDts(destPath)
-        }
-    }
-
-    private fun showBackupBootImageDialog() {
-        val activity = requireActivity() as MainActivity
-        DialogUtil.showConfirmDialog(activity, R.string.backup_image, R.string.will_backup_to) {
-            activity.runWithStoragePermission {
-                deviceViewModel.backupBoot()
-            }
-        }
-    }
-    
-    private fun handleImportFile(uri: Uri) {
-        viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
-            try {
-                val inputStream = requireContext().contentResolver.openInputStream(uri)
-                val bytes = inputStream?.readBytes()
-                inputStream?.close()
-                
-                if (bytes != null) {
-                    val decompressed = GzipUtils.uncompress(bytes)
-                    if (decompressed != null) {
-                        importExportViewModel.importConfig(decompressed)
-                    } else {
-                        val text = String(bytes)
-                        if (text.trim().startsWith("{")) {
-                            importExportViewModel.importConfig(text)
-                        } else {
-                            withContext(Dispatchers.Main) {
-                                DialogUtil.showError(requireActivity(), R.string.failed_decoding)
-                            }
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                withContext(Dispatchers.Main) {
-                    DialogUtil.showError(requireActivity(), R.string.error_occur)
-                }
-            }
-        }
-    }
-    
-    private fun handleImportFromText(text: String) {
-        viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
-            if (text.trim().startsWith("{")) {
-                importExportViewModel.importConfig(text)
-            } else {
-                val bytes = text.toByteArray(Charsets.ISO_8859_1)
-                val decompressed = GzipUtils.uncompress(bytes)
-                if (decompressed != null) {
-                    importExportViewModel.importConfig(decompressed)
-                } else {
-                    withContext(Dispatchers.Main) {
-                        importExportViewModel.importConfig(text)
-                    }
-                }
-            }
-        }
-    }
-    
-    private fun handleExportToFile(desc: String) {
-        viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
-            val content = importExportViewModel.exportConfig(desc)
-            if (content != null) {
-                val dir = File(Environment.getExternalStorageDirectory(), "KonaBess/Export")
-                if (!dir.exists()) dir.mkdirs()
-                
-                val filename = "config_${System.currentTimeMillis()}.json.gz"
-                val file = File(dir, filename)
-                
-                try {
-                    val fos = FileOutputStream(file)
-                    fos.write(content.toByteArray(Charsets.ISO_8859_1))
-                    fos.close()
-                    
-                    importExportViewModel.addToHistory(filename, desc, file.absolutePath, deviceViewModel.currentChipType?.id ?: "Unknown")
-                    
-                    withContext(Dispatchers.Main) {
-                        DialogUtil.showDetailedError(requireActivity(), R.string.success_export_to, file.absolutePath)
-                    }
-                } catch (e: Exception) {
-                    withContext(Dispatchers.Main) {
-                        DialogUtil.showError(requireActivity(), R.string.failed_export)
-                    }
-                }
-            }
-        }
-    }
-    
     private fun handleExportToClipboard(desc: String) {
         viewLifecycleOwner.lifecycleScope.launch(Dispatchers.Main) {
             val content = importExportViewModel.exportConfig(desc)
@@ -216,6 +110,13 @@ class ImportExportFragment : Fragment() {
                 val clipboard = requireContext().getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                 val clip = ClipData.newPlainText("KonaBess Config", content)
                 clipboard.setPrimaryClip(clip)
+                
+                // Track in history
+                importExportViewModel.addToHistory("Clipboard", desc, "clipboard://text", com.ireddragonicy.konabessnext.core.ChipInfo.current?.id ?: "Unknown")
+                
+                // Notify UI to show result
+                importExportViewModel.notifyExportResult(content)
+                
                 Toast.makeText(requireContext(), R.string.text_copied_to_clipboard, Toast.LENGTH_SHORT).show()
             }
         }

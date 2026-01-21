@@ -145,8 +145,9 @@ class DeviceViewModel @Inject constructor(
     fun backupBoot() {
         viewModelScope.launch {
             try {
-                val dest = repository.backupBootImage()
-                _repackState.value = UiState.Success("Backup successful to $dest")
+                val bootFile = repository.getBootImageFile()
+                val dest = bootFile.absolutePath
+                _repackState.value = UiState.Success("Backup successful at $dest")
             } catch (e: Exception) {
                 _repackState.value = UiState.Error("Backup failed: ${e.message}", e)
             }

@@ -33,60 +33,60 @@ fun GpuParamEditor(
 ) {
     val context = LocalContext.current
     
-    // Parse lines into displayable items
-    val params = remember(level) {
-        level.lines.mapIndexed { index, line ->
-            val decoded = DtsHelper.decode_hex_line(line)
-            val name = decoded.name ?: ""
-            val rawValue = decoded.value ?: ""
-            val title = ChipStringHelper.convertLevelParams(name, context)
-            
-            // Format value for display
-            val displayValue = try {
-                if (name == "qcom,gpu-freq") {
-                    val hz = if (rawValue.startsWith("0x")) java.lang.Long.decode(rawValue) else rawValue.toLong()
-                    com.ireddragonicy.konabessnext.ui.SettingsActivity.formatFrequency(hz, context)
-                } else if (name == "qcom,level" || name == "qcom,cx-level") {
-                    val lvl = if (rawValue.startsWith("0x")) java.lang.Long.decode(rawValue) else rawValue.toLong()
-                    val idx = com.ireddragonicy.konabessnext.core.editor.LevelOperations.levelint2int(lvl)
-                    com.ireddragonicy.konabessnext.core.ChipInfo.rpmh_levels.level_str().getOrNull(idx) ?: rawValue
-                } else if (rawValue.startsWith("0x")) {
-                    // Try to convert generic hex to nice decimal if short
-                    val longVal = java.lang.Long.decode(rawValue)
-                    if (longVal < 1000) longVal.toString() else rawValue
-                } else {
+    com.ireddragonicy.konabessnext.ui.theme.KonaBessTheme {
+        // Parse lines into displayable items
+        val params = remember(level) {
+            level.lines.mapIndexed { index, line ->
+                val decoded = DtsHelper.decode_hex_line(line)
+                val name = decoded.name ?: ""
+                val rawValue = decoded.value ?: ""
+                val title = ChipStringHelper.convertLevelParams(name, context)
+                
+                // Format value for display
+                val displayValue = try {
+                    if (name == "qcom,gpu-freq") {
+                        val hz = if (rawValue.startsWith("0x")) java.lang.Long.decode(rawValue) else rawValue.toLong()
+                        com.ireddragonicy.konabessnext.ui.SettingsActivity.formatFrequency(hz, context)
+                    } else if (name == "qcom,level" || name == "qcom,cx-level") {
+                        val lvl = if (rawValue.startsWith("0x")) java.lang.Long.decode(rawValue) else rawValue.toLong()
+                        val idx = com.ireddragonicy.konabessnext.core.editor.LevelOperations.levelint2int(lvl)
+                        com.ireddragonicy.konabessnext.core.ChipInfo.rpmh_levels.level_str().getOrNull(idx) ?: rawValue
+                    } else if (rawValue.startsWith("0x")) {
+                        // Try to convert generic hex to nice decimal if short
+                        val longVal = java.lang.Long.decode(rawValue)
+                        if (longVal < 1000) longVal.toString() else rawValue
+                    } else {
+                        rawValue
+                    }
+                } catch (e: Exception) {
                     rawValue
                 }
-            } catch (e: Exception) {
-                rawValue
-            } /* + (if (rawValue != displayValue && rawValue.startsWith("0x")) " ($rawValue)" else "") */ // Optional: show original hex?
-            
-            ParamItem(index, name, rawValue, displayValue, title, line)
+                
+                ParamItem(index, name, rawValue, displayValue, title, line)
+            }
         }
-    }
 
-    var editingParam by remember { mutableStateOf<ParamItem?>(null) }
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        var editingParam by remember { mutableStateOf<ParamItem?>(null) }
+        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    if (editingParam != null) {
-        ModalBottomSheet(
-            onDismissRequest = { editingParam = null },
-            sheetState = sheetState,
-            containerColor = MaterialTheme.colorScheme.surface,
-            contentColor = MaterialTheme.colorScheme.onSurface
-        ) {
-            EditParamSheetContent(
-                param = editingParam!!,
-                onSave = { encodedLine, historyMsg ->
-                    onUpdateParam(editingParam!!.index, encodedLine, historyMsg)
-                    editingParam = null
-                },
-                onCancel = { editingParam = null }
-            )
+        if (editingParam != null) {
+            ModalBottomSheet(
+                onDismissRequest = { editingParam = null },
+                sheetState = sheetState,
+                containerColor = MaterialTheme.colorScheme.surface,
+                contentColor = MaterialTheme.colorScheme.onSurface
+            ) {
+                EditParamSheetContent(
+                    param = editingParam!!,
+                    onSave = { encodedLine, historyMsg ->
+                        onUpdateParam(editingParam!!.index, encodedLine, historyMsg)
+                        editingParam = null
+                    },
+                    onCancel = { editingParam = null }
+                )
+            }
         }
-    }
 
-    com.ireddragonicy.konabessnext.ui.theme.KonaBessTheme {
         Scaffold(
             containerColor = MaterialTheme.colorScheme.background,
             topBar = {
