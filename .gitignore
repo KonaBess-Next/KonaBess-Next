@@ -67,6 +67,9 @@ captures/
 # Google Services (e.g. APIs or Firebase)
 # google-services.json
 
+# dts folder
+/dts/
+
 # Freeline
 freeline.py
 freeline/

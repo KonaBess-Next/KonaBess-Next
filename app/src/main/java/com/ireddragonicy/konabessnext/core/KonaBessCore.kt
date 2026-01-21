@@ -56,7 +56,10 @@ object KonaBessCore {
         "Tuna 7 SoC" to "tuna",
         "Tuna SoC" to "tuna",
         "PineappleP SG" to "pineapple_sg",
-        "KalamaP QCS" to "kalamap_qcs_singleBin"
+        "KalamaP QCS" to "kalamap_qcs_singleBin",
+        "Montague" to "montague",
+        "Parrot" to "parrot",
+        "Ravelin" to "ravelin"
     )
 
     private val PROPERTY_CACHE = ConcurrentHashMap<String, String>()
