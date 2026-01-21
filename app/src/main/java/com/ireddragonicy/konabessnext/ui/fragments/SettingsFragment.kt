@@ -9,24 +9,24 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.ComposeView
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
-import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.ireddragonicy.konabessnext.BuildConfig
 import com.ireddragonicy.konabessnext.R
 import com.ireddragonicy.konabessnext.data.KonaBessStr
 import com.ireddragonicy.konabessnext.ui.SettingsActivity
-import com.ireddragonicy.konabessnext.ui.adapters.SettingsAdapter
+import com.ireddragonicy.konabessnext.ui.compose.SettingsScreen
 import com.ireddragonicy.konabessnext.viewmodel.SettingsViewModel
 import dagger.hilt.android.AndroidEntryPoint
-import java.util.ArrayList
 
 @AndroidEntryPoint
 class SettingsFragment : Fragment() {
-    private var recyclerView: RecyclerView? = null
-    private var adapter: SettingsAdapter? = null
     private var prefs: SharedPreferences? = null
 
     // MVVM ViewModel
@@ -35,118 +35,31 @@ class SettingsFragment : Fragment() {
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
         savedInstanceState: Bundle?
-    ): View? {
-        // Initialize MVVM ViewModel (already injected via delegate)
+    ): View {
         settingsViewModel.loadSettings(requireContext())
-
         prefs = requireContext().getSharedPreferences(SettingsActivity.PREFS_NAME, Context.MODE_PRIVATE)
 
-        recyclerView = RecyclerView(requireContext())
-        recyclerView!!.layoutManager = LinearLayoutManager(requireContext())
-        // Fix: Increase bottom padding to 88dp for navbar and set clipToPadding false
-        val bottomPadding = (requireContext().resources.displayMetrics.density * 88).toInt()
-        recyclerView!!.setPadding(0, 8, 0, bottomPadding)
-        recyclerView!!.clipToPadding = false
-
-        loadSettings()
-        return recyclerView
-    }
-
-    private fun loadSettings() {
-        val items = ArrayList<SettingsAdapter.SettingItem>()
-
-        items.add(
-            SettingsAdapter.SettingItem(
-                R.drawable.ic_dark_mode,
-                getString(R.string.theme),
-                getString(R.string.theme_description),
-                currentThemeName
-            )
-        )
-
-        // Dynamic Color Toggle
-        val isDynamicColor = prefs!!.getBoolean(SettingsActivity.KEY_DYNAMIC_COLOR, true)
-        items.add(
-            SettingsAdapter.SettingItem(
-                R.drawable.ic_tune,
-                "Dynamic Color",
-                "Use wallpaper-based colors (Material You)",
-                isDynamicColor
-            )
-        )
-
-        // Color Palette (Only relevant if Dynamic Color is OFF)
-        if (!isDynamicColor) {
-            items.add(
-                SettingsAdapter.SettingItem(
-                    R.drawable.ic_tune,
-                    "Color Palette",
-                    "Choose your color scheme",
-                    currentColorPaletteName
+        return ComposeView(requireContext()).apply {
+            setContent {
+                var refreshKey by remember { mutableStateOf(0) }
+                
+                SettingsScreen(
+                    currentTheme = currentThemeName,
+                    isDynamicColor = prefs!!.getBoolean(SettingsActivity.KEY_DYNAMIC_COLOR, true),
+                    currentColorPalette = currentColorPaletteName,
+                    currentLanguage = currentLanguageName,
+                    currentFreqUnit = currentFreqUnitName,
+                    isAutoSave = prefs!!.getBoolean(SettingsActivity.KEY_AUTO_SAVE_GPU_TABLE, false),
+                    onThemeClick = { showThemeDialog() },
+                    onDynamicColorToggle = { toggleDynamicColor() },
+                    onColorPaletteClick = { showColorPaletteDialog() },
+                    onLanguageClick = { showLanguageDialog() },
+                    onFreqUnitClick = { showFreqUnitDialog() },
+                    onAutoSaveToggle = { toggleAutoSave() },
+                    onHelpClick = { showHelpDialog() }
                 )
-            )
-        }
-
-        items.add(
-            SettingsAdapter.SettingItem(
-                R.drawable.ic_language,
-                getString(R.string.language),
-                "Select your preferred language",
-                currentLanguageName
-            )
-        )
-
-        items.add(
-            SettingsAdapter.SettingItem(
-                R.drawable.ic_frequency,
-                getString(R.string.gpu_freq_unit),
-                getString(R.string.freq_unit_description),
-                currentFreqUnitName
-            )
-        )
-
-        // Auto-save GPU freq table toggle
-        val isAutoSave = prefs!!.getBoolean(SettingsActivity.KEY_AUTO_SAVE_GPU_TABLE, false)
-        items.add(
-            SettingsAdapter.SettingItem(
-                R.drawable.ic_save,
-                getString(R.string.auto_save_gpu_freq_table),
-                getString(R.string.auto_save_gpu_freq_table_desc),
-                isAutoSave
-            )
-        )
-
-        items.add(
-            SettingsAdapter.SettingItem(
-                R.drawable.ic_help,
-                getString(R.string.help),
-                "About and documentation",
-                "Version " + BuildConfig.VERSION_NAME
-            )
-        )
-
-        adapter = SettingsAdapter(items, requireContext())
-        adapter!!.setOnItemClickListener { position ->
-            val item = items[position]
-
-            if (item.title == getString(R.string.theme)) {
-                showThemeDialog()
-            } else if (item.title == "Dynamic Color") {
-                toggleDynamicColor()
-            } else if (item.title == "Color Palette") {
-                showColorPaletteDialog()
-            } else if (item.title == getString(R.string.language)) {
-                showLanguageDialog()
-            } else if (item.title == getString(R.string.gpu_freq_unit)) {
-                showFreqUnitDialog()
-            } else if (item.title == getString(R.string.auto_save_gpu_freq_table)) {
-                toggleAutoSave()
-            } else if (item.title == getString(R.string.help)) {
-                showHelpDialog()
             }
         }
-
-        recyclerView!!.adapter = adapter
     }
 
     private fun showThemeDialog() {
@@ -162,7 +75,6 @@ class SettingsFragment : Fragment() {
             .setTitle(getString(R.string.theme))
             .setSingleChoiceItems(themes, currentTheme) { dialog, which ->
                 prefs!!.edit().putInt(SettingsActivity.KEY_THEME, which).apply()
-                adapter!!.updateItem(0, currentThemeName)
                 dialog.dismiss()
                 SettingsActivity.applyThemeFromSettings(requireContext())
                 requireActivity().recreate()
@@ -200,7 +112,6 @@ class SettingsFragment : Fragment() {
             .setTitle("Color Palette")
             .setSingleChoiceItems(palettes, initialSelection) { dialog, which ->
                 prefs!!.edit().putInt(SettingsActivity.KEY_COLOR_PALETTE, paletteIds[which]).apply()
-                adapter!!.updateItem(2, currentColorPaletteName) // Note: Index might vary, best to recreate
                 dialog.dismiss()
                 requireActivity().recreate()
             }
@@ -229,7 +140,6 @@ class SettingsFragment : Fragment() {
             .setTitle(getString(R.string.language))
             .setSingleChoiceItems(languages, currentIndex) { dialog, which ->
                 prefs!!.edit().putString(SettingsActivity.KEY_LANGUAGE, languageCodes[which]).apply()
-                adapter!!.updateItem(2, currentLanguageName)
                 dialog.dismiss()
                 requireActivity().recreate()
             }
@@ -250,7 +160,6 @@ class SettingsFragment : Fragment() {
             .setTitle(getString(R.string.gpu_freq_unit))
             .setSingleChoiceItems(units, currentUnit) { dialog, which ->
                 prefs!!.edit().putInt(SettingsActivity.KEY_FREQ_UNIT, which).apply()
-                adapter!!.updateItem(3, currentFreqUnitName)
                 dialog.dismiss()
             }
             .setNegativeButton(getString(R.string.cancel), null)
@@ -266,22 +175,18 @@ class SettingsFragment : Fragment() {
                 MaterialAlertDialogBuilder(requireContext())
                     .setTitle(getString(R.string.about))
                     .setMessage(
-                        getResources().getString(R.string.author) + " " +
+                        resources.getString(R.string.author) + " " +
                                 "IRedDragonICY & xzr467706992 (LibXZR)\n"
-                                + getResources().getString(R.string.release_at) + " www.akr-developers.com\n"
+                                + resources.getString(R.string.release_at) + " www.akr-developers.com\n"
                     )
                     .setPositiveButton(getString(R.string.ok), null)
-                    .setNegativeButton(
-                        "Github"
-                    ) { _, _ ->
+                    .setNegativeButton("Github") { _, _ ->
                         startActivity(Intent().apply {
                             action = Intent.ACTION_VIEW
                             data = Uri.parse("https://github.com/ireddragonicy/KonaBess")
                         })
                     }
-                    .setNeutralButton(
-                        getString(R.string.visit_akr)
-                    ) { _, _ ->
+                    .setNeutralButton(getString(R.string.visit_akr)) { _, _ ->
                         startActivity(Intent().apply {
                             action = Intent.ACTION_VIEW
                             data = Uri.parse("https://github.com/ireddragonicy")
@@ -299,17 +204,10 @@ class SettingsFragment : Fragment() {
         prefs!!.edit().putBoolean(SettingsActivity.KEY_AUTO_SAVE_GPU_TABLE, newState).apply()
         requireActivity().recreate()
 
-        // Show toast to confirm the change
         val message = if (newState) getString(R.string.auto_save_enabled_toast)
         else getString(R.string.auto_save_disabled_toast)
         Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show()
     }
-
-    private val autoSaveStatusText: String
-        get() {
-            val isEnabled = prefs!!.getBoolean(SettingsActivity.KEY_AUTO_SAVE_GPU_TABLE, false)
-            return if (isEnabled) getString(R.string.common_on) else getString(R.string.common_off)
-        }
 
     private fun toggleDynamicColor() {
         val currentState = prefs!!.getBoolean(SettingsActivity.KEY_DYNAMIC_COLOR, true)

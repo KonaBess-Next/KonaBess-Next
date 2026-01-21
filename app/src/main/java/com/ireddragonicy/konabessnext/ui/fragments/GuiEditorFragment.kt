@@ -8,7 +8,7 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
-import com.ireddragonicy.konabessnext.core.GpuTableEditor
+// import com.ireddragonicy.konabessnext.core.GpuTableEditor
 import com.ireddragonicy.konabessnext.ui.MainActivity
 import com.ireddragonicy.konabessnext.viewmodel.SharedGpuViewModel
 import dagger.hilt.android.AndroidEntryPoint

@@ -30,29 +30,7 @@ import kotlinx.coroutines.withContext
 object ChipsetManager {
 
     interface OnChipsetSwitchedListener {
-        @Throws(Exception::class)
-        fun onInitAndDecode()
-
-        @Throws(Exception::class)
-        fun onPatchThrottleLevel()
-
-        fun onResetEditorState()
-
-        @Throws(Exception::class)
-        fun onRefreshView(restoredSession: Boolean, targetBinIndex: Int?, targetLevelIndex: Int?)
-
-        fun saveCurrentSession()
-
-        fun restoreSession(dtbId: Int): EditorStateManager.EditorSession?
-
-        fun getLinesInDts(): ArrayList<String>
-        fun getBins(): ArrayList<Bin>
-        fun getBinPosition(): Int
-
-        fun getCurrentBinIndex(): Int?
-        fun getCurrentLevelIndex(): Int?
-        fun setCurrentBinIndex(index: Int?)
-        fun setCurrentLevelIndex(index: Int?)
+        fun onChipsetSwitched(dtb: Dtb)
     }
 
     /**
@@ -254,50 +232,10 @@ object ChipsetManager {
         newDtb: Dtb, chipsetNameView: TextView,
         listener: OnChipsetSwitchedListener
     ) {
-        val lifecycleOwner = activity as? androidx.activity.ComponentActivity ?: return
-        val waiting = DialogUtil.getWaitDialog(activity, R.string.getting_freq_table)
-        waiting.show()
-
-        lifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
-            try {
-                val previous = KonaBessCore.currentDtb
-                if (previous != null && previous.id != newDtb.id) {
-                    listener.saveCurrentSession()
-                }
-
-                // Switch to new chipset
-                KonaBessCore.chooseTarget(newDtb, activity)
-
-                val session = listener.restoreSession(newDtb.id)
-                val restored = session != null
-                val targetBinIndex = if (restored) session!!.selectedBinIndex else null
-                val targetLevelIndex = if (restored) session!!.selectedLevelIndex else null
-
-                if (!restored) {
-                    listener.onInitAndDecode()
-                    listener.onPatchThrottleLevel()
-                    listener.onResetEditorState()
-                    listener.saveCurrentSession()
-                }
-
-                withContext(Dispatchers.Main) {
-                    waiting.dismiss()
-
-                    chipsetNameView.text = "${newDtb.id} ${newDtb.type.getDescription(activity)}"
-
-                    try {
-                        listener.onRefreshView(restored, targetBinIndex, targetLevelIndex)
-                        Toast.makeText(activity, "Switched to chipset " + newDtb.id, Toast.LENGTH_SHORT).show()
-                    } catch (e: Exception) {
-                        DialogUtil.showError(activity, R.string.error_occur)
-                    }
-                }
-            } catch (e: Exception) {
-                withContext(Dispatchers.Main) {
-                    waiting.dismiss()
-                    DialogUtil.showError(activity, R.string.getting_freq_table_failed)
-                }
-            }
-        }
+         // UI Update first
+         chipsetNameView.text = "${newDtb.id} ${newDtb.type.getDescription(activity)}"
+         // Notify listener to handle logic (save, load, refresh)
+         listener.onChipsetSwitched(newDtb)
     }
 }
+

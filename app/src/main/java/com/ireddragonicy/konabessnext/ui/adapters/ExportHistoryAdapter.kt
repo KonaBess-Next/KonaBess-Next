@@ -18,7 +18,6 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.textfield.TextInputLayout
 import com.ireddragonicy.konabessnext.R
-import com.ireddragonicy.konabessnext.core.TableIO
 import com.ireddragonicy.konabessnext.model.ExportHistoryItem
 import com.ireddragonicy.konabessnext.utils.ExportHistoryManager
 import com.ireddragonicy.konabessnext.utils.RootHelper
@@ -33,6 +32,7 @@ class ExportHistoryAdapter(
     private val historyItems: MutableList<ExportHistoryItem>,
     private val activity: Activity,
     private val historyManager: ExportHistoryManager,
+    private val onApplyConfig: (String) -> Unit,
     private val listener: OnHistoryChangeListener?
 ) : RecyclerView.Adapter<ExportHistoryAdapter.ViewHolder>() {
 
@@ -131,8 +131,8 @@ class ExportHistoryAdapter(
         try {
             // Read file content
             val content = file.readText()
-            // Apply via TableIO
-            TableIO.importFromData(activity, content)
+            // Delegate logic to activity/viewModel
+            onApplyConfig.invoke(content)
         } catch (e: Exception) {
             e.printStackTrace()
             Toast.makeText(activity, R.string.error_occur, Toast.LENGTH_SHORT).show()

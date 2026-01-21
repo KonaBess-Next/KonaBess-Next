@@ -67,7 +67,7 @@ class GpuRepository @Inject constructor(
             .launchIn(repoScope)
     }
 
-    private suspend fun parseContentPartial(content: String) {
+    suspend fun parseContentPartial(content: String) {
         _parsedResult.value = ParseResult.Loading
         try {
             val lines = content.split("\n")
@@ -152,11 +152,9 @@ class GpuRepository @Inject constructor(
     val stateVersion: StateFlow<Long> = _stateVersion.asStateFlow()
 
     // Centralized legacy state synchronization
+    // Centralized legacy state synchronization - REMOVED
     private fun syncLegacyState() {
-        com.ireddragonicy.konabessnext.core.GpuTableEditor.bins = ArrayList(_bins.value)
-        com.ireddragonicy.konabessnext.core.GpuTableEditor.bin_position = binPosition
-        com.ireddragonicy.konabessnext.core.GpuTableEditor.lines_in_dts = ArrayList(_linesInDts.value)
-        _stateVersion.value++
+        // No-op: GpuTableEditor is deleted
     }
 
     suspend fun loadTable() = withContext(Dispatchers.IO) {
@@ -187,7 +185,8 @@ class GpuRepository @Inject constructor(
             _linesInDts.value = linesMutable
             
             // Centralized sync
-            syncLegacyState()
+            // Centralized sync
+            // syncLegacyState()
             
             // Reset history
             undoStack.clear()
@@ -375,7 +374,7 @@ class GpuRepository @Inject constructor(
         
         redoStack.clear()
         updateHistoryState()
-        syncLegacyState()
+        // syncLegacyState()
         refreshIsDirty() // Compare with initial state
     }
 
@@ -418,7 +417,7 @@ class GpuRepository @Inject constructor(
         updateGeneratedContent()
         
         _parsedResult.value = ParseResult.Success(_bins.value)
-        syncLegacyState()
+        // syncLegacyState()
         refreshIsDirty() // Compare with initial state after undo/redo
     }
     

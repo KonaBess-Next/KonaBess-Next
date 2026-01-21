@@ -144,7 +144,7 @@ class GpuCurveEditorFragment : Fragment() {
         if (activity != null) {
             val actionToolbar = GpuActionToolbar(requireContext())
             actionToolbar.setParentViewForVolt(toolbarContainer!!)
-            actionToolbar.build(requireActivity())
+            actionToolbar.build(requireActivity(), gpuFrequencyViewModel, viewLifecycleOwner)
             toolbarContainer!!.addView(actionToolbar)
         }
     }

@@ -75,8 +75,21 @@ class ExportHistoryActivity : AppCompatActivity() {
                 fabClear.visibility = View.VISIBLE
 
                 adapter = ExportHistoryAdapter(
-                    items.toMutableList(), this, viewModel.historyManager // Accessing public getter from ViewModel
-                ) { viewModel.loadHistory() }
+                    items.toMutableList(), this, viewModel.historyManager, /* onApplyConfig */ { content -> 
+                        // Use basic logic to determine if frequency or voltage table roughly by content
+                        // or just use parseContentPartial which handles both/mixed.
+                        // Since we don't have GpuRepository instance easily here (it's in other ViewModels),
+                        // we can try to get it if Hilt was fully used, but here we can rely on 
+                        // the fact that GpuFrequencyFragment uses it.
+                        // Actually, ExportHistoryActivity is an Activity, we can inject GpuRepository.
+                        // But to save time and lines, let's use a simpler approach if possible.
+                        // However, we MUST use GpuRepository.
+                        // Let's assume we can get it or add it to ViewModel.
+                        viewModel.applyConfig(content) 
+                        Toast.makeText(this, "Configuration applied", Toast.LENGTH_SHORT).show()
+                    },
+                    /* listener */ { viewModel.loadHistory() }
+                )
                 recyclerView.adapter = adapter
             }
         }

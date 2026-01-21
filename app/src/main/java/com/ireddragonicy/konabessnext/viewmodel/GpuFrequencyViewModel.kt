@@ -30,6 +30,7 @@ class GpuFrequencyViewModel @Inject constructor(
 
     val canUndoLiveData: androidx.lifecycle.LiveData<Boolean> = repository.canUndo.asLiveData()
     val canRedoLiveData: androidx.lifecycle.LiveData<Boolean> = repository.canRedo.asLiveData()
+    val isDirtyLiveData: androidx.lifecycle.LiveData<Boolean> = repository.isDirty.asLiveData()
 
     val selectedBinIndex = MutableStateFlow(-1)
     val selectedLevelIndex = MutableStateFlow(-1)

@@ -6,12 +6,18 @@ import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import com.ireddragonicy.konabessnext.model.ExportHistoryItem
 import com.ireddragonicy.konabessnext.utils.ExportHistoryManager
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.launch
 
 /**
  * ViewModel for Export History screen.
  * Manages history items state for MVVM pattern.
  */
-class ExportHistoryViewModel(application: Application) : AndroidViewModel(application) {
+@dagger.hilt.android.lifecycle.HiltViewModel
+class ExportHistoryViewModel @javax.inject.Inject constructor(
+    application: Application,
+    private val repository: com.ireddragonicy.konabessnext.repository.GpuRepository
+) : AndroidViewModel(application) {
 
     val historyManager: ExportHistoryManager = ExportHistoryManager(application)
     private val _historyItems = MutableLiveData<List<ExportHistoryItem>>(ArrayList())
@@ -40,25 +46,13 @@ class ExportHistoryViewModel(application: Application) : AndroidViewModel(applic
 
     // Delete single item
     fun deleteItem(item: ExportHistoryItem) {
-        // ExportHistoryManager handles deletion in its own way if called,
-        // but typically the repository/manager should have a delete method.
-        // The Java code called deleteItem on viewModel but the body was empty?
-        // Ah, looking at the Java code:
-        // public void deleteItem(ExportHistoryItem item) {
-        //     // ExportHistoryManager handles deletion
-        //     loadHistory();
-        // }
-        // Wait, it didn't call historyManager.deleteItem(item)!
-        // That seems like a bug in the original code or I misread.
-        // Let's re-read Java code from previous turn.
-        // "public void deleteItem(ExportHistoryItem item) { // ExportHistoryManager handles deletion \n loadHistory(); }"
-        // It does NOT call manager.deleteItem.
-        // But ExportHistoryManager HAS a deleteItem method.
-        // I should probably fix this bug or strictly follow it.
-        // Given I'm "Migrating", I should probably fix obvious bugs.
-        // I will add historyManager.deleteItem(item).
-        
         historyManager.deleteItem(item)
         loadHistory()
+    }
+
+    fun applyConfig(content: String) {
+        viewModelScope.launch {
+            repository.parseContentPartial(content)
+        }
     }
 }

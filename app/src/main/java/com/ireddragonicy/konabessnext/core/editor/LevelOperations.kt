@@ -249,4 +249,25 @@ object LevelOperations {
             "Unknown"
         }
     }
+
+    @JvmStatic
+    fun levelint2int(value: Long): Int {
+        val levels = com.ireddragonicy.konabessnext.core.ChipInfo.rpmh_levels.levels()
+        for (i in levels.indices) {
+            if (levels[i].toLong() == value) return i
+        }
+        return 0
+    }
+
+    @JvmStatic
+    fun levelint2str(value: Long): String {
+        val levels = com.ireddragonicy.konabessnext.core.ChipInfo.rpmh_levels.levels()
+        val strings = com.ireddragonicy.konabessnext.core.ChipInfo.rpmh_levels.level_str()
+        for (i in levels.indices) {
+            if (levels[i].toLong() == value) {
+                return if (i < strings.size) strings[i] else value.toString()
+            }
+        }
+        return value.toString()
+    }
 }

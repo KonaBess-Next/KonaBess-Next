@@ -26,7 +26,7 @@ import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.ireddragonicy.konabessnext.R
-import com.ireddragonicy.konabessnext.core.GpuTableEditor
+// import com.ireddragonicy.konabessnext.core.GpuTableEditor
 import com.ireddragonicy.konabessnext.core.KonaBessCore
 import com.ireddragonicy.konabessnext.ui.MainActivity
 import com.ireddragonicy.konabessnext.ui.adapters.ChipsetSelectorAdapter
@@ -62,8 +62,7 @@ class GpuFrequencyFragment : Fragment() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Bridge ViewModel to GpuTableEditor for gradual migration
-        GpuTableEditor.setViewModel(gpuFrequencyViewModel)
+        // ViewModel handles logic directly now.
     }
 
     override fun onCreateView(
@@ -149,10 +148,10 @@ class GpuFrequencyFragment : Fragment() {
                 }
             }
 
-            // Observe editor states to sync with GpuTableEditor static state
+            // Observe editor states
             launch {
                 gpuFrequencyViewModel.isDirty.collect { isDirty ->
-                    GpuTableEditor.setDirty(isDirty)
+                    // UI observes this directly
                 }
             }
 
@@ -160,10 +159,7 @@ class GpuFrequencyFragment : Fragment() {
             launch {
                 gpuFrequencyViewModel.stateVersion.collect { version ->
                     if (version > 0 && deviceViewModel.isPrepared.value) {
-                        // Auto-refresh UI and buttons when state changes
-                        GpuTableEditor.updateUndoRedoButtons()
-                        GpuTableEditor.updateHistoryButtonLabel()
-                        refreshCurrentView()
+                        // UI Refresh handled by Compose state
                     }
                 }
             }
@@ -172,8 +168,7 @@ class GpuFrequencyFragment : Fragment() {
     
     private fun refreshCurrentView() {
         if (!isAdded) return
-        // Delegate to GpuTableEditor which preserves navigation state
-        GpuTableEditor.refreshCurrentView()
+        // No-op
     }
 
     override fun onResume() {
@@ -248,13 +243,32 @@ class GpuFrequencyFragment : Fragment() {
                     historyCount = history.size,
                     currentViewMode = currentMode,
                     showChipsetSelector = true,
-                    onSave = { GpuTableEditor.saveFrequencyTable(activity, true, "Saved manually") },
-                    onUndo = { GpuTableEditor.handleUndo() },
-                    onRedo = { GpuTableEditor.handleRedo() },
-                    onShowHistory = { GpuTableEditor.showHistoryDialog(activity) },
+                    onSave = { gpuFrequencyViewModel.save(true) },
+                    onUndo = { gpuFrequencyViewModel.undo() },
+                    onRedo = { gpuFrequencyViewModel.redo() },
+                    onShowHistory = { 
+                        val history = gpuFrequencyViewModel.history.value
+                        MaterialAlertDialogBuilder(activity)
+                           .setTitle("History")
+                           .setItems(history.toTypedArray(), null)
+                           .setPositiveButton("OK", null)
+                           .show()
+                    },
                     onViewModeChanged = { mode -> updateViewMode(mode) },
                     onChipsetClick = {
-                        val listener = GpuTableEditor()
+                        val listener = object : com.ireddragonicy.konabessnext.core.editor.ChipsetManager.OnChipsetSwitchedListener {
+                             override fun onChipsetSwitched(dtb: com.ireddragonicy.konabessnext.model.Dtb) {
+                                 // Save current state (optional, assuming ViewModel/Repo handles persistence/caching on load)
+                                 gpuFrequencyViewModel.save(false)
+                                 
+                                 // Switch global target
+                                 com.ireddragonicy.konabessnext.core.KonaBessCore.chooseTarget(dtb, activity)
+                                 
+                                 // Reload data for new target
+                                 gpuFrequencyViewModel.loadData()
+                                 sharedViewModel.loadData()
+                             }
+                        }
                         com.ireddragonicy.konabessnext.core.editor.ChipsetManager.showChipsetSelectorDialog(
                             activity, contentContainer!!, android.widget.TextView(activity), listener
                         )

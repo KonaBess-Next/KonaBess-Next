@@ -337,7 +337,7 @@ fun LevelCard(
                     "qcom,bus-max" -> busMax = decoded.value.toString()
                     "qcom,bus-min" -> busMin = decoded.value.toString()
                     "qcom,bus-freq" -> busFreq = decoded.value.toString()
-                    "qcom,level", "qcom,cx-level" -> volt = com.ireddragonicy.konabessnext.core.GpuVoltEditor.levelint2str(decoded.value)
+                    "qcom,level", "qcom,cx-level" -> volt = com.ireddragonicy.konabessnext.core.editor.LevelOperations.levelint2str(decoded.value)
                 }
             }
         } catch (e: Exception) { e.printStackTrace() }

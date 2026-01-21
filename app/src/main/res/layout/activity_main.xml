@@ -4,27 +4,17 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-    <!-- ViewPager2 for swipeable content -->
-    <androidx.viewpager2.widget.ViewPager2
-        android:id="@+id/view_pager"
+    <!-- ViewPager2 in EdgeAwareViewPager2Wrapper to allow system back gesture at edges -->
+    <com.ireddragonicy.konabessnext.ui.widgets.EdgeAwareViewPager2Wrapper
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        app:layout_behavior="@string/appbar_scrolling_view_behavior" />
-
-    <!-- Material Top App Bar -->
-    <com.google.android.material.appbar.AppBarLayout
-        android:id="@+id/app_bar_layout"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content">
-
-        <com.google.android.material.appbar.MaterialToolbar
-            android:id="@+id/toolbar"
+        android:layout_height="match_parent">
+        
+        <androidx.viewpager2.widget.ViewPager2
+            android:id="@+id/view_pager"
             android:layout_width="match_parent"
-            android:layout_height="?attr/actionBarSize"
-            android:background="?attr/colorSurface"
-            app:titleTextColor="?attr/colorOnSurface" />
-
-    </com.google.android.material.appbar.AppBarLayout>
+            android:layout_height="match_parent" />
+            
+    </com.ireddragonicy.konabessnext.ui.widgets.EdgeAwareViewPager2Wrapper>
 
     <!-- Bottom Navigation Bar -->
     <androidx.compose.ui.platform.ComposeView

@@ -13,21 +13,20 @@ import com.google.android.material.color.MaterialColors
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.ireddragonicy.konabessnext.R
 import com.ireddragonicy.konabessnext.core.ChipInfo
-import com.ireddragonicy.konabessnext.core.GpuTableEditor
-import com.ireddragonicy.konabessnext.core.GpuVoltEditor
-import com.ireddragonicy.konabessnext.core.editor.EditorStateManager
+import com.ireddragonicy.konabessnext.viewmodel.SharedGpuViewModel
+import com.ireddragonicy.konabessnext.viewmodel.GpuFrequencyViewModel
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.Observer
 import com.ireddragonicy.konabessnext.ui.MainActivity
-import com.ireddragonicy.konabessnext.ui.RawDtsEditorActivity
 import com.ireddragonicy.konabessnext.core.editor.ChipsetManager
 import com.ireddragonicy.konabessnext.core.KonaBessCore
-import com.ireddragonicy.konabessnext.viewmodel.SharedGpuViewModel
 
 import com.google.android.material.button.MaterialButtonToggleGroup
 
 class GpuActionToolbar @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null
-) : LinearLayout(context, attrs), EditorStateManager.OnHistoryStateChangedListener {
+) : LinearLayout(context, attrs) {
 
     private var btnSave: MaterialButton? = null
     private var btnUndo: MaterialButton? = null
@@ -70,7 +69,7 @@ class GpuActionToolbar @JvmOverloads constructor(
         this.parentViewForVolt = view
     }
 
-    fun build(activity: Activity) {
+    fun build(activity: Activity, viewModel: GpuFrequencyViewModel, lifecycleOwner: LifecycleOwner) {
         removeAllViews()
 
         val density = activity.resources.displayMetrics.density
@@ -86,21 +85,24 @@ class GpuActionToolbar @JvmOverloads constructor(
         // Build Row 1 contents
         btnSave = createMaterialButton(activity, "Save", R.drawable.ic_save)
         btnSave!!.setOnClickListener {
-            GpuTableEditor.saveFrequencyTable(
-                activity,
-                true,
-                "Saved manually"
-            )
+            viewModel.save(true)
         }
 
         btnUndo = createMaterialButton(activity, null, R.drawable.ic_undo)
-        btnUndo!!.setOnClickListener { GpuTableEditor.handleUndo() }
+        btnUndo!!.setOnClickListener { viewModel.undo() }
 
         btnRedo = createMaterialButton(activity, null, R.drawable.ic_redo)
-        btnRedo!!.setOnClickListener { GpuTableEditor.handleRedo() }
+        btnRedo!!.setOnClickListener { viewModel.redo() }
 
         btnHistory = createMaterialButton(activity, null, R.drawable.ic_history)
-        btnHistory!!.setOnClickListener { GpuTableEditor.showHistoryDialog(activity) }
+        btnHistory!!.setOnClickListener { 
+            val history = viewModel.history.value
+            MaterialAlertDialogBuilder(activity)
+                .setTitle("History")
+                .setItems(history.toTypedArray(), null)
+                .setPositiveButton("OK", null)
+                .show()
+        }
 
         // Layout Params
         val mainActionParams = LayoutParams(0, LayoutParams.WRAP_CONTENT, 1.0f)
@@ -118,7 +120,22 @@ class GpuActionToolbar @JvmOverloads constructor(
         firstRow.addView(btnRedo)
         firstRow.addView(btnHistory)
 
-        GpuTableEditor.registerToolbarButtons(btnSave, btnUndo, btnRedo, btnHistory)
+        // Observe ViewModel state
+        viewModel.isDirtyLiveData.observe(lifecycleOwner) { isDirty ->
+             // Update Save button color/state if needed
+             // btnSave?.isEnabled = isDirty // Or keep enabled to force save?
+             // Legacy behavior: button changes color. 
+             // We can implement color change logic here if needed.
+             updateSaveButtonColor(btnSave, isDirty)
+        }
+
+        viewModel.canUndoLiveData.observe(lifecycleOwner) { canUndo ->
+             updateButtonState(btnUndo, canUndo)
+        }
+
+        viewModel.canRedoLiveData.observe(lifecycleOwner) { canRedo ->
+             updateButtonState(btnRedo, canRedo)
+        }
         
         // Add Row 1 First (As requested)
         addView(firstRow)
@@ -267,27 +284,43 @@ class GpuActionToolbar @JvmOverloads constructor(
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
-        GpuTableEditor.addHistoryListener(this)
+        // GpuTableEditor.addHistoryListener(this)
     }
 
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
-        GpuTableEditor.removeHistoryListener(this)
+        // GpuTableEditor.removeHistoryListener(this)
     }
 
+    /*
     override fun onHistoryStateChanged(canUndo: Boolean, canRedo: Boolean) {
-        if (context is Activity) {
-            (context as Activity).runOnUiThread {
-                updateButtonState(btnUndo, canUndo)
-                updateButtonState(btnRedo, canRedo)
-            }
-        }
+       // Removed
     }
+    */
 
     private fun updateButtonState(btn: MaterialButton?, enabled: Boolean) {
         if (btn != null) {
             btn.isEnabled = enabled
             btn.alpha = if (enabled) 1f else 0.5f
         }
+    }
+
+    private fun updateSaveButtonColor(btn: MaterialButton?, isDirty: Boolean) {
+        if (btn == null) return
+        val backgroundAttr = if (isDirty)
+            com.google.android.material.R.attr.colorErrorContainer
+        else
+            com.google.android.material.R.attr.colorSecondaryContainer
+        val foregroundAttr = if (isDirty)
+            com.google.android.material.R.attr.colorOnErrorContainer
+        else
+            com.google.android.material.R.attr.colorOnSecondaryContainer
+            
+        val background = MaterialColors.getColor(btn, backgroundAttr)
+        val foreground = MaterialColors.getColor(btn, foregroundAttr)
+        
+        btn.backgroundTintList = ColorStateList.valueOf(background)
+        btn.setTextColor(foreground)
+        btn.iconTint = ColorStateList.valueOf(foreground)
     }
 }

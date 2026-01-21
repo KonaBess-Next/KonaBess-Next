@@ -22,9 +22,7 @@ import androidx.core.view.WindowCompat
 import android.graphics.Color
 import androidx.viewpager2.widget.ViewPager2
 import androidx.viewpager2.widget.ViewPager2.OnPageChangeCallback
-import com.google.android.material.appbar.AppBarLayout
-import com.google.android.material.appbar.MaterialToolbar
-import androidx.coordinatorlayout.widget.CoordinatorLayout
+// AppBarLayout and MaterialToolbar removed - using edge-to-edge without titles
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.runtime.mutableIntStateOf
 import com.ireddragonicy.konabessnext.ui.compose.MainNavigationBar
@@ -32,7 +30,7 @@ import com.ireddragonicy.konabessnext.ui.theme.KonaBessTheme
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.ireddragonicy.konabessnext.R
 import kotlinx.coroutines.launch
-import com.ireddragonicy.konabessnext.core.GpuTableEditor
+import com.ireddragonicy.konabessnext.viewmodel.GpuFrequencyViewModel
 import com.ireddragonicy.konabessnext.ui.adapters.ViewPagerAdapter
 import com.ireddragonicy.konabessnext.ui.fragments.GpuFrequencyFragment
 import com.ireddragonicy.konabessnext.ui.fragments.ImportExportFragment
@@ -53,13 +51,13 @@ class MainActivity : AppCompatActivity() {
     private lateinit var viewPager: ViewPager2
     private lateinit var bottomNav: ComposeView
     private var currentTab = mutableIntStateOf(0)
-    private var appBarLayout: AppBarLayout? = null
-    private var toolbar: MaterialToolbar? = null
+    // appBarLayout and toolbar removed - using edge-to-edge without titles
     private var isPageChangeFromUser = true
     private var gpuFrequencyFragment: GpuFrequencyFragment? = null
 
     // MVVM ViewModel
     val deviceViewModel: DeviceViewModel by viewModels()
+    val gpuFrequencyViewModel: GpuFrequencyViewModel by viewModels()
 
     // Permission and File Result Launchers
     private var pendingPermissionAction: (() -> Unit)? = null
@@ -224,25 +222,46 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showMainView() {
+        setContentView(R.layout.activity_main)
+
+        // AppBarLayout and toolbar removed - pure edge-to-edge UI
+
+        viewPager = findViewById(R.id.view_pager)
+        bottomNav = findViewById(R.id.compose_bottom_nav)
+
         // Initialize OnBackPressedCallback for GpuTableEditor navigation
         if (gpuTableEditorBackCallback == null) {
             gpuTableEditorBackCallback = object : OnBackPressedCallback(false) {
                 override fun handleOnBackPressed() {
-                    GpuTableEditor.handleBackNavigation()
+                    
+                    val binIdx = gpuFrequencyViewModel.selectedBinIndex.value
+                    
+                    if (binIdx != -1) {
+                        // Navigate Internal: Unselect Bin/Level
+                        val lvlIdx = gpuFrequencyViewModel.selectedLevelIndex.value
+                        if (lvlIdx != -1) {
+                            gpuFrequencyViewModel.selectedLevelIndex.value = -1
+                        } else {
+                            gpuFrequencyViewModel.selectedBinIndex.value = -1
+                        }
+                    } else {
+                        isEnabled = false
+                        onBackPressedDispatcher.onBackPressed()
+                        // Only re-enable if we are still on the first tab
+                        if (viewPager.currentItem == 0) {
+                            isEnabled = true
+                        }
+                    }
                 }
             }
             onBackPressedDispatcher.addCallback(this, gpuTableEditorBackCallback!!)
+            
+            // Set initial enabled state based on current tab
+            gpuTableEditorBackCallback?.isEnabled = (viewPager.currentItem == 0)
         } else {
-            gpuTableEditorBackCallback?.isEnabled = false
+            // Update existing callback state
+            gpuTableEditorBackCallback?.isEnabled = (viewPager.currentItem == 0)
         }
-
-        setContentView(R.layout.activity_main)
-
-        toolbar = findViewById(R.id.toolbar)
-        appBarLayout = findViewById(R.id.app_bar_layout)
-
-        viewPager = findViewById(R.id.view_pager)
-        bottomNav = findViewById(R.id.compose_bottom_nav)
 
         setupViewPager()
         setupBottomNavigation()
@@ -266,26 +285,8 @@ class MainActivity : AppCompatActivity() {
         viewPager.registerOnPageChangeCallback(object : OnPageChangeCallback() {
             override fun onPageSelected(position: Int) {
                 super.onPageSelected(position)
-                // Disable GpuTableEditor callback when changing pages
-                gpuTableEditorBackCallback?.isEnabled = false
-
-                // Hide AppBarLayout when on GPU Frequency page (position 0)
-                // Otherwise, show it and set appropriate title
-                // Hide AppBarLayout when on GPU Frequency page (position 0)
-                // Otherwise, show it and set appropriate title
-                val params = viewPager.layoutParams as CoordinatorLayout.LayoutParams
-                if (position == 0) {
-                    appBarLayout?.visibility = View.GONE
-                    params.behavior = null
-                } else {
-                    appBarLayout?.visibility = View.VISIBLE
-                    params.behavior = AppBarLayout.ScrollingViewBehavior()
-                    when (position) {
-                        1 -> toolbar?.title = getString(R.string.import_export)
-                        2 -> toolbar?.title = getString(R.string.settings)
-                    }
-                }
-                viewPager.requestLayout()
+                // Manage Back Callback based on page
+                gpuTableEditorBackCallback?.isEnabled = (position == 0)
 
                 if (isPageChangeFromUser) {
                     currentTab.intValue = position

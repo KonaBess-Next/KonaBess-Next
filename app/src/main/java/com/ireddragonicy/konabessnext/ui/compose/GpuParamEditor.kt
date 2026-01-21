@@ -50,7 +50,7 @@ fun GpuParamEditor(
                     com.ireddragonicy.konabessnext.ui.SettingsActivity.formatFrequency(hz, context)
                 } else if (name == "qcom,level" || name == "qcom,cx-level") {
                     val lvl = if (rawValue.startsWith("0x")) java.lang.Long.decode(rawValue) else rawValue.toLong()
-                    val idx = com.ireddragonicy.konabessnext.core.GpuVoltEditor.levelint2int(lvl)
+                    val idx = com.ireddragonicy.konabessnext.core.editor.LevelOperations.levelint2int(lvl)
                     com.ireddragonicy.konabessnext.core.ChipInfo.rpmh_levels.level_str().getOrNull(idx) ?: rawValue
                 } else if (rawValue.startsWith("0x")) {
                     // Try to convert generic hex to nice decimal if short
@@ -214,7 +214,7 @@ fun VoltageSelector(param: ParamItem, onSave: (String, String) -> Unit) {
     
     // Find initial index
     val initialIndex = try {
-        com.ireddragonicy.konabessnext.core.GpuVoltEditor.levelint2int(param.rawValue.toLong())
+        com.ireddragonicy.konabessnext.core.editor.LevelOperations.levelint2int(param.rawValue.toLong())
     } catch (e: Exception) { 0 }
     
     LazyColumn(
