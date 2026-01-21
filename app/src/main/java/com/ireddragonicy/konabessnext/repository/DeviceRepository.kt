@@ -5,9 +5,11 @@ import android.content.SharedPreferences
 import android.os.Environment
 import android.util.Log
 import com.ireddragonicy.konabessnext.core.ChipInfo
+import com.ireddragonicy.konabessnext.model.ChipDefinition
 import com.ireddragonicy.konabessnext.model.Dtb
 import com.ireddragonicy.konabessnext.model.DtbType
 import com.ireddragonicy.konabessnext.utils.AssetsUtil
+import com.ireddragonicy.konabessnext.core.KonaBessCore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -69,42 +71,6 @@ class DeviceRepository @Inject constructor(
     private var dtbNum: Int = 0
     private var dtbType: DtbType? = null
 
-    // Chip Mappings (Model string -> Chip ID)
-    private val chipMappings: Map<String, String> = mapOf(
-        "kona v2.1" to "kona",
-        "kona v2" to "kona",
-        "SM8150 v2" to "msmnile",
-        "Lahaina V2.1" to "lahaina",
-        "Lahaina v2.1" to "lahaina",
-        "Lito" to "lito_v1",
-        "Lito v2" to "lito_v2",
-        "Lagoon" to "lagoon",
-        "Shima" to "shima",
-        "Yupik" to "yupik",
-        "Waipio" to "waipio_singleBin",
-        "Waipio v2" to "waipio_singleBin",
-        "Cape" to "cape_singleBin",
-        "Kalama v2" to "kalama",
-        "KalamaP v2" to "kalama",
-        "Diwali" to "diwali",
-        "Ukee" to "ukee_singleBin",
-        "Pineapple v2" to "pineapple",
-        "PineappleP v2" to "pineapple",
-        "Cliffs SoC" to "cliffs_singleBin",
-        "Cliffs 7 SoC" to "cliffs_7_singleBin",
-        "KalamaP SG SoC" to "kalama_sg_singleBin",
-        "Sun v2 SoC" to "sun",
-        "Sun Alt. Thermal Profile v2 SoC" to "sun",
-        "SunP v2 SoC" to "sun",
-        "SunP v2 Alt. Thermal Profile SoC" to "sun",
-        "Canoe v2 SoC" to "canoe",
-        "CanoeP v2 SoC" to "canoe",
-        "Tuna 7 SoC" to "tuna",
-        "Tuna SoC" to "tuna",
-        "PineappleP SG" to "pineapple_sg",
-        "KalamaP QCS" to "kalamap_qcs_singleBin"
-    )
-
     // --- Core Logic ---
 
     suspend fun cleanEnv() = withContext(Dispatchers.IO) {
@@ -158,7 +124,7 @@ class DeviceRepository @Inject constructor(
 
     fun chooseTarget(dtb: Dtb) {
         dtsPath = "$filesDir/${dtb.id}.dts"
-        com.ireddragonicy.konabessnext.core.KonaBessCore.dts_path = dtsPath
+        KonaBessCore.dts_path = dtsPath
         ChipInfo.current = dtb.type
         currentDtb = dtb
         prepared = true
@@ -210,8 +176,6 @@ class DeviceRepository @Inject constructor(
             // Try to detect if not set
             if (File("$filesDir/vendor_boot.img").exists()) "vendor_boot"
             else "boot"
-            // Note: If getBootImage wasn't called, we might not have the image in filesDir yet.
-            // But usually backup is called after detection.
         }
         
         // Ensure source exists
@@ -276,26 +240,32 @@ class DeviceRepository @Inject constructor(
             return if (isSingleBin(content)) "kona_singleBin" else "kona"
         }
 
-        for ((key, baseId) in chipMappings) {
-            if (modelContent.contains(key, ignoreCase = true)) {
-                Log.d(TAG, "Matched key '$key' to ID '$baseId'")
-                if (baseId == "kona" || baseId == "msmnile" || baseId == "lahaina") {
-                    return determineChipVariant(index, baseId, content)
+        // Use dynamic detection from definitions
+        for (def: ChipDefinition in ChipInfo.definitions) {
+            for (model in def.models) {
+                if (modelContent.contains(model, ignoreCase = true)) {
+                    Log.d(TAG, "Matched key '$model' to ID '${def.id}'")
+                    
+                    if (isSingleBin(content)) {
+                        if (def.strategyType == "SINGLE_BIN") return def.id
+                        
+                        // Check if single bin variant exists
+                        val singleBinId = def.id + "_singleBin"
+                        if (ChipInfo.getById(singleBinId) != null) {
+                            return singleBinId
+                        }
+                    }
+                    return def.id
                 }
-                return baseId
             }
         }
+        
         Log.w(TAG, "No mapping found for model: '$modelContent'")
         return null
     }
 
     private fun isSingleBin(content: String): Boolean {
         return content.contains("qcom,gpu-pwrlevels {")
-    }
-
-    private fun determineChipVariant(index: Int, regularId: String, content: String): String {
-        val singleBinId = regularId + "_singleBin"
-         return if (isSingleBin(content)) singleBinId else regularId
     }
     
     private fun readFileToString(file: File): String {
@@ -484,7 +454,7 @@ class DeviceRepository @Inject constructor(
             
             if (dtsFile.exists()) {
                 dtsPath = dtsFile.absolutePath
-                com.ireddragonicy.konabessnext.core.KonaBessCore.dts_path = dtsPath
+                KonaBessCore.dts_path = dtsPath
                 ChipInfo.current = def
                 currentDtb = Dtb(dtbId, def)
                 prepared = true

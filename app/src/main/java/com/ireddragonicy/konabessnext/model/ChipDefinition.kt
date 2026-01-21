@@ -14,5 +14,6 @@ data class ChipDefinition(
     val levelCount: Int, // e.g. 416, 464, 480
     val levels: Map<Int, String>, // Index to Label mapping
     val binDescriptions: Map<Int, String>? = null, // Bin index to Resource String mapping
-    val needsCaTargetOffset: Boolean = false // Whether to offset qcom,ca-target-pwrlevel
+    val needsCaTargetOffset: Boolean = false, // Whether to offset qcom,ca-target-pwrlevel
+    val models: List<String> = emptyList() // Auto-generated mapping identifiers
 )

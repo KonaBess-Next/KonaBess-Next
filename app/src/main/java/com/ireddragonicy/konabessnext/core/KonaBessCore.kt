@@ -2,6 +2,7 @@ package com.ireddragonicy.konabessnext.core
 
 import android.app.Activity
 import android.content.Context
+import com.ireddragonicy.konabessnext.model.ChipDefinition
 import com.ireddragonicy.konabessnext.model.Dtb
 import com.ireddragonicy.konabessnext.model.DtbType
 import com.ireddragonicy.konabessnext.utils.AssetsUtil
@@ -22,45 +23,6 @@ object KonaBessCore {
 
     // Regex patterns
     private val MODEL_PROPERTY = Pattern.compile("model\\s*=\\s*\"([^\"]+)\"")
-
-    // Chip mappings (Model string -> Chip ID)
-    private val CHIP_MAPPINGS = mapOf(
-        "kona v2.1" to "kona",
-        "kona v2" to "kona",
-        "SM8150 v2" to "msmnile",
-        "Lahaina V2.1" to "lahaina",
-        "Lahaina v2.1" to "lahaina",
-        "Lito" to "lito_v1",
-        "Lito v2" to "lito_v2",
-        "Lagoon" to "lagoon",
-        "Shima" to "shima",
-        "Yupik" to "yupik",
-        "Waipio" to "waipio_singleBin",
-        "Waipio v2" to "waipio_singleBin",
-        "Cape" to "cape_singleBin",
-        "Kalama v2" to "kalama",
-        "KalamaP v2" to "kalama",
-        "Diwali" to "diwali",
-        "Ukee" to "ukee_singleBin",
-        "Pineapple v2" to "pineapple",
-        "PineappleP v2" to "pineapple",
-        "Cliffs SoC" to "cliffs_singleBin",
-        "Cliffs 7 SoC" to "cliffs_7_singleBin",
-        "KalamaP SG SoC" to "kalama_sg_singleBin",
-        "Sun v2 SoC" to "sun",
-        "Sun Alt. Thermal Profile v2 SoC" to "sun",
-        "SunP v2 SoC" to "sun",
-        "SunP v2 Alt. Thermal Profile SoC" to "sun",
-        "Canoe v2 SoC" to "canoe",
-        "CanoeP v2 SoC" to "canoe",
-        "Tuna 7 SoC" to "tuna",
-        "Tuna SoC" to "tuna",
-        "PineappleP SG" to "pineapple_sg",
-        "KalamaP QCS" to "kalamap_qcs_singleBin",
-        "Montague" to "montague",
-        "Parrot" to "parrot",
-        "Ravelin" to "ravelin"
-    )
 
     private val PROPERTY_CACHE = ConcurrentHashMap<String, String>()
 
@@ -170,24 +132,36 @@ object KonaBessCore {
             return if (isSingleBin(content)) "kona_singleBin" else "kona"
         }
 
-        for ((key, baseId) in CHIP_MAPPINGS) {
-            if (modelContent.contains(key)) {
-                if (baseId == "kona" || baseId == "msmnile" || baseId == "lahaina") {
-                     return determineChipVariant(index, baseId, content)
+        // Iterate through loaded definitions dynamically
+        for (def: ChipDefinition in ChipInfo.definitions) {
+            for (model in def.models) {
+                if (modelContent.contains(model, ignoreCase = true)) {
+                    // Check if this chip needs variant handling (Single vs Multi bin)
+                    // We check if a "_singleBin" variant exists for this ID.
+                    
+                    if (isSingleBin(content)) {
+                        // Check if current matched definition is already single bin
+                        if (def.strategyType == "SINGLE_BIN") {
+                            return def.id
+                        }
+                        
+                        // Try to find a single bin variant by ID suffix
+                        val singleBinId = def.id + "_singleBin"
+                        if (ChipInfo.getById(singleBinId) != null) {
+                            return singleBinId
+                        }
+                    }
+                    
+                    return def.id
                 }
-                return baseId
             }
         }
+        
         return null
     }
 
     private fun isSingleBin(content: String): Boolean {
         return content.contains("qcom,gpu-pwrlevels {")
-    }
-
-    private fun determineChipVariant(index: Int, regularId: String, content: String): String {
-         val singleBinId = regularId + "_singleBin"
-         return if (isSingleBin(content)) singleBinId else regularId
     }
 
     @JvmStatic
@@ -213,7 +187,6 @@ object KonaBessCore {
 
     @Throws(IOException::class)
     private fun unpackBootImage(context: Context) {
-        // Using RootHelper static for now as we are converting static class 1:1
         RootHelper.execShForOutput("cd $filesDir && ./magiskboot unpack boot.img")
         determineDtbType()
     }

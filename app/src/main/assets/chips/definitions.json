@@ -30,7 +30,11 @@
     "binDescriptions": {
       "0": "Snapdragon 865",
       "1": "Snapdragon 865+"
-    }
+    },
+    "models": [
+      "kona v2.1",
+      "kona v2"
+    ]
   },
   {
     "id": "kona_singleBin",
@@ -88,7 +92,10 @@
       "383": "384 - TURBO",
       "399": "400 - TURBO_L0",
       "415": "416 - TURBO_L1"
-    }
+    },
+    "models": [
+      "SM8150 v2"
+    ]
   },
   {
     "id": "msmnile_singleBin",
@@ -147,7 +154,10 @@
       "383": "384 - TURBO",
       "399": "400 - TURBO_L0",
       "415": "416 - TURBO_L1"
-    }
+    },
+    "models": [
+      "Lito"
+    ]
   },
   {
     "id": "lito_v2",
@@ -177,7 +187,10 @@
       "383": "384 - TURBO",
       "399": "400 - TURBO_L0",
       "415": "416 - TURBO_L1"
-    }
+    },
+    "models": [
+      "Lito v2"
+    ]
   },
   {
     "id": "lagoon",
@@ -207,7 +220,10 @@
       "383": "384 - TURBO",
       "399": "400 - TURBO_L0",
       "415": "416 - TURBO_L1"
-    }
+    },
+    "models": [
+      "Lagoon"
+    ]
   },
   {
     "id": "shima",
@@ -236,7 +252,10 @@
       "383": "384 - TURBO",
       "399": "400 - TURBO_L0",
       "415": "416 - TURBO_L1"
-    }
+    },
+    "models": [
+      "Shima"
+    ]
   },
   {
     "id": "yupik",
@@ -265,7 +284,10 @@
       "383": "384 - TURBO",
       "399": "400 - TURBO_L0",
       "415": "416 - TURBO_L1"
-    }
+    },
+    "models": [
+      "Yupik"
+    ]
   },
   {
     "id": "lahaina",
@@ -297,7 +319,11 @@
       "431": "432 - TURBO_L2",
       "447": "448 - SUPER_TURBO",
       "463": "464 - SUPER_TURBO_NO_CPR"
-    }
+    },
+    "models": [
+      "Lahaina V2.1",
+      "Lahaina v2.1"
+    ]
   },
   {
     "id": "lahaina_singleBin",
@@ -355,7 +381,11 @@
       "383": "384 - TURBO",
       "399": "400 - TURBO_L0",
       "415": "416 - TURBO_L1"
-    }
+    },
+    "models": [
+      "Waipio",
+      "Waipio v2"
+    ]
   },
   {
     "id": "cape_singleBin",
@@ -384,7 +414,10 @@
       "383": "384 - TURBO",
       "399": "400 - TURBO_L0",
       "415": "416 - TURBO_L1"
-    }
+    },
+    "models": [
+      "Cape"
+    ]
   },
   {
     "id": "kalama",
@@ -421,7 +454,11 @@
       "447": "448 - TURBO_L3",
       "463": "464 - SUPER_TURBO",
       "479": "480 - SUPER_TURBO_NO_CPR"
-    }
+    },
+    "models": [
+      "Kalama v2",
+      "KalamaP v2"
+    ]
   },
   {
     "id": "kalama_sg_singleBin",
@@ -458,7 +495,10 @@
       "447": "448 - TURBO_L3",
       "463": "464 - SUPER_TURBO",
       "479": "480 - SUPER_TURBO_NO_CPR"
-    }
+    },
+    "models": [
+      "KalamaP SG SoC"
+    ]
   },
   {
     "id": "diwali",
@@ -487,7 +527,10 @@
       "383": "384 - TURBO",
       "399": "400 - TURBO_L0",
       "415": "416 - TURBO_L1"
-    }
+    },
+    "models": [
+      "Diwali"
+    ]
   },
   {
     "id": "ukee_singleBin",
@@ -516,7 +559,10 @@
       "383": "384 - TURBO",
       "399": "400 - TURBO_L0",
       "415": "416 - TURBO_L1"
-    }
+    },
+    "models": [
+      "Ukee"
+    ]
   },
   {
     "id": "tuna",
@@ -553,7 +599,11 @@
       "447": "448 - TURBO_L3",
       "463": "464 - SUPER_TURBO",
       "479": "480 - SUPER_TURBO_NO_CPR"
-    }
+    },
+    "models": [
+      "Tuna 7 SoC",
+      "Tuna SoC"
+    ]
   },
   {
     "id": "cliffs_7_singleBin",
@@ -590,7 +640,10 @@
       "447": "448 - TURBO_L3",
       "463": "464 - SUPER_TURBO",
       "479": "480 - SUPER_TURBO_NO_CPR"
-    }
+    },
+    "models": [
+      "Cliffs 7 SoC"
+    ]
   },
   {
     "id": "pineapple",
@@ -624,7 +677,11 @@
       "447": "448 - TURBO_L3",
       "463": "464 - SUPER_TURBO",
       "479": "480 - SUPER_TURBO_NO_CPR"
-    }
+    },
+    "models": [
+      "Pineapple v2",
+      "PineappleP v2"
+    ]
   },
   {
     "id": "pineapple_sg",
@@ -661,7 +718,10 @@
       "447": "448 - TURBO_L3",
       "463": "464 - SUPER_TURBO",
       "479": "480 - SUPER_TURBO_NO_CPR"
-    }
+    },
+    "models": [
+      "PineappleP SG"
+    ]
   },
   {
     "id": "sun",
@@ -702,7 +762,13 @@
       "451": "452 - TURBO_L4",
       "463": "464 - SUPER_TURBO",
       "479": "480 - SUPER_TURBO_NO_CPR"
-    }
+    },
+    "models": [
+      "Sun v2 SoC",
+      "Sun Alt. Thermal Profile v2 SoC",
+      "SunP v2 SoC",
+      "SunP v2 Alt. Thermal Profile SoC"
+    ]
   },
   {
     "id": "canoe",
@@ -743,7 +809,11 @@
       "451": "452 - TURBO_L4",
       "463": "464 - SUPER_TURBO",
       "479": "480 - SUPER_TURBO_NO_CPR"
-    }
+    },
+    "models": [
+      "Canoe v2 SoC",
+      "CanoeP v2 SoC"
+    ]
   },
   {
     "id": "cliffs_singleBin",
@@ -757,7 +827,10 @@
     "levels": {
       "15": "16 - RETENTION",
       "255": "256 - NOM"
-    }
+    },
+    "models": [
+      "Cliffs SoC"
+    ]
   },
   {
     "id": "kalamap_qcs_singleBin",
@@ -794,7 +867,10 @@
       "447": "448 - TURBO_L3",
       "463": "464 - SUPER_TURBO",
       "479": "480 - SUPER_TURBO_NO_CPR"
-    }
+    },
+    "models": [
+      "KalamaP QCS"
+    ]
   },
   {
     "id": "montague",
@@ -823,7 +899,10 @@
       "383": "384 - TURBO",
       "399": "400 - TURBO_L0",
       "415": "416 - TURBO_L1"
-    }
+    },
+    "models": [
+      "Montague"
+    ]
   },
   {
     "id": "parrot",
@@ -852,7 +931,10 @@
       "383": "384 - TURBO",
       "399": "400 - TURBO_L0",
       "415": "416 - TURBO_L1"
-    }
+    },
+    "models": [
+      "Parrot"
+    ]
   },
   {
     "id": "ravelin",
@@ -881,6 +963,9 @@
       "383": "384 - TURBO",
       "399": "400 - TURBO_L0",
       "415": "416 - TURBO_L1"
-    }
+    },
+    "models": [
+      "Ravelin"
+    ]
   }
 ]
