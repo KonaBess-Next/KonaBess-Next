@@ -1,128 +1,79 @@
 package com.ireddragonicy.konabessnext.ui.compose
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.*
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.withStyle
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import com.ireddragonicy.konabessnext.editor.core.CodeEditor
+import com.ireddragonicy.konabessnext.viewmodel.RawDtsEditorViewModel.LineSearchResult
 
 @Composable
 fun DtsEditor(
-    lines: List<String>,
-    onLinesChanged: (List<String>) -> Unit,
+    content: String,
+    onContentChanged: (String) -> Unit,
     searchQuery: String = "",
     searchResultIndex: Int = -1,
-    searchResults: List<com.ireddragonicy.konabessnext.viewmodel.RawDtsEditorViewModel.LineSearchResult> = emptyList(),
+    searchResults: List<LineSearchResult> = emptyList(),
     modifier: Modifier = Modifier
 ) {
-    val listState = rememberLazyListState()
+    // We use a side-effect to avoid resetting text cursor when 'content' changes due to our own typing
+    // Actually CodeEditor handles this check internally usually, or we do it here.
     
-    // Jump to search result
-    LaunchedEffect(searchResultIndex) {
-        if (searchResultIndex >= 0 && searchResultIndex < searchResults.size) {
-            val result = searchResults[searchResultIndex]
-            listState.animateScrollToItem(result.lineIndex)
-        }
-    }
-
-    LazyColumn(
-        state = listState,
-        modifier = modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.surface)
-    ) {
-        itemsIndexed(lines) { index, line ->
-            DtsLine(
-                lineNumber = index + 1,
-                text = line,
-                onTextChanged = { newText ->
-                    val newLines = lines.toMutableList()
-                    newLines[index] = newText
-                    onLinesChanged(newLines)
-                },
-                searchQuery = searchQuery,
-                isSearchResult = searchResults.any { it.lineIndex == index },
-                isCurrentResult = if (searchResultIndex >= 0 && searchResultIndex < searchResults.size) 
-                                    searchResults[searchResultIndex].lineIndex == index 
-                                 else false
-            )
-        }
-    }
-}
-
-@Composable
-fun DtsLine(
-    lineNumber: Int,
-    text: String,
-    onTextChanged: (String) -> Unit,
-    searchQuery: String,
-    isSearchResult: Boolean,
-    isCurrentResult: Boolean
-) {
-    val lineContent = remember(text, searchQuery, isCurrentResult) {
-        highlightDts(text, searchQuery, isCurrentResult)
-    }
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 1.dp)
-    ) {
-        // Line number gutter
-        Text(
-            text = lineNumber.toString().padStart(4),
-            modifier = Modifier
-                .width(48.dp)
-                .padding(end = 8.dp),
-            style = TextStyle(
-                fontFamily = FontFamily.Monospace,
-                fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                textAlign = androidx.compose.ui.text.style.TextAlign.End
-            )
-        )
-
-        // BasicTextField for high performance editing per line
-        BasicTextField(
-            value = text, // We use the raw text for the field
-            onValueChange = onTextChanged,
-            modifier = Modifier.weight(1f),
-            textStyle = TextStyle(
-                fontFamily = FontFamily.Monospace,
-                fontSize = 13.sp,
-                color = MaterialTheme.colorScheme.onSurface
-            ),
-            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-            decorationBox = { innerTextField ->
-                // If not focusing, we could show the annotated string for highlighting.
-                // For simplicity and editing, we just use the text field.
-                // Ideally we'd use a VisualTransformation for highlighting.
-                innerTextField()
+    // Create the view
+    AndroidView(
+        modifier = modifier.fillMaxSize(),
+        factory = { context ->
+            CodeEditor(context).apply {
+                // Setup listener
+                setOnTextChangedListener {
+                    // Signal change
+                    onContentChanged(this.text.toString())
+                }
             }
-        )
-    }
+        },
+        update = { view ->
+            // Update content only if different to avoid cursor jump/loop
+            if (view.text.toString() != content) {
+                // Determine if difference is significant or just typing?
+                // For now, simple check.
+                view.setText(content)
+            }
+            
+            // Handle Search
+            if (searchQuery.isNotEmpty()) {
+                // This might spam search on every recomposition if query doesn't change?
+                // No, 'update' block runs on recomposition.
+                // We should check if query actually changed? 
+                // Or just let CodeEditor handle "search same query" gracefully.
+                // It does have logic to find next.
+                // Ideally we only search if different.
+                
+                // For basic "Highlight all" behavior:
+                // view.searchAndSelect(searchQuery) matches ONE.
+                // We might need a "setSearchQuery" on CodeEditor if we expanded it.
+                // But for now, let's map the ViewModel's "current index" navigation.
+                
+                // If the ViewModel manages navigation, we just highlight?
+                // Legacy logic pushed navigation via function calls.
+                // Compose 'update' is state-driven.
+                
+                 if (searchQuery != view.lastSearchQuery || searchResultIndex != view.lastSearchIndex) {
+                     // Trigger logic
+                     view.searchAndSelect(searchQuery)
+                 }
+            } else {
+                view.clearSearch()
+            }
+        }
+    )
 }
 
-private fun highlightDts(text: String, query: String, isCurrent: Boolean) = buildAnnotatedString {
-    // Basic logic for highlighting could go here as a VisualTransformation
-    // For now we'll just handle search highlights if we were using a Text view.
-    // In a real editor, a custom VisualTransformation is better.
-    append(text)
-}
+// Extension to store state in View for diffing during Compose updates
+private var CodeEditor.lastSearchQuery: String?
+    get() = this.tag as? String // Using tag as simple storage
+    set(value) { this.tag = value }
+
+private var CodeEditor.lastSearchIndex: Int
+    get() = 0 // Needs a better storage mechanism or field in CodeEditor
+    set(value) {}
+

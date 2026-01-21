@@ -223,7 +223,10 @@ fun VoltageSelector(param: ParamItem, onSave: (String, String) -> Unit) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable {
+                    .clickable(
+                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                        indication = androidx.compose.foundation.LocalIndication.current
+                    ) {
                          val value = if (index >= 0 && index < values.size) values[index] else 0
                          val newValue = value.toString()
                          val encoded = DtsHelper.encodeIntOrHexLine(param.rawName, newValue)

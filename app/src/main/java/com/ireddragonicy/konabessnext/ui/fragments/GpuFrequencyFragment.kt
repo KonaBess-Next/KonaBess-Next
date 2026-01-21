@@ -453,17 +453,19 @@ class GpuFrequencyFragment : Fragment() {
         transaction.commit()
     }
     
+    /*
     private fun toggleSearch() {
         val fm = childFragmentManager
         val textFragment = fm.findFragmentByTag("TAG_TEXT") as? com.ireddragonicy.konabessnext.ui.fragments.UnifiedRawDtsFragment
         
         // Only toggle if Text Fragment is visible
         if (textFragment != null && textFragment.isVisible) {
-             textFragment.showSearchBar()
+             // textFragment.showSearchBar() // Method removed in Compose migration
         } else {
              Toast.makeText(requireContext(), "Search available in Text Mode", Toast.LENGTH_SHORT).show()
         }
     }
+    */
 
     private fun showPromptState(activity: MainActivity) {
         contentContainer!!.removeAllViews()

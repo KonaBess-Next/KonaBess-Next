@@ -170,6 +170,7 @@ class GpuRepository @Inject constructor(
             
             // Initial content
             _dtsContent.value = lines.joinToString("\n")
+            _dtsLines.value = lines
 
             // Use a mutable list to strip lines as we decode
             val linesMutable = ArrayList(lines)
