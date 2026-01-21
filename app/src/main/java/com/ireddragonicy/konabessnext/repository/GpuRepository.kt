@@ -45,55 +45,54 @@ class GpuRepository @Inject constructor(
     private val _parsedResult = MutableStateFlow<ParseResult>(ParseResult.Loading)
     val parsedResult: StateFlow<ParseResult> = _parsedResult.asStateFlow()
 
-    // Bins are now derived from parsedResult for consistency, 
-    // but we allow immediate updates from GUI to avoid lag.
     private val _bins = MutableStateFlow<List<Bin>>(emptyList())
     val bins: StateFlow<List<Bin>> = _bins.asStateFlow()
     
-    // Opps for voltage control
     private val _opps = MutableStateFlow<List<Opp>>(emptyList())
     val opps: StateFlow<List<Opp>> = _opps.asStateFlow()
 
-    // Helper to avoid circular loop when updating from GUI
-    private var isUpdatingFromGui = false
+    // Flag to ignore debounce trigger when content is updated programmatically
+    @Volatile
+    private var ignoreNextContentUpdate = false
 
     init {
         // Live Synchronization: Text -> Bins
         _dtsContent
-            .debounce(300) // Debounce text input
+            .debounce(500) // Increased debounce to 500ms to avoid rapid flicker
             .onEach { content ->
-                if (!isUpdatingFromGui && content.isNotEmpty()) {
+                if (ignoreNextContentUpdate) {
+                    ignoreNextContentUpdate = false
+                    return@onEach
+                }
+                
+                if (content.isNotEmpty()) {
                     parseContentPartial(content)
                 }
-                isUpdatingFromGui = false
             }
             .flowOn(Dispatchers.Default)
             .launchIn(repoScope)
     }
 
     suspend fun parseContentPartial(content: String) {
-        _parsedResult.value = ParseResult.Loading
+        // Don't set Loading state for partial text updates to avoid UI flickering
+        // _parsedResult.value = ParseResult.Loading 
+        
         try {
             val lines = content.split("\n")
             val linesMutable = ArrayList(lines)
             
-            // Only re-parse if architecture is known
             val currentChip = chipRepository.currentChip.value
             if (currentChip != null) {
-                // Reset positions if needed, though they might shift in text editor
-                binPosition = -1 
+                // Keep current positions or reset?
+                // For text editing, we just re-parse structure.
                 val newBins = decodeBins(linesMutable)
                 
-                // Update bins without triggering generation
                 _bins.value = newBins
                 _parsedResult.value = ParseResult.Success(newBins)
                 
-                // Also update Opps if needed
                  val newOpps = decodeOpps(ArrayList(lines))
                  _opps.value = newOpps
                  
-                // Correctly update _linesInDts with the STRIPPED list (without tables)
-                // so that genBack() can cleanly append the generated table later.
                  _linesInDts.value = linesMutable
             }
         } catch (e: Exception) {
@@ -113,7 +112,6 @@ class GpuRepository @Inject constructor(
     private val undoStack: Deque<Pair<EditorState, String>> = ArrayDeque()
     private val redoStack: Deque<Pair<EditorState, String>> = ArrayDeque()
     
-    // History strings for UI
     private val _history = MutableStateFlow<List<String>>(emptyList())
     val history: StateFlow<List<String>> = _history.asStateFlow()
 
@@ -126,41 +124,18 @@ class GpuRepository @Inject constructor(
     private val _isDirty = MutableStateFlow(false)
     val isDirty: StateFlow<Boolean> = _isDirty.asStateFlow()
 
-    // Initial state snapshots for isDirty comparison
     private var initialBins: List<Bin> = emptyList()
     private var initialOpps: List<Opp> = emptyList()
     private var initialDtsLines: List<String> = emptyList()
 
     private fun refreshIsDirty() {
-        // Strict structural equality check
-        // Note: we must compare against deep copies captured at load time
-        // Bin.equals (data class) checks content recursively
-        
-        // We also check linesInDts to catch text edits that didn't affect bins?
-        // Logic: if bins match and opps match, are we clean?
-        // Text Editor might change comments.
-        // If user edited text, _dtsContent changed.
-        
-        // The previous logic only checked Bins + Opps hash.
-        // So we stick to that for "Functional" dirty state.
-        // If comment changed, isDirty might be false?
-        // Let's stick to Bins/Opps equality for consistency with previous intent.
-        
         val binsChanged = _bins.value != initialBins
         val oppsChanged = _opps.value != initialOpps
-        
         _isDirty.value = binsChanged || oppsChanged
     }
 
-    // State version - increments on every state change for reactive observation
     private val _stateVersion = MutableStateFlow(0L)
     val stateVersion: StateFlow<Long> = _stateVersion.asStateFlow()
-
-    // Centralized legacy state synchronization
-    // Centralized legacy state synchronization - REMOVED
-    private fun syncLegacyState() {
-        // No-op: GpuTableEditor is deleted
-    }
 
     suspend fun loadTable() = withContext(Dispatchers.IO) {
         _parsedResult.value = ParseResult.Loading
@@ -168,42 +143,32 @@ class GpuRepository @Inject constructor(
             val path = deviceRepository.dtsPath ?: throw IOException("DTS Path not set")
             val lines = FileUtil.readLines(path)
             
-            // Initial content
+            // Set flag to ignore the next debounce trigger since we are loading valid data
+            ignoreNextContentUpdate = true
             _dtsContent.value = lines.joinToString("\n")
             _dtsLines.value = lines
 
-            // Use a mutable list to strip lines as we decode
             val linesMutable = ArrayList(lines)
             
-            // Reset positions
             binPosition = -1
             oppPosition = -1
             
-            // Decode Freq Table (Bins) - This removes lines from linesMutable
             val newBins = decodeBins(linesMutable)
             _bins.value = newBins
             binPosition = if (binPosition < 0) 0 else binPosition
             
-            // Decode Voltage Table (Opps) - This removes lines from linesMutable
             val newOpps = decodeOpps(linesMutable)
             _opps.value = newOpps
             
             _linesInDts.value = linesMutable
             
-            // Centralized sync
-            // Centralized sync
-            // syncLegacyState()
-            
-            // Reset history
             undoStack.clear()
             redoStack.clear()
             updateHistoryState()
             
-            // Capture initial state for isDirty tracking
-            // MUST be deep copies so they don't mutate with the live state
             initialBins = EditorState.deepCopyBins(newBins)
             initialOpps = EditorState.deepCopyOpps(newOpps)
-            initialDtsLines = ArrayList(linesMutable) // Copy for good measure
+            initialDtsLines = ArrayList(linesMutable)
             
             _isDirty.value = false
             
@@ -217,7 +182,6 @@ class GpuRepository @Inject constructor(
     private fun decode(lines: List<String>) {
         val newBins = ArrayList<Bin>()
         var i = -1
-        // Make a mutable copy for decoding if architecture modifies it (it shouldn't, but logic in GpuTableEditor passed lines directly)
         val linesMutable = ArrayList(lines)
         
         while (++i < linesMutable.size) {
@@ -228,44 +192,7 @@ class GpuRepository @Inject constructor(
                 if (arch.isStartLine(thisLine)) {
                     if (binPosition < 0) binPosition = i
                     arch.decode(linesMutable, newBins, i)
-                    // Logic in original code: i-- because decode consumes lines? 
-                    // Wait, ChipArchitecture.decode usually parses multiple lines.
-                    // The loop continues. If decode advanced logic, great.
-                    // Original code: i-- inside the if block. This implies decode doesn't advance 'i' or we need to re-evaluate?
-                    // "ChipInfo.which.architecture.decode(lines_in_dts, bins, i);"
-                    // Looking at Java code:
-                    /*
-                    if (ChipInfo.which.architecture.isStartLine(this_line)) {
-                        if (bin_position < 0)
-                            bin_position = i;
-                        ChipInfo.which.architecture.decode(lines_in_dts, bins, i);
-                        i--;
-                    }
-                    */
-                    // This creates an infinite loop if decode doesn't modify lines or some state, 
-                    // OR 'i' is only decremented to re-check something?
-                    // Actually, 'decode' probably modifies 'bins'. 
-                    // AND 'decode' doesn't return new index. 
-                    // Wait, if it decrements 'i', it means it wants to re-process current line? No.
-                    // Ah, maybe 'decode' removes lines? No.
-                    // Let's assume the Java logic is correct and just replicate it carefully or trust the loop handles it.
-                    // Actually, if 'decode' parses the block starting at 'i', it should skip those lines in the loop.
-                    // But 'i' is the loop variable. IF 'decode' doesn't update 'i' (it's passed as value), then loop increments 'i'.
-                    // So decrementing 'i' means next loop iteration 'i' is same as before. That would be infinite loop unless block specific logic.
-                    // MAYBE 'decode' modifies 'lines_in_dts'?? Unlikely.
-                    // Let's assume standard parsing.
-                    // I will replicate the "i--" for now, assuming Side Effects or strict porting.
-                    i-- 
-                    // Wait, if I do i--, next loop ++i brings it back to same line.
-                    // Does ChipInfo.which.architecture.decode consume lines from the list? 
-                    // Java: decode(lines_in_dts, bins, i)
-                    // If it modifies lines_in_dts (removes them), then 'i' points to next line.
-                    // But 'decode' usually reads.
-                    // I will NOT execute this loop blindly.
-                    // But I have to replace GpuTableEditor.
-                    // I will assume for now that simply populating 'bins' is the goal.
-                    // Let's protect against infinite loop by breaking if bins don't increase or i doesn't move.
-                    break // Assuming only one table block or handled internally.
+                    break 
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -273,7 +200,6 @@ class GpuRepository @Inject constructor(
         }
         _bins.value = newBins
         
-        // Reset history
         undoStack.clear()
         redoStack.clear()
         updateHistoryState()
@@ -282,10 +208,11 @@ class GpuRepository @Inject constructor(
 
     suspend fun saveTable() = withContext(Dispatchers.IO) {
         val path = deviceRepository.dtsPath ?: throw IOException("DTS Path not set")
+        if (dtsIsStale) syncDts()
+        
         val newDts = genBack()
         FileUtil.writeLines(path, newDts)
         
-        // Update snapshots to current state as the new baseline
         initialBins = EditorState.deepCopyBins(_bins.value)
         initialOpps = EditorState.deepCopyOpps(_opps.value)
         initialDtsLines = ArrayList(_linesInDts.value)
@@ -297,9 +224,7 @@ class GpuRepository @Inject constructor(
         val newDts = ArrayList(_linesInDts.value)
         val sortedInsertions = ArrayList<Pair<Int, List<String>>>()
         
-        // Collect insertions
         if (_bins.value.isNotEmpty()) {
-             // If binPosition is valid use it, else append? Or 0?
              val pos = if (binPosition >= 0 && binPosition <= newDts.size) binPosition else newDts.size
              sortedInsertions.add(pos to genTableBins())
         }
@@ -309,7 +234,6 @@ class GpuRepository @Inject constructor(
              sortedInsertions.add(pos to genTableOpps())
         }
         
-        // Sort by position descending to avoid shifting indices issues if we insert multiple
         sortedInsertions.sortByDescending { it.first }
         
         for ((pos, lines) in sortedInsertions) {
@@ -323,12 +247,11 @@ class GpuRepository @Inject constructor(
         return newDts
     }
 
-
-    // --- State Management ---
-    
     private fun updateGeneratedContent() {
         val newDts = genBack()
         _dtsLines.value = newDts
+        
+        ignoreNextContentUpdate = true
         _dtsContent.value = newDts.joinToString("\n")
     }
 
@@ -342,11 +265,20 @@ class GpuRepository @Inject constructor(
         )
     }
 
+    private var dtsIsStale = false
+
+    fun syncDts() {
+        if (dtsIsStale) {
+            updateGeneratedContent()
+            dtsIsStale = false
+        }
+    }
+
     fun saveState(description: String) {
         pushUndoState(captureState(), description)
         redoStack.clear()
         updateHistoryState()
-        updateGeneratedContent()
+        syncDts() 
     }
 
     fun modifyOpps(newOpps: List<Opp>, description: String = "Modify Opps") {
@@ -355,36 +287,42 @@ class GpuRepository @Inject constructor(
         _isDirty.value = true
         redoStack.clear()
         updateHistoryState()
-        updateGeneratedContent()
+        dtsIsStale = true
+        syncDts()
     }
 
     fun updateDtsContent(content: String, description: String) {
-        // Called from Text Editor
-        // We push state before changing
         pushUndoState(captureState(), description)
+        
+        ignoreNextContentUpdate = true // Avoid self-triggering debounce
         _dtsContent.value = content
+        
         _isDirty.value = true
         redoStack.clear()
         updateHistoryState()
+        dtsIsStale = false
     }
     
-    fun updateBins(newBins: List<Bin>, description: String) {
-        modifyBins(newBins, description)
+    fun updateBins(newBins: List<Bin>, description: String, regenerateDts: Boolean = true) {
+        modifyBins(newBins, description, regenerateDts)
     }
 
-    fun modifyBins(newBins: List<Bin>, description: String = "Modify Bins") {
-        // Called from GUI Editor
+    fun modifyBins(newBins: List<Bin>, description: String = "Modify Bins", regenerateDts: Boolean = true) {
         pushUndoState(captureState(), description)
         
-        isUpdatingFromGui = true
         _bins.value = ArrayList(newBins)
         _parsedResult.value = ParseResult.Success(_bins.value)
-        updateGeneratedContent()
+        
+        if (regenerateDts) {
+            updateGeneratedContent()
+            dtsIsStale = false
+        } else {
+            dtsIsStale = true
+        }
         
         redoStack.clear()
         updateHistoryState()
-        // syncLegacyState()
-        refreshIsDirty() // Compare with initial state
+        refreshIsDirty()
     }
 
     fun undo() {
@@ -394,7 +332,6 @@ class GpuRepository @Inject constructor(
         val previous = undoStack.pop()
         val description = previous.second
         
-        // Push current to redo with description
         redoStack.push(currentSnapshot to description)
         
         restoreState(previous.first)
@@ -421,13 +358,12 @@ class GpuRepository @Inject constructor(
         _opps.value = state.oppsSnapshot
         oppPosition = state.oppPosition
         
-        // Prevent round-trip parsing since we are restoring a known valid state
-        isUpdatingFromGui = true
+        // When restoring state, we trust it's valid, update UI immediately
+        ignoreNextContentUpdate = true
         updateGeneratedContent()
         
         _parsedResult.value = ParseResult.Success(_bins.value)
-        // syncLegacyState()
-        refreshIsDirty() // Compare with initial state after undo/redo
+        refreshIsDirty()
     }
     
     private fun pushUndoState(state: EditorState, description: String) {
@@ -440,7 +376,6 @@ class GpuRepository @Inject constructor(
     private fun updateHistoryState() {
          _canUndo.value = !undoStack.isEmpty()
          _canRedo.value = !redoStack.isEmpty()
-         // Update history list for UI
          val list = ArrayList<String>()
          for (pair in undoStack) {
              list.add(pair.second)
@@ -453,7 +388,14 @@ class GpuRepository @Inject constructor(
     private fun decodeBins(linesMutable: ArrayList<String>): List<Bin> {
         val newBins = ArrayList<Bin>()
         var i = -1
+        // Safety Break for infinite loops
+        var loopCount = 0
+        val maxLoops = linesMutable.size * 2
+        
         while (++i < linesMutable.size) {
+            loopCount++
+            if (loopCount > maxLoops) break
+            
             val thisLine = linesMutable[i].trim()
             try {
                 val currentChip = chipRepository.currentChip.value
@@ -461,8 +403,7 @@ class GpuRepository @Inject constructor(
                 if (arch.isStartLine(thisLine)) {
                     if (binPosition < 0) binPosition = i
                     arch.decode(linesMutable, newBins, i)
-                    // Since decode modifies list (removes), we need to step back to process next line correctly
-                    i-- // Decrement i to stay on the match as next loop increments it
+                    i-- 
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -482,7 +423,6 @@ class GpuRepository @Inject constructor(
         var start = -1
         var foundPosition = -1
         
-        // Iterate and remove
         while (++i < linesMutable.size) {
             val line = linesMutable[i].trim()
             if (line.isEmpty()) continue
@@ -507,14 +447,12 @@ class GpuRepository @Inject constructor(
                 if (bracket == 0) break
                 
                 if (start != -1 && bracket == 1) {
-                     // Found a closed opp block
                      try {
                          val subList = linesMutable.subList(start, i + 1)
-                         // Create copy for parsing because we clear subList
                          val subListCopy = ArrayList(subList)
                          newOpps.add(parseOpp(subListCopy))
-                         subList.clear() // Removes from linesMutable
-                         i = start - 1 // Reset index
+                         subList.clear() 
+                         i = start - 1 
                          start = -1
                      } catch(e: Exception) {
                          e.printStackTrace()

@@ -19,41 +19,15 @@ object DtsHelper {
     @JvmStatic
     @Throws(Exception::class)
     fun decode_int_line_hz(line: String): intLine {
-        var line = line
-        val intLine = intLine()
-        line = line.trim { it <= ' ' }
-        var i: Int = 0
-        while (i < line.length) {
-            if (line.startsWith("=", i)) {
-                break
-            }
-            i++
-        }
-        if (i == line.length) throw Exception()
-        intLine.name = line.substring(0, i).trim { it <= ' ' }
-
-        var value = line.substring(i + 1)
-        value = value.replace("<0x0 ", "")
-            .replace(">", "")
-            .replace(";", "")
-
-        if (value.contains("0x")) {
-            value = value.replace("0x", "").trim { it <= ' ' }
-            intLine.value = value.toLong(16)
-        } else {
-            value = value.trim { it <= ' ' }
-            intLine.value = value.toLong()
-        }
-
-        return intLine
+        // Simple delegator for now, logic is similar
+        return decode_int_line(line)
     }
 
     //To handle dtc bug
     @JvmStatic
     @Throws(Exception::class)
     fun decode_stringed_int(input: String): Int {
-        var input = input
-        input = input.replace("\"", "")
+        var processed = input.replace("\"", "")
             .replace(";", "")
             .replace("\\a", "\u0007")
             .replace("\\b", "\b")
@@ -61,12 +35,12 @@ object DtsHelper {
             .replace("\\n", "\n")
             .replace("\\r", "\r")
             .replace("\\t", "\t")
-            .replace("\\v", "\u000b") // \11 is \v vertical tab
+            .replace("\\v", "\u000b") 
             .replace("\\\\", "\\")
             .replace("\\'", "'")
             .replace("\\\"", "\"")
             .trim { it <= ' ' }
-        val chars = input.toCharArray()
+        val chars = processed.toCharArray()
         if (chars.size != 3) throw Exception()
         var ret = 0
         for (i in 1..chars.size) {
@@ -78,35 +52,40 @@ object DtsHelper {
     @JvmStatic
     @Throws(Exception::class)
     fun decode_int_line(line: String): intLine {
-        var line = line
+        val trimmedLine = line.trim()
+        val eqIndex = trimmedLine.indexOf('=')
+        
+        if (eqIndex == -1) throw Exception("Invalid line format")
+        
         val intLine = intLine()
-        line = line.trim { it <= ' ' }
-        var i: Int = 0
-        while (i < line.length) {
-            if (line.startsWith("=", i)) {
-                break
+        intLine.name = trimmedLine.substring(0, eqIndex).trim()
+
+        // Fast extraction between < and >
+        val start = trimmedLine.indexOf('<', eqIndex)
+        val end = trimmedLine.indexOf('>', start)
+        
+        if (start != -1 && end != -1) {
+            var valStr = trimmedLine.substring(start + 1, end).trim()
+            
+            // Handle multiple values like <0x0 587000000>
+            val spaceIndex = valStr.lastIndexOf(' ')
+            if (spaceIndex != -1) {
+                valStr = valStr.substring(spaceIndex + 1).trim()
             }
-            i++
-        }
-        if (i == line.length) throw Exception()
-        intLine.name = line.substring(0, i).trim { it <= ' ' }
 
-        var value = line.substring(i + 1)
-        if (value.contains("\"")) {
-            intLine.value = decode_stringed_int(value).toLong()
-            return intLine
-        }
-
-        value = value.replace("<", "")
-            .replace(">", "")
-            .replace(";", "")
-
-        if (value.contains("0x")) {
-            value = value.replace("0x", "").trim { it <= ' ' }
-            intLine.value = value.toLong(16)
+            if (valStr.startsWith("0x")) {
+                intLine.value = valStr.substring(2).toLong(16)
+            } else {
+                intLine.value = valStr.toLong()
+            }
         } else {
-            value = value.trim { it <= ' ' }
-            intLine.value = value.toLong()
+            // Fallback/Legacy handling for quoted values
+            val valuePart = trimmedLine.substring(eqIndex + 1)
+            if (valuePart.contains("\"")) {
+                intLine.value = decode_stringed_int(valuePart).toLong()
+            } else {
+                throw Exception("Value not found in brackets")
+            }
         }
 
         return intLine
@@ -115,25 +94,25 @@ object DtsHelper {
     @JvmStatic
     @Throws(Exception::class)
     fun decode_hex_line(line: String): hexLine {
-        var line = line
+        val trimmedLine = line.trim()
+        val eqIndex = trimmedLine.indexOf('=')
+        
+        if (eqIndex == -1) throw Exception("Invalid line format")
+        
         val hexLine = hexLine()
-        line = line.trim { it <= ' ' }
-        var i: Int = 0
-        while (i < line.length) {
-            if (line.startsWith("=", i)) {
-                break
-            }
-            i++
+        hexLine.name = trimmedLine.substring(0, eqIndex).trim()
+
+        val start = trimmedLine.indexOf('<', eqIndex)
+        val end = trimmedLine.indexOf('>', start)
+        
+        if (start != -1 && end != -1) {
+            hexLine.value = trimmedLine.substring(start + 1, end).trim()
+        } else {
+             // Fallback
+             var value = trimmedLine.substring(eqIndex + 1)
+             value = value.replace(";", "").trim()
+             hexLine.value = value
         }
-        if (i == line.length) throw Exception()
-        hexLine.name = line.substring(0, i).trim { it <= ' ' }
-
-        var value = line.substring(i + 1)
-        value = value.replace("<", "")
-            .replace(">", "")
-            .replace(";", "").trim { it <= ' ' }
-
-        hexLine.value = value
 
         return hexLine
     }

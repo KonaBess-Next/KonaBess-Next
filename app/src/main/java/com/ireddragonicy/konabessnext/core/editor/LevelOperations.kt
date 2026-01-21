@@ -1,4 +1,3 @@
-/* --- src/main/java/com/ireddragonicy/konabessnext/core/editor/LevelOperations.kt --- */
 package com.ireddragonicy.konabessnext.core.editor
 
 import android.app.Activity
@@ -12,26 +11,24 @@ import java.util.regex.Pattern
 
 /**
  * Handles level and bin manipulation operations.
- * Optimized with Regex for robust DTS parsing.
+ * Optimized for performance using direct string parsing where possible.
  */
 object LevelOperations {
 
-    // Pre-compiled regex for performance
+    // Pre-compiled regex for complex replacements only
     private val PWR_LEVEL_REGEX = Pattern.compile("(qcom,(?:initial|ca-target)-pwrlevel\\s*=\\s*<)(0x[0-9a-fA-F]+|\\d+)(>;)")
-    private val GPU_FREQ_REGEX = Pattern.compile("qcom,gpu-freq\\s*=\\s*<(0x[0-9a-fA-F]+|\\d+)>;")
 
     // ===== Cloning Operations =====
 
     @JvmStatic
     fun cloneBinsList(source: List<Bin>?): ArrayList<Bin> {
         if (source == null) return ArrayList()
-        // Improve cloning using map-to-ArrayList for conciseness
         return source.mapTo(ArrayList()) { cloneBin(it) }
     }
 
     @JvmStatic
     fun cloneBin(original: Bin?): Bin {
-        if (original == null) return Bin(0) // Safe fallback
+        if (original == null) return Bin(0)
         val copy = Bin(original.id)
         copy.header = ArrayList(original.header)
         copy.levels = ArrayList(original.levels.map { cloneLevel(it) })
@@ -44,12 +41,8 @@ object LevelOperations {
         return Level(ArrayList(original.lines))
     }
 
-    // ===== Level Offset Operations (Fixed & Robust) =====
+    // ===== Level Offset Operations =====
 
-    /**
-     * Safely offsets a power level property in the bin header using Regex.
-     * Prevents crashes on malformed lines.
-     */
     private fun safeOffsetHeaderValue(headerLines: ArrayList<String>, key: String, offset: Int) {
         for (i in headerLines.indices) {
             val line = headerLines[i]
@@ -61,21 +54,17 @@ object LevelOperations {
                         val valueStr = matcher.group(2)
                         val suffix = matcher.group(3)
 
-                        // Parse hex or decimal
                         val currentValue = if (valueStr?.startsWith("0x") == true) {
-                            valueStr?.substring(2)?.toLong(16) ?: 0L
+                            valueStr.substring(2).toLong(16)
                         } else {
                             valueStr?.toLong() ?: 0L
                         }
 
-                        // Apply offset but keep it non-negative
                         val newValue = (currentValue + offset).coerceAtLeast(0)
-                        
-                        // Reconstruct string
                         headerLines[i] = "$prefix$newValue$suffix"
-                        return // Done
+                        return
                     } catch (e: Exception) {
-                        e.printStackTrace() // Log but don't crash
+                        e.printStackTrace()
                     }
                 }
             }
@@ -97,11 +86,9 @@ object LevelOperations {
     @JvmStatic
     fun patchThrottleLevel(bins: ArrayList<Bin>?) {
         if (bins == null) return
-        // Simple replacement is safer and faster than parsing
         for (bin in bins) {
             for (i in bin.header.indices) {
                 if (bin.header[i].contains("qcom,throttle-pwrlevel")) {
-                    // Normalize to standard format 0
                     val parts = bin.header[i].split("=")
                     if (parts.isNotEmpty()) {
                         bin.header[i] = "${parts[0].trim()} = <0>;"
@@ -112,19 +99,24 @@ object LevelOperations {
         }
     }
 
-    // ===== Frequency Operations =====
+    // ===== Frequency Operations (Optimized) =====
 
     @JvmStatic
     fun getFrequencyFromLevel(lvl: Level): Long {
+        // Fast path string parsing without Regex overhead
+        // Format: qcom,gpu-freq = <587000000>;
         for (line in lvl.lines) {
             if (line.contains("qcom,gpu-freq")) {
-                val matcher = GPU_FREQ_REGEX.matcher(line)
-                if (matcher.find()) {
-                    val valStr = matcher.group(1)
-                    return runCatching {
-                        if (valStr?.startsWith("0x") == true) valStr?.substring(2)?.toLong(16) ?: 0L
-                        else valStr?.toLong() ?: 0L
-                    }.getOrDefault(0L)
+                val start = line.indexOf('<')
+                val end = line.indexOf('>')
+                if (start != -1 && end != -1 && end > start) {
+                    val valStr = line.substring(start + 1, end).trim()
+                    return try {
+                        if (valStr.startsWith("0x")) valStr.substring(2).toLong(16)
+                        else valStr.toLong()
+                    } catch (e: Exception) {
+                        0L
+                    }
                 }
             }
         }
@@ -146,18 +138,16 @@ object LevelOperations {
         val currentLevels = bins[binId].levels
         val newLevels = ArrayList<Level>()
         
-        // Map frequency to available levels (Snapshot to handle duplicates correctly)
         val availableLevels = ArrayList(currentLevels)
         
         for (item in items) {
             if (item.hasFrequencyValue()) {
-                // Find matching level in available pool
                 val iterator = availableLevels.iterator()
                 while (iterator.hasNext()) {
                     val lvl = iterator.next()
                     if (getFrequencyFromLevel(lvl) == item.frequencyHz) {
                         newLevels.add(lvl)
-                        iterator.remove() // Consume it so duplicates work
+                        iterator.remove()
                         break
                     }
                 }
@@ -192,18 +182,12 @@ object LevelOperations {
         val bin = bins[binId]
         if (bin.levels.isEmpty()) return
 
-        // Always append to the end as requested by user
         val insertIndex = bin.levels.size
-
-        // Use the level AT insertIndex as template if available (copying "down" logic), 
-        // OR the last available level if we are at the end.
-        // This ensures if we insert before retention levels (offset > 0), we copy the retention level (which the user sees as bottom).
         val templateIndex = if (insertIndex < bin.levels.size) insertIndex else bin.levels.lastIndex
         val template = bin.levels[templateIndex.coerceAtLeast(0)]
 
         bin.levels.add(insertIndex, cloneLevel(template))
 
-        // Only offset if we inserted at 0 (effectively addAtTop behavior)
         if (insertIndex == 0) {
             offsetInitialLevel(bins, binId, 1)
             if (ChipInfo.current?.needsCaTargetOffset == true) offsetCaTargetLevel(bins, binId, 1)
@@ -247,7 +231,7 @@ object LevelOperations {
 
     @JvmStatic
     fun levelint2int(value: Long): Int {
-        val levels = com.ireddragonicy.konabessnext.core.ChipInfo.rpmh_levels.levels()
+        val levels = ChipInfo.rpmh_levels.levels()
         for (i in levels.indices) {
             if (levels[i].toLong() == value) return i
         }
@@ -256,8 +240,8 @@ object LevelOperations {
 
     @JvmStatic
     fun levelint2str(value: Long): String {
-        val levels = com.ireddragonicy.konabessnext.core.ChipInfo.rpmh_levels.levels()
-        val strings = com.ireddragonicy.konabessnext.core.ChipInfo.rpmh_levels.level_str()
+        val levels = ChipInfo.rpmh_levels.levels()
+        val strings = ChipInfo.rpmh_levels.level_str()
         for (i in levels.indices) {
             if (levels[i].toLong() == value) {
                 return if (i < strings.size) strings[i] else value.toString()
