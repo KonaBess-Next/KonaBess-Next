@@ -23,6 +23,12 @@ import com.ireddragonicy.konabessnext.model.ChipDefinition
 import android.net.Uri
 import java.lang.StringBuilder
 import java.util.ArrayList
+import androidx.documentfile.provider.DocumentFile
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import com.ireddragonicy.konabessnext.utils.RootHelper
+import com.ireddragonicy.konabessnext.utils.UriPathHelper
 
 @HiltViewModel
 class ImportExportViewModel @Inject constructor(
@@ -50,6 +56,9 @@ class ImportExportViewModel @Inject constructor(
 
     private val _lastExportedContent = MutableSharedFlow<String>()
     val lastExportedContent: SharedFlow<String> = _lastExportedContent.asSharedFlow()
+
+    private val _batchProgress = MutableStateFlow<String?>(null)
+    val batchProgress: StateFlow<String?> = _batchProgress.asStateFlow()
 
     fun updateExportAvailability() {
         // Logic to check if export is available (e.g. data loaded)
@@ -128,6 +137,12 @@ class ImportExportViewModel @Inject constructor(
     fun notifyExportResult(content: String) {
         viewModelScope.launch {
             _lastExportedContent.emit(content)
+        }
+    }
+
+    fun clearExportResult() {
+        viewModelScope.launch {
+            _lastExportedContent.emit("") // Or use a way to nullify if it was StateFlow. Since it's SharedFlow, emitting empty might work but UI check is for != null.
         }
     }
 
@@ -237,6 +252,106 @@ class ImportExportViewModel @Inject constructor(
                 _messageEvent.emit("Successfully backed up boot image")
             } catch (e: Exception) {
                 _errorEvent.emit("Backup failed: ${e.message}")
+            }
+        }
+    }
+
+    fun batchConvertDtbToDts(context: Context, sourceUris: List<Uri>) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val total = sourceUris.size
+            var successCount = 0
+            val successPaths = StringBuilder()
+            val dtcPath = File(context.filesDir, "dtc").absolutePath
+            val cacheDir = context.cacheDir
+            
+            try {
+                // Ensure dtc is executable
+                RootHelper.exec("chmod 755 $dtcPath")
+
+                sourceUris.forEachIndexed { index, uri ->
+                    val currentProgress = "Converting ${index + 1}/$total..."
+                    _batchProgress.value = currentProgress
+                    
+                    try {
+                        var realPath = UriPathHelper.getPath(context, uri)
+                        val sourceFile = DocumentFile.fromSingleUri(context, uri)
+                        val originalName = sourceFile?.name ?: "file_${index}.dtb"
+                        val originalSize = sourceFile?.length() ?: 0L
+
+                        // Root fallback: if API fails, use shell to find the file effectively
+                        if (realPath == null && RootHelper.isRootAvailable()) {
+                            realPath = RootHelper.findFile(originalName, originalSize)
+                        }
+
+                        val outputName = if (originalName.endsWith(".dtb", true)) {
+                            originalName.substring(0, originalName.length - 4) + ".dts"
+                        } else {
+                            "$originalName.dts"
+                        }
+
+                        // Step A: Copy to Cache (for safety and binary access)
+                        val tempInput = File(cacheDir, "temp_input.dtb")
+                        context.contentResolver.openInputStream(uri)?.use { input ->
+                            tempInput.outputStream().use { output ->
+                                input.copyTo(output)
+                            }
+                        }
+
+                        // Step B: Prepare temp output path
+                        val tempOutput = File(cacheDir, "temp_output.dts")
+                        if (tempOutput.exists()) tempOutput.delete()
+
+                        // Step C: Execute
+                        val result = RootHelper.exec("$dtcPath -I dtb -O dts \"${tempInput.absolutePath}\" -o \"${tempOutput.absolutePath}\"")
+                        
+                        if (result.isSuccess && tempOutput.exists() && tempOutput.length() > 0) {
+                            // Step D: Save to same folder or fallback
+                            if (realPath != null) {
+                                val sourceFolder = File(realPath).parent
+                                val finalOutputPath = "$sourceFolder/$outputName"
+                                
+                                // Use root or direct I/O to move/copy
+                                val saveSuccess = if (RootHelper.isRootAvailable()) {
+                                    RootHelper.copyFile(tempOutput.absolutePath, finalOutputPath, "777")
+                                } else {
+                                    try {
+                                        tempOutput.copyTo(File(finalOutputPath), overwrite = true)
+                                        true
+                                    } catch (e: Exception) { false }
+                                }
+                                
+                                if (saveSuccess) {
+                                    successPaths.append(finalOutputPath).append("\n")
+                                    successCount++
+                                } else {
+                                    _errorEvent.emit("Permission denied writing to $sourceFolder. Root required or folder restricted.")
+                                }
+                            } else {
+                                _errorEvent.emit("Could not resolve path for $originalName. Skipping.")
+                            }
+                        } else {
+                            val errorLog = result.err.joinToString("\n")
+                            _errorEvent.emit("Failed to convert $originalName: $errorLog")
+                        }
+
+                        // Step E: Cleanup
+                        tempInput.delete()
+                        tempOutput.delete()
+
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+
+                _batchProgress.value = null
+                if (successCount > 0) {
+                    notifyExportResult(successPaths.toString().trim())
+                }
+                _messageEvent.emit("Successfully converted $successCount/$total files")
+                
+            } catch (e: Exception) {
+                _batchProgress.value = null
+                _errorEvent.emit("Batch conversion error: ${e.message}")
             }
         }
     }

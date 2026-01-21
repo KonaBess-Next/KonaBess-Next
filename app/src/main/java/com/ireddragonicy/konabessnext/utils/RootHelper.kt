@@ -43,6 +43,15 @@ object RootHelper {
         return exec(*commands).out
     }
 
+    /**
+     * Find a file by name and size as a fallback for SAF resolution.
+     */
+    fun findFile(name: String, size: Long): String? {
+        val sizeFilter = if (size > 0) "-size ${size}c" else ""
+        val result = execForOutput("find /sdcard /storage /data/media/0 -name '$name' $sizeFilter 2>/dev/null")
+        return result.firstOrNull { it.isNotBlank() && (it.startsWith("/") || it.contains("emulated")) }
+    }
+
     // --- File Operations (Centralized) ---
 
     @JvmStatic

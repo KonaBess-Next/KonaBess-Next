@@ -36,6 +36,9 @@ fun ImportExportScreen(
     onExportToClipboard: (String) -> Unit,
     onExportRawDts: () -> Unit,
     onBackupBootImage: () -> Unit,
+    onBatchDtbToDts: () -> Unit,
+    onDismissResult: () -> Unit,
+    onOpenFile: (String) -> Unit,
     lastExportedResult: String? = null,
     modifier: Modifier = Modifier
 ) {
@@ -45,9 +48,10 @@ fun ImportExportScreen(
     var textInput by remember { mutableStateOf("") }
 
     LaunchedEffect(lastExportedResult) {
-        if (lastExportedResult != null && showSheet && sheetType == BottomSheetType.EXPORT_CLIPBOARD) {
+        if (!lastExportedResult.isNullOrEmpty()) {
             textInput = lastExportedResult
             sheetType = BottomSheetType.EXPORT_RESULT
+            showSheet = true
         }
     }
 
@@ -59,7 +63,8 @@ fun ImportExportScreen(
             ActionItem(R.drawable.ic_clipboard_import, "Import from Clipboard", "Paste configuration from clipboard", isPrepared),
             ActionItem(R.drawable.ic_clipboard_export, "Export to Clipboard", "Copy configuration to clipboard", isPrepared),
             ActionItem(R.drawable.ic_code, "Export Raw DTS", "Save raw device tree source", isPrepared),
-            ActionItem(R.drawable.ic_backup, "Backup Boot Image", "Create a backup of your boot image", isPrepared)
+            ActionItem(R.drawable.ic_backup, "Backup Boot Image", "Create a backup of your boot image", isPrepared),
+            ActionItem(R.drawable.ic_code, "Batch DTB to DTS", "Convert multiple .dtb files to human-readable text", true)
         )
     }
 
@@ -69,6 +74,7 @@ fun ImportExportScreen(
                 onDismissRequest = { 
                     showSheet = false 
                     sheetType = BottomSheetType.NONE
+                    onDismissResult()
                 },
                 sheetState = sheetState,
                 shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
@@ -87,7 +93,7 @@ fun ImportExportScreen(
                         BottomSheetType.EXPORT_FILE -> R.string.export_to_file
                         BottomSheetType.IMPORT_CLIPBOARD -> R.string.import_from_clipboard
                         BottomSheetType.EXPORT_CLIPBOARD -> R.string.export_to_clipboard
-                        BottomSheetType.EXPORT_RESULT -> R.string.text_copied_to_clipboard
+                        BottomSheetType.EXPORT_RESULT -> R.string.success
                         else -> 0
                     }
                     
@@ -106,32 +112,61 @@ fun ImportExportScreen(
                         Spacer(Modifier.height(16.dp))
                         
                         if (sheetType == BottomSheetType.EXPORT_RESULT) {
+                            val isBatchResult = textInput.contains(".dts")
+                            val resultLines = remember(textInput) { textInput.trim().split("\n").filter { it.isNotBlank() } }
+
+                            if (isBatchResult) {
+                                Text(
+                                    text = "Converted Files:",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                Spacer(Modifier.height(8.dp))
+                            }
+
                             Surface(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .heightIn(max = 200.dp),
+                                    .heightIn(max = 400.dp),
                                 color = MaterialTheme.colorScheme.surfaceVariant,
                                 shape = RoundedCornerShape(12.dp)
                             ) {
                                 val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
                                 Box(modifier = Modifier.padding(16.dp)) {
-                                    Text(
-                                        text = textInput,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.padding(end = 40.dp)
-                                    )
-                                    IconButton(
-                                        onClick = {
-                                            clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(textInput))
-                                        },
-                                        modifier = Modifier.align(Alignment.TopEnd)
-                                    ) {
-                                        Icon(
-                                            painter = painterResource(R.drawable.ic_content_copy),
-                                            contentDescription = "Copy Again",
-                                            tint = MaterialTheme.colorScheme.primary
-                                        )
+                                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        resultLines.forEach { line ->
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                            ) {
+                                                Text(
+                                                    text = if (isBatchResult) line.substringAfterLast("/") else line,
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    modifier = Modifier.weight(1f)
+                                                )
+                                                
+                                                IconButton(
+                                                    onClick = {
+                                                        if (isBatchResult) {
+                                                            onOpenFile(line)
+                                                        } else {
+                                                            clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(line))
+                                                        }
+                                                    },
+                                                    modifier = Modifier.size(32.dp)
+                                                ) {
+                                                    Icon(
+                                                        painter = painterResource(if (isBatchResult) R.drawable.ic_folder else R.drawable.ic_content_copy),
+                                                        contentDescription = if (isBatchResult) "Open File" else "Copy",
+                                                        tint = MaterialTheme.colorScheme.primary,
+                                                        modifier = Modifier.size(20.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -225,6 +260,7 @@ fun ImportExportScreen(
                                 }
                                 5 -> onExportRawDts()
                                 6 -> onBackupBootImage()
+                                7 -> onBatchDtbToDts()
                             }
                         }
                     )

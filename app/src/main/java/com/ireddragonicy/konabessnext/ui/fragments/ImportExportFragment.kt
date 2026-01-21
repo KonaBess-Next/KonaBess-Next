@@ -7,6 +7,8 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.os.Environment
+import android.os.StrictMode
+import android.provider.MediaStore
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -39,6 +41,7 @@ class ImportExportFragment : Fragment() {
 
     private val deviceViewModel: DeviceViewModel by activityViewModels()
     private val importExportViewModel: ImportExportViewModel by activityViewModels()
+    private var progressController: com.ireddragonicy.konabessnext.utils.DialogUtil.ProgressDialogController? = null
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -62,6 +65,9 @@ class ImportExportFragment : Fragment() {
                     onExportToClipboard = { desc -> handleExportToClipboard(desc) },
                     onExportRawDts = { exportRawDtsLauncher.launch("dts_dump_${System.currentTimeMillis()}.txt") },
                     onBackupBootImage = { backupBootLauncher.launch("boot_backup_${System.currentTimeMillis()}.img") },
+                    onBatchDtbToDts = { batchDtbInputLauncher.launch("*/*") },
+                    onDismissResult = { importExportViewModel.clearExportResult() },
+                    onOpenFile = { path -> openFile(path) },
                     lastExportedResult = lastExportedResult
                 )
             }
@@ -72,6 +78,8 @@ class ImportExportFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
         
         // Handle ViewModel events
+        progressController = com.ireddragonicy.konabessnext.utils.DialogUtil.ProgressDialogController(requireActivity())
+
         viewLifecycleOwner.lifecycleScope.launch {
             importExportViewModel.messageEvent.collectLatest { msg ->
                 Toast.makeText(requireContext(), msg, Toast.LENGTH_SHORT).show()
@@ -81,6 +89,16 @@ class ImportExportFragment : Fragment() {
         viewLifecycleOwner.lifecycleScope.launch {
             importExportViewModel.errorEvent.collectLatest { msg ->
                 DialogUtil.showError(requireActivity(), msg)
+            }
+        }
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            importExportViewModel.batchProgress.collectLatest { progress ->
+                if (progress != null) {
+                    progressController?.show(progress)
+                } else {
+                    progressController?.dismiss()
+                }
             }
         }
     }
@@ -103,6 +121,13 @@ class ImportExportFragment : Fragment() {
         uri?.let { importExportViewModel.backupBootToUri(requireContext(), it) }
     }
 
+    private var sourceDtbUris: List<Uri> = emptyList()
+    private val batchDtbInputLauncher = registerForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris: List<Uri> ->
+        if (uris.isNotEmpty()) {
+            importExportViewModel.batchConvertDtbToDts(requireContext(), uris)
+        }
+    }
+
     private fun handleExportToClipboard(desc: String) {
         viewLifecycleOwner.lifecycleScope.launch(Dispatchers.Main) {
             val content = importExportViewModel.exportConfig(desc)
@@ -119,6 +144,34 @@ class ImportExportFragment : Fragment() {
                 
                 Toast.makeText(requireContext(), R.string.text_copied_to_clipboard, Toast.LENGTH_SHORT).show()
             }
+        }
+    }
+
+    private fun openFile(path: String) {
+        val file = File(path)
+        if (!file.exists()) {
+            Toast.makeText(requireContext(), R.string.file_not_found, Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        try {
+            // Enable file:// URI exposure for legacy/root editors using standard API
+            val builder = StrictMode.VmPolicy.Builder()
+            StrictMode.setVmPolicy(builder.build())
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
+        try {
+            // Use file:// URI which is what power users expect for direct editing
+            val uri = Uri.fromFile(file)
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, "text/plain")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            startActivity(Intent.createChooser(intent, "Open with"))
+        } catch (e: Exception) {
+            Toast.makeText(requireContext(), "Error opening file: ${e.message}", Toast.LENGTH_LONG).show()
         }
     }
 }
