@@ -122,77 +122,79 @@ class ExportHistoryAdapter(
     }
 
     private fun applyConfig(item: ExportHistoryItem) {
-        val file = File(item.filePath)
-        if (!file.exists()) {
-            Toast.makeText(activity, R.string.file_not_found, Toast.LENGTH_SHORT).show()
-            return
-        }
+        val path = item.filePath
+        val isUri = path.startsWith("content://") || path.startsWith("file://")
 
         try {
-            // Read file content
-            val content = file.readText()
+            val content = if (isUri) {
+                val uri = android.net.Uri.parse(path)
+                activity.contentResolver.openInputStream(uri)?.use { input ->
+                    input.readBytes().toString(Charsets.UTF_8)
+                } ?: throw java.io.FileNotFoundException("Could not open URI: $path")
+            } else {
+                val file = File(path)
+                if (!file.exists()) {
+                    Toast.makeText(activity, R.string.file_not_found, Toast.LENGTH_SHORT).show()
+                    return
+                }
+                file.readText()
+            }
+
             // Delegate logic to activity/viewModel
             onApplyConfig.invoke(content)
         } catch (e: Exception) {
             e.printStackTrace()
-            Toast.makeText(activity, R.string.error_occur, Toast.LENGTH_SHORT).show()
+            val msg = if (e is java.io.FileNotFoundException) activity.getString(R.string.file_not_found) else activity.getString(R.string.error_occur)
+            Toast.makeText(activity, msg, Toast.LENGTH_SHORT).show()
         }
     }
 
     private fun shareConfig(item: ExportHistoryItem) {
-        val file = File(item.filePath)
-        if (!file.exists()) {
-            Toast.makeText(activity, R.string.file_not_found, Toast.LENGTH_SHORT).show()
-            return
-        }
+        val path = item.filePath
+        val isUri = path.startsWith("content://")
 
         try {
-            // Robust Sharing: Copy to internal cache first to ensure FileProvider works flawlessly
-            val cachePath = File(activity.cacheDir, "shared_exports")
-            if (!cachePath.exists()) {
-                cachePath.mkdirs()
-            }
-            // Use original filename to preserve extension for receiving app
-            val newFile = File(cachePath, file.name)
+            val uri = if (isUri) {
+                // Direct URI from SAF (we might need to check permissions, but usually Action.SEND works if we passed it)
+                android.net.Uri.parse(path)
+            } else {
+                val file = File(path)
+                if (!file.exists()) {
+                    Toast.makeText(activity, R.string.file_not_found, Toast.LENGTH_SHORT).show()
+                    return
+                }
 
-            // Use centralized root copy utility
-            if (!RootHelper.copyFile(file.absolutePath, newFile.absolutePath, "666")) {
-                Toast.makeText(activity, "Failed to copy file with Root.", Toast.LENGTH_SHORT).show()
-                return
-            }
+                // Robust Sharing: Copy to internal cache first to ensure FileProvider works flawlessly
+                val cachePath = File(activity.cacheDir, "shared_exports")
+                if (!cachePath.exists()) cachePath.mkdirs()
+                
+                val newFile = File(cachePath, file.name)
+                if (!RootHelper.copyFile(file.absolutePath, newFile.absolutePath, "666")) {
+                    Toast.makeText(activity, "Failed to copy file for sharing.", Toast.LENGTH_SHORT).show()
+                    return
+                }
 
-            val uri = FileProvider.getUriForFile(
-                activity,
-                "${activity.packageName}.fileprovider", newFile
-            )
+                FileProvider.getUriForFile(activity, "${activity.packageName}.fileprovider", newFile)
+            }
 
             val shareIntent = Intent(Intent.ACTION_SEND)
-
-            // Determine MIME type based on extension
-            var mimeType = "*/*"
-            val filename = file.name.lowercase(Locale.getDefault())
-            if (filename.endsWith(".txt") || filename.endsWith(".dts")) {
-                mimeType = "text/plain"
-            } else if (filename.endsWith(".img") || filename.endsWith(".bin")) {
-                mimeType = "application/octet-stream"
+            
+            // Determine MIME type
+            val filename = item.filename.lowercase(Locale.getDefault())
+            val mimeType = when {
+                filename.endsWith(".txt") || filename.endsWith(".dts") -> "text/plain"
+                filename.endsWith(".img") || filename.endsWith(".bin") -> "application/octet-stream"
+                else -> "*/*"
             }
 
             shareIntent.type = mimeType
             shareIntent.putExtra(Intent.EXTRA_STREAM, uri)
             shareIntent.putExtra(Intent.EXTRA_SUBJECT, item.filename)
             shareIntent.putExtra(Intent.EXTRA_TEXT, "KonaBess GPU Config: ${item.description}")
-
-            // Critical for Android 10+: Add ClipData to ensure permissions are granted
             shareIntent.clipData = ClipData.newRawUri(null, uri)
             shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            shareIntent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
 
-            activity.startActivity(
-                Intent.createChooser(
-                    shareIntent,
-                    activity.getString(R.string.share_config)
-                )
-            )
+            activity.startActivity(Intent.createChooser(shareIntent, activity.getString(R.string.share_config)))
         } catch (e: Exception) {
             e.printStackTrace()
             Toast.makeText(activity, R.string.error_occur, Toast.LENGTH_SHORT).show()
