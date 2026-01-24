@@ -95,3 +95,6 @@ lint/tmp/
 
 # Android Profiling
 *.hprof
+
+# KonaBess DTS files
+dts/
