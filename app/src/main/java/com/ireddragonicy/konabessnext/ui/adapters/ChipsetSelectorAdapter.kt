@@ -31,6 +31,14 @@ class ChipsetSelectorAdapter(
         fun onChipsetSelected(dtb: Dtb)
     }
 
+    companion object {
+        const val MANUAL_SETUP_ID = -999
+    }
+
+    override fun getItemViewType(position: Int): Int {
+        return if (position == dtbList.size) 1 else 0 // 1 for manual setup, 0 for item
+    }
+
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
         val view = LayoutInflater.from(parent.context)
             .inflate(R.layout.item_chipset_option, parent, false)
@@ -38,32 +46,46 @@ class ChipsetSelectorAdapter(
     }
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-        val dtb = dtbList[position]
-
-        // Set chipset name
-        val chipsetName = "${dtb.id} ${dtb.type.name}"
-        holder.chipsetName.text = chipsetName
-
-        // Set subtitle
-        holder.chipsetSubtitle.text = "DTB Index: ${dtb.id}"
-
-        // Show recommended badge if this is the recommended chipset
-        if (dtb.id == recommendedIndex) {
-            holder.recommendedBadge.visibility = View.VISIBLE
-        } else {
+        if (getItemViewType(position) == 1) {
+            // Manual Setup Item
+            holder.chipsetName.text = "Manual Setup / Deep Scan"
+            holder.chipsetSubtitle.text = "Configure unsupported device manually"
+            holder.chipsetIcon.setImageResource(R.drawable.ic_search) // Use build icon or similar, or generic
             holder.recommendedBadge.visibility = View.GONE
-        }
-
-        // Show currently selected badge if this is the currently selected chipset
-        if (currentlySelectedId != null && dtb.id == currentlySelectedId) {
-            holder.selectedBadge.visibility = View.VISIBLE
-        } else {
             holder.selectedBadge.visibility = View.GONE
-        }
+            
+            holder.cardView.setOnClickListener {
+                // Return a dummy DTB with special ID
+                listener?.onChipsetSelected(Dtb(MANUAL_SETUP_ID, com.ireddragonicy.konabessnext.model.ChipDefinition("manual", "Manual", 0, false, 0, null, "", 0, mapOf()))) 
+            }
+        } else {
+            val dtb = dtbList[position]
 
-        // Set click listener
-        holder.cardView.setOnClickListener {
-            listener?.onChipsetSelected(dtb)
+            // Set chipset name
+            val chipsetName = "${dtb.id} ${dtb.type.name}"
+            holder.chipsetName.text = chipsetName
+
+            // Set subtitle
+            holder.chipsetSubtitle.text = "DTB Index: ${dtb.id}"
+
+            // Show recommended badge if this is the recommended chipset
+            if (dtb.id == recommendedIndex) {
+                holder.recommendedBadge.visibility = View.VISIBLE
+            } else {
+                holder.recommendedBadge.visibility = View.GONE
+            }
+
+            // Show currently selected badge if this is the currently selected chipset
+            if (currentlySelectedId != null && dtb.id == currentlySelectedId) {
+                holder.selectedBadge.visibility = View.VISIBLE
+            } else {
+                holder.selectedBadge.visibility = View.GONE
+            }
+
+            // Set click listener
+            holder.cardView.setOnClickListener {
+                listener?.onChipsetSelected(dtb)
+            }
         }
 
         // Add subtle elevation on press
@@ -77,7 +99,7 @@ class ChipsetSelectorAdapter(
     }
 
     override fun getItemCount(): Int {
-        return dtbList.size
+        return dtbList.size + 1
     }
 
     class ViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {

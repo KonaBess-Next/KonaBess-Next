@@ -71,6 +71,67 @@ class DeviceRepository @Inject constructor(
     private var dtbNum: Int = 0
     private var dtbType: DtbType? = null
 
+    fun getDtbCount(): Int {
+        return dtbNum
+    }
+
+    fun setCustomChip(def: ChipDefinition, dtbIndex: Int) {
+        val dtsFile = File(filesDir, "$dtbIndex.dts")
+        if (dtsFile.exists()) {
+            dtsPath = dtsFile.absolutePath
+            KonaBessCore.dts_path = dtsPath
+            ChipInfo.current = def
+            currentDtb = Dtb(dtbIndex, def)
+            prepared = true
+            
+            // Persist this custom definition
+            saveLastChipset(dtbIndex, def.id)
+            saveCustomDefinition(def)
+        }
+    }
+
+    private fun saveCustomDefinition(def: ChipDefinition) {
+        // Simple serialization or just marking it. 
+        // For full persistence, we'd need to serialize the whole object to JSON.
+        // For now, let's just save the ID and valid flag if it's a simple custom flow.
+        // Ideally, we serialize `def` to a separate pref or file.
+        // Since we are adding deep scan, we should save the parameters (Strategy, VoltPattern, etc)
+        // For MVP, we can save keys like "custom_def_strategy", "custom_def_pattern", etc.
+        prefs.edit()
+             .putString("custom_def_id", def.id)
+             .putString("custom_def_strategy", def.strategyType)
+             .putString("custom_def_pattern", def.voltTablePattern)
+             .putInt("custom_def_max_levels", def.maxTableLevels)
+             .putBoolean("custom_def_ignore_volt", def.ignoreVoltTable)
+             .apply()
+    }
+
+    fun tryLoadCustomDefinition(id: String): ChipDefinition? {
+        if (!id.startsWith("custom_detected")) return null
+        
+        val strategy = prefs.getString("custom_def_strategy", "MULTI_BIN") ?: "MULTI_BIN"
+        val pattern = prefs.getString("custom_def_pattern", null)
+        val maxLevels = prefs.getInt("custom_def_max_levels", 11)
+        val ignoreVolt = prefs.getBoolean("custom_def_ignore_volt", false)
+        
+        return ChipDefinition(
+            id = id,
+            name = "Custom Discovered Device",
+            maxTableLevels = maxLevels,
+            ignoreVoltTable = ignoreVolt,
+            minLevelOffset = 1,
+            voltTablePattern = pattern,
+            strategyType = strategy,
+            levelCount = 416, 
+            levels = mapOf(),
+            models = listOf("Custom")
+        )
+    }
+
+    fun getDtsFile(index: Int): File {
+        return File(filesDir, "$index.dts")
+    }
+
     // --- Core Logic ---
 
     suspend fun cleanEnv() = withContext(Dispatchers.IO) {
@@ -449,7 +510,11 @@ class DeviceRepository @Inject constructor(
         if (dtbId < 0) return false
         
         try {
-            val def = ChipInfo.getById(chipId) ?: return false
+            var def = ChipInfo.getById(chipId)
+            if (def == null && chipId.startsWith("custom_detected")) {
+                def = tryLoadCustomDefinition(chipId)
+            }
+            if (def == null) return false
             val dtsFile = File(filesDir, "$dtbId.dts")
             
             if (dtsFile.exists()) {

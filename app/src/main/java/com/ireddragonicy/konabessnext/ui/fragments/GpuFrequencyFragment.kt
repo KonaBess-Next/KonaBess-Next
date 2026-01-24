@@ -180,6 +180,14 @@ class GpuFrequencyFragment : Fragment() {
                     }
                 }
             }
+            // scannerResults
+            launch {
+                deviceViewModel.scannerResults.collect { results ->
+                    if (results.isNotEmpty()) {
+                        showScanResultsDialog(activity, results)
+                    }
+                }
+            }
         }
     }
     
@@ -226,12 +234,15 @@ class GpuFrequencyFragment : Fragment() {
         contentContainer!!.removeAllViews()
         contentContainer!!.gravity = Gravity.NO_GRAVITY
         
+
+        
         // Root Workbench Container
         gpuEditorContainer = LinearLayout(requireContext())
         gpuEditorContainer!!.orientation = LinearLayout.VERTICAL
         gpuEditorContainer!!.layoutParams = LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
         )
+        contentContainer!!.addView(gpuEditorContainer)
         
         // Compose Toolbar (replaces legacy GpuActionToolbar)
         val toolbarComposeView = androidx.compose.ui.platform.ComposeView(requireContext())
@@ -369,6 +380,44 @@ class GpuFrequencyFragment : Fragment() {
                                                 }
                                             }
                                         }
+
+                                        item {
+                                            Card(
+                                                onClick = {
+                                                    showSheet = false
+                                                    showManualSetupDialog(requireActivity() as MainActivity)
+                                                },
+                                                modifier = Modifier.fillMaxWidth(),
+                                                colors = CardDefaults.cardColors(
+                                                    containerColor = MaterialTheme.colorScheme.surfaceContainer
+                                                )
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier.padding(16.dp),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Icon(
+                                                        painter = painterResource(R.drawable.ic_search),
+                                                        contentDescription = null,
+                                                        modifier = Modifier.padding(end = 16.dp)
+                                                    )
+                                                    Column(modifier = Modifier.weight(1f)) {
+                                                        Text(
+                                                            text = "Manual Setup / Deep Scan",
+                                                            style = MaterialTheme.typography.titleMedium
+                                                        )
+                                                        Text(
+                                                            text = "Configure unsupported device manually",
+                                                            style = MaterialTheme.typography.bodySmall
+                                                        )
+                                                    }
+                                                    Icon(
+                                                        painter = painterResource(R.drawable.ic_chevron_right),
+                                                        contentDescription = null
+                                                    )
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -407,6 +456,31 @@ class GpuFrequencyFragment : Fragment() {
         toolbarParams.setMargins(0, 0, 0, 0)
         gpuEditorContainer!!.addView(toolbarComposeView, toolbarParams)
 
+        // Check for custom/unsupported definition (Added below toolbar)
+        val currentChip = deviceViewModel.currentChipType
+        if (currentChip != null && (currentChip.id.startsWith("custom_detected") || currentChip.id == "manual")) {
+            val warningCard = MaterialCardView(requireContext())
+            val warningParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            )
+            warningParams.setMargins(24, 12, 24, 12)
+            warningCard.layoutParams = warningParams
+            warningCard.setCardBackgroundColor(android.graphics.Color.parseColor("#44FF0000")) // Semi-transparent red
+            warningCard.strokeColor = android.graphics.Color.RED
+            warningCard.strokeWidth = 2
+            warningCard.radius = 16f
+            
+            val warningText = TextView(requireContext())
+            warningText.text = "WARNING: Your GPU is officially unsupported! You are using a custom/manual configuration. Proceed with caution."
+            warningText.setTextColor(android.graphics.Color.RED)
+            warningText.setPadding(32, 24, 32, 24)
+            warningText.textSize = 14f
+            warningText.typeface = android.graphics.Typeface.DEFAULT_BOLD
+            
+            warningCard.addView(warningText)
+            gpuEditorContainer!!.addView(warningCard)
+        }
+
         // Fragment Container for Frames (GUI / Text / Tree)
         val fragmentContainer = android.widget.FrameLayout(requireContext())
         fragmentContainer.id = View.generateViewId()
@@ -414,8 +488,6 @@ class GpuFrequencyFragment : Fragment() {
             ViewGroup.LayoutParams.MATCH_PARENT, 0, 1.0f
         )
         gpuEditorContainer!!.addView(fragmentContainer, containerParams)
-
-        contentContainer!!.addView(gpuEditorContainer)
 
         // Initialize Fragments
         val fm = childFragmentManager
@@ -577,6 +649,7 @@ class GpuFrequencyFragment : Fragment() {
 
         card.addView(cardContent)
 
+
         // Add card to container with margin
         val cardParams = LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
@@ -702,6 +775,42 @@ class GpuFrequencyFragment : Fragment() {
         submitParams.setMargins(0, 24, 0, 0)
         cardContent.addView(submitDtsButton, submitParams)
 
+        // Add "Deep Scan" button for unsupported devices
+        val deepScanButton = MaterialButton(
+            requireContext(), null,
+            com.google.android.material.R.attr.materialButtonOutlinedStyle
+        )
+        deepScanButton.text = "Deep Scan DTS Structure"
+        deepScanButton.cornerRadius = 32
+        deepScanButton.setPadding(buttonPadding * 2, buttonPadding, buttonPadding * 2, buttonPadding)
+        deepScanButton.textSize = 14f
+        deepScanButton.setIconResource(R.drawable.ic_search) // Ensure this icon exists or use generic
+        deepScanButton.iconGravity = MaterialButton.ICON_GRAVITY_TEXT_START
+        deepScanButton.setOnClickListener { 
+            deviceViewModel.performDeepScan() 
+            Toast.makeText(context, "Scanning DTS files...", Toast.LENGTH_SHORT).show()
+        }
+        val scanParams = LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        )
+        scanParams.gravity = Gravity.CENTER_HORIZONTAL
+        scanParams.setMargins(0, 24, 0, 0)
+        cardContent.addView(deepScanButton, scanParams)
+
+        // Add "Manual Setup" button
+        val manualSetupButton = MaterialButton(requireContext(), null, com.google.android.material.R.attr.borderlessButtonStyle)
+        manualSetupButton.text = "Manual Setup"
+        manualSetupButton.textSize = 14f
+        manualSetupButton.setOnClickListener {
+            showManualSetupDialog(activity)
+        }
+        val manualParams = LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
+        )
+        manualParams.gravity = Gravity.CENTER_HORIZONTAL
+        manualParams.setMargins(0, 8, 0, 0)
+        cardContent.addView(manualSetupButton, manualParams)
+
         card.addView(cardContent)
 
         // Add card to container with margin
@@ -710,6 +819,159 @@ class GpuFrequencyFragment : Fragment() {
         )
         cardParams.setMargins(40, 0, 40, 0)
         contentContainer!!.addView(card, cardParams)
+    }
+
+    private fun showScanResultsDialog(activity: MainActivity, results: List<com.ireddragonicy.konabessnext.core.scanner.DtsScanResult>) {
+        if (results.size == 1) {
+            val result = results.first()
+            showSingleResultDialog(activity, result)
+        } else {
+            // Show selection list
+            val items = results.map { "DTB #${it.dtbIndex}: ${it.recommendedStrategy} (${it.maxLevels} Lvls)" }.toTypedArray()
+            var selectedIndex = 0
+            
+            MaterialAlertDialogBuilder(requireContext())
+                .setTitle("Select Candidate")
+                .setSingleChoiceItems(items, 0) { _, which ->
+                    selectedIndex = which
+                }
+                .setPositiveButton("Next") { _, _ ->
+                    showSingleResultDialog(activity, results[selectedIndex])
+                }
+                .setNegativeButton("Cancel", null)
+                .show()
+        }
+    }
+
+    private fun showSingleResultDialog(activity: MainActivity, result: com.ireddragonicy.konabessnext.core.scanner.DtsScanResult) {
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle("Structure Found")
+            .setMessage("Candidate Found in DTB #${result.dtbIndex}.\n\nStrategy: ${result.recommendedStrategy}\nLevels: ${result.maxLevels}\nTable: ${result.voltageTablePattern ?: "None"}\n\nWould you like to try applying this?")
+            .setPositiveButton("Apply & Test") { _, _ ->
+                deviceViewModel.applyCustomDefinition(result)
+            }
+            .setNegativeButton("Cancel", null)
+            .setNeutralButton("Manual Edit") { _, _ ->
+                 showManualSetupDialog(activity, result)
+            }
+            .show()
+    }
+
+    private fun showManualSetupDialog(activity: MainActivity, baseResult: com.ireddragonicy.konabessnext.core.scanner.DtsScanResult? = null) {
+        val context = requireContext()
+        val layout = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(50, 40, 50, 40)
+        }
+
+        // Deep Scan Button
+        val deepScanBtn = MaterialButton(context, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+             text = "Scan for Structure (Deep Scan)"
+             setIconResource(R.drawable.ic_search)
+             setOnClickListener {
+                 // Close manual dialog if possible? The dialog is built later.
+                 // We can't easily dismiss the dialog from here unless we save a reference.
+                 // Actually, showManualSetupDialog builds a Dialog but doesn't return it easily to dismiss.
+                 // But we can trigger the scan. The scan results dialog will pop up over this one or we can find a way to dismiss.
+                 // For now, let's trigger scan and toast.
+                 deviceViewModel.performDeepScan()
+                 Toast.makeText(context, "Deep Scan started...", Toast.LENGTH_SHORT).show()
+                 // Ideally we should close this dialog.
+             }
+        }
+        val scanParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        scanParams.setMargins(0, 0, 0, 24)
+        layout.addView(deepScanBtn, scanParams)
+
+        // Divider
+        val divider = View(context).apply { setBackgroundColor(android.graphics.Color.GRAY); alpha = 0.2f }
+        layout.addView(divider, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 2).apply { setMargins(0, 16, 0, 24) })
+
+        // Strategy Inputs
+        val strategyGroup = android.widget.RadioGroup(context).apply {
+            orientation = android.widget.RadioGroup.HORIZONTAL
+        }
+        val radioMulti = android.widget.RadioButton(context).apply { text = "MULTI_BIN"; id = View.generateViewId() }
+        val radioSingle = android.widget.RadioButton(context).apply { text = "SINGLE_BIN"; id = View.generateViewId() }
+        strategyGroup.addView(radioMulti)
+        strategyGroup.addView(radioSingle)
+        
+        if (baseResult?.recommendedStrategy == "SINGLE_BIN") radioSingle.isChecked = true else radioMulti.isChecked = true
+
+        layout.addView(TextView(context).apply { text = "Strategy Type" })
+        layout.addView(strategyGroup)
+
+        // DTB Index Input
+        val dtbInput = com.google.android.material.textfield.TextInputEditText(context).apply {
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER
+            setText((baseResult?.dtbIndex ?: 0).toString())
+            hint = "DTB Index (0, 1, ...)"
+        }
+        layout.addView(createInputLayout(context, "DTB Index", dtbInput))
+
+        // Max Levels Input
+        val maxLevelsInput = com.google.android.material.textfield.TextInputEditText(context).apply {
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER
+            setText((baseResult?.maxLevels ?: 11).toString())
+            hint = "Max Table Levels"
+        }
+        layout.addView(createInputLayout(context, "Max Levels", maxLevelsInput))
+
+        // Volt Table Pattern Input
+        val patternInput = com.google.android.material.textfield.TextInputEditText(context).apply {
+            inputType = android.text.InputType.TYPE_CLASS_TEXT
+            setText(baseResult?.voltageTablePattern ?: "gpu-opp-table")
+            hint = "Volt Table Pattern"
+        }
+        layout.addView(createInputLayout(context, "Volt Table Pattern", patternInput))
+
+        // Ignore Volt Table Checkbox
+        val ignoreVoltCheckbox = android.widget.CheckBox(context).apply {
+            text = "Ignore Volt Table"
+            isChecked = baseResult?.voltageTablePattern == null
+        }
+        layout.addView(ignoreVoltCheckbox)
+
+        MaterialAlertDialogBuilder(context)
+            .setTitle("Manual Configuration")
+            .setView(layout)
+            .setPositiveButton("Apply") { _, _ ->
+                try {
+                    val strategy = if (radioSingle.isChecked) "SINGLE_BIN" else "MULTI_BIN"
+                    val dtbIndex = dtbInput.text.toString().toIntOrNull() ?: 0
+                    val maxLevels = maxLevelsInput.text.toString().toIntOrNull() ?: 11
+                    val pattern = patternInput.text.toString().takeIf { it.isNotBlank() }
+                    val ignoreVolt = ignoreVoltCheckbox.isChecked
+
+                    // Construct result manually
+                    val manualResult = com.ireddragonicy.konabessnext.core.scanner.DtsScanResult(
+                        isValid = true,
+                        dtbIndex = dtbIndex,
+                        recommendedStrategy = strategy,
+                        voltageTablePattern = if (ignoreVolt) null else pattern,
+                        maxLevels = maxLevels,
+                        levelCount = 416, // Default
+                        confidence = "Manual"
+                    )
+                    
+                    deviceViewModel.applyCustomDefinition(manualResult)
+                    
+                } catch (e: Exception) {
+                    Toast.makeText(context, "Invalid Input: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun createInputLayout(context: android.content.Context, label: String, editText: android.view.View): com.google.android.material.textfield.TextInputLayout {
+        val til = com.google.android.material.textfield.TextInputLayout(context, null, com.google.android.material.R.attr.textInputStyle)
+        til.hint = label
+        til.addView(editText)
+        val params = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        params.setMargins(0, 16, 0, 0)
+        til.layoutParams = params
+        return til
     }
 
     private fun startPreparation(activity: MainActivity) {

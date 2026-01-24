@@ -56,7 +56,16 @@ class DeviceViewModel @Inject constructor(
 
                 val dtbs = repository.dtbs
                 Log.d("KonaBessDet", "ViewModel detected ${dtbs.size} compatible chipsets")
+                
                 if (dtbs.isEmpty()) {
+                    // Try to recover custom definition
+                    val recovered = repository.tryRestoreLastChipset()
+                    if (recovered && repository.currentDtb != null) {
+                         _detectionState.value = UiState.Success(listOf(repository.currentDtb!!))
+                         selectChipset(repository.currentDtb!!)
+                         return@launch
+                    }
+
                     _detectionState.value = UiState.Error("No compatible chipset found")
                     _isPrepared.value = false
                     return@launch
@@ -64,11 +73,17 @@ class DeviceViewModel @Inject constructor(
 
                 _detectionState.value = UiState.Success(dtbs)
                 
-                val recommended = findRecommendedIndex(dtbs)
-                if (dtbs.size == 1) {
-                    selectChipset(dtbs[0])
+                // Try restore last used first
+                val restored = repository.tryRestoreLastChipset()
+                if (restored && repository.currentDtb != null && dtbs.any { it.id == repository.currentDtb?.id }) {
+                    selectChipset(repository.currentDtb!!)
                 } else {
-                    _recommendedIndex.value = recommended
+                    val recommended = findRecommendedIndex(dtbs)
+                    if (dtbs.size == 1) {
+                        selectChipset(dtbs[0])
+                    } else {
+                        _recommendedIndex.value = recommended
+                    }
                 }
             } catch (e: Exception) {
                 Log.e("KonaBessDet", "Detection failed with exception", e)
@@ -181,6 +196,64 @@ class DeviceViewModel @Inject constructor(
                 _repackState.value = UiState.Error("Flashing failed: ${e.message}", e)
             }
         }
+    }
+
+    private val _scannerResults = MutableStateFlow<List<com.ireddragonicy.konabessnext.core.scanner.DtsScanResult>>(emptyList())
+    val scannerResults: StateFlow<List<com.ireddragonicy.konabessnext.core.scanner.DtsScanResult>> = _scannerResults.asStateFlow()
+
+    fun performDeepScan() {
+        _scannerResults.value = emptyList() // Reset to trigger update even if results are same
+        
+        // Only show full loading state if we aren't already working on a valid chipset
+        if (!_isPrepared.value) {
+            _detectionState.value = UiState.Loading
+        }
+        
+        viewModelScope.launch {
+            try {
+                // Get count from repository
+                val count = repository.getDtbCount()
+                val results = mutableListOf<com.ireddragonicy.konabessnext.core.scanner.DtsScanResult>()
+                
+                for (i in 0 until count) {
+                    val file = repository.getDtsFile(i)
+                    val result = com.ireddragonicy.konabessnext.core.scanner.DtsScanner.scan(file, i)
+                    if (result.isValid) {
+                        results.add(result)
+                    }
+                }
+                
+                _scannerResults.value = results
+                
+                if (results.isEmpty()) {
+                    if (!_isPrepared.value) {
+                        _detectionState.value = UiState.Error("Deep Scan: No recognizable GPU structures found.")
+                    }
+                } else {
+                    // We found potential candidates.
+                    // If we are not prepared (initial detection failed), we keep the state as Error 
+                    // (which shows the "Unsupported Device" prompt) but the dialog will appear.
+                    if (!_isPrepared.value) {
+                        _detectionState.value = UiState.Error("Deep Scan: Found ${results.size} candidates.", null)
+                    }
+                }
+                
+            } catch (e: Exception) {
+                 if (!_isPrepared.value) {
+                     _detectionState.value = UiState.Error("Deep Scan failed: ${e.message}", e)
+                 }
+            }
+        }
+    }
+
+    fun applyCustomDefinition(result: com.ireddragonicy.konabessnext.core.scanner.DtsScanResult) {
+        val def = com.ireddragonicy.konabessnext.core.scanner.DtsScanner.toChipDefinition(result)
+        repository.setCustomChip(def, result.dtbIndex)
+        chipRepository.setCurrentChip(def)
+        _selectedChipset.value = Dtb(result.dtbIndex, def)
+        _isPrepared.value = true
+        _detectionState.value = UiState.Success(listOf(Dtb(result.dtbIndex, def)))
+        _scannerResults.value = emptyList() // Clear results after selection
     }
 
     fun reboot() {

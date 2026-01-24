@@ -159,7 +159,7 @@ private fun TreeRow(
             .fillMaxWidth()
             .clickable(
                 interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                indication = androidx.compose.foundation.LocalIndication.current,
+                indication = null,
                 enabled = item.type == ItemType.NODE
             ) { 
                 if (item.type == ItemType.NODE) onToggleExpand() 

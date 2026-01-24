@@ -9,25 +9,61 @@ abstract class BaseChipArchitecture : ChipArchitecture {
     override fun decode(dtsLines: MutableList<String>, bins: MutableList<Bin>, startIndex: Int) {
         var i = startIndex
         var bracket = 0
+        
+        // Safety check for starting line
+        val firstLine = dtsLines[startIndex].trim()
+        if (firstLine.contains("{")) bracket++
+        // If the first line doesn't have {, we are in trouble or it's on next line.
+        // But isStartLine usually implies start of block.
+        // If the block start is split? (e.g. "node \n {") - BaseChipArchitecture assumes checking line by line.
+        // We will assume bracket increases on start line or next line if we track it?
+        // But the loop below starts checking from i=startIndex.
 
+        // Actually, we should initialize bracket based on first line, then loop.
+        // But the loop increments i at end.
+        
+        // Let's reset and do it properly loop.
+        bracket = 0 
+        
         while (i < dtsLines.size) {
-            val thisLine = dtsLines[i].trim()
+            var thisLine = dtsLines[i].trim()
+            
+            // Remove C-style comments /* ... */ (simplified, assumes one line)
+            if (thisLine.contains("/*") && thisLine.contains("*/")) {
+                thisLine = thisLine.replace(Regex("/\\*.*?\\*/"), "")
+            }
+            // Remove C++ style comments //
+            if (thisLine.contains("//")) {
+                thisLine = thisLine.substringBefore("//")
+            }
+            
+            // Remove strings to avoid counting braces inside them
+            // Regex to remove content in quotes: "([^"\\]*(\\.[^"\\]*)*)"
+            thisLine = thisLine.replace(Regex("\"([^\"\\\\]*(\\\\.[^\"\\\\]*)*)\""), "\"\"")
 
             if (thisLine.contains("{")) {
-                bracket++
+                // Count occurrences
+                bracket += thisLine.count { it == '{' }
             }
             if (thisLine.contains("}")) {
-                bracket--
+                bracket -= thisLine.count { it == '}' }
             }
 
-            if (bracket == 0) {
-                val end = i
-                decodeBin(dtsLines.subList(startIndex, end + 1), bins)
-                dtsLines.subList(startIndex, end + 1).clear()
-                return
+            if (bracket == 0 && i >= startIndex) { // i >= startIndex ensures we processed at least one line (the start)
+                // If it's a one-liner "node {};", bracket goes 0 immediately.
+                // Ensure we actually processed a block.
+                if (thisLine.contains(";") || i > startIndex) {
+                    val end = i
+                    decodeBin(dtsLines.subList(startIndex, end + 1), bins)
+                    dtsLines.subList(startIndex, end + 1).clear()
+                    return
+                }
             }
             i++
         }
+        // If we reach here, we didn't find the matching closing brace.
+        // But maybe the file structure is loose?
+        // Throwing exception causes GpuRepository to catch it and skip.
         throw Exception("Invalid bin range: non-terminating block starting at line $startIndex")
     }
 

@@ -210,28 +210,34 @@ fun VoltageSelector(param: ParamItem, onSave: (String, String) -> Unit) {
     val levels = com.ireddragonicy.konabessnext.core.ChipInfo.rpmh_levels?.level_str() ?: emptyArray()
     val values = com.ireddragonicy.konabessnext.core.ChipInfo.rpmh_levels?.levels() ?: intArrayOf()
     
-    // Find initial index
-    val initialIndex = try {
-        com.ireddragonicy.konabessnext.core.editor.LevelOperations.levelint2int(param.rawValue.toLong())
-    } catch (e: Exception) { 0 }
+    val currentLong = try { 
+        if (param.rawValue.startsWith("0x")) java.lang.Long.decode(param.rawValue) else param.rawValue.toLong() 
+    } catch (e: Exception) { -1L }
+    
+    // Check if it matches a preset
+    val matchIndex = values.indexOfFirst { it.toLong() == currentLong }
+    
+    var customText by remember { mutableStateOf(if (matchIndex == -1) param.rawValue else "") }
+    var selectedIndex by remember { mutableStateOf(matchIndex) } // -1 means custom
     
     LazyColumn(
-        modifier = Modifier.heightIn(max = 300.dp) // Limit height
+        modifier = Modifier.heightIn(max = 400.dp)
     ) {
+        // Standard Presets
         itemsIndexed(levels) { index, label ->
-            val isSelected = index == initialIndex
+            val isSelected = index == selectedIndex
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable(
                         interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                        indication = androidx.compose.foundation.LocalIndication.current
+                        indication = null
                     ) {
+                         selectedIndex = index
+                         // Auto-save on selection of preset
                          val value = if (index >= 0 && index < values.size) values[index] else 0
-                         val newValue = value.toString()
-                         val encoded = DtsHelper.encodeIntOrHexLine(param.rawName, newValue)
-                         val historyMsg = "Updated Voltage to $label"
-                         onSave(encoded, historyMsg)
+                         val encoded = DtsHelper.encodeIntOrHexLine(param.rawName, value.toString())
+                         onSave(encoded, "Updated Voltage to $label")
                     }
                     .padding(vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -243,6 +249,53 @@ fun VoltageSelector(param: ParamItem, onSave: (String, String) -> Unit) {
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurface
                 )
+            }
+        }
+        
+        // Custom Option
+        item {
+            val isCustom = selectedIndex == -1
+            Column {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(
+                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                            indication = null
+                        ) { selectedIndex = -1 }
+                        .padding(vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    RadioButton(selected = isCustom, onClick = null)
+                    Spacer(Modifier.width(16.dp))
+                    Text(
+                        text = "Custom Value",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+                
+                if (isCustom) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(start = 48.dp, bottom = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedTextField(
+                            value = customText,
+                            onValueChange = { customText = it },
+                            label = { Text("Raw Value (Dec/Hex)") },
+                            modifier = Modifier.weight(1f),
+                            singleLine = true
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Button(onClick = {
+                            val encoded = DtsHelper.encodeIntOrHexLine(param.rawName, customText)
+                            onSave(encoded, "Updated Voltage to Custom: $customText")
+                        }) {
+                            Text("Save")
+                        }
+                    }
+                }
             }
         }
     }
