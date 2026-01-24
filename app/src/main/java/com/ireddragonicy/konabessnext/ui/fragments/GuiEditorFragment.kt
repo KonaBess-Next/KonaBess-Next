@@ -9,8 +9,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
@@ -68,6 +68,10 @@ class GuiEditorFragment : Fragment() {
                                     bins = bins,
                                     onBinClick = { index ->
                                         gpuFrequencyViewModel.selectedBinIndex.value = index
+                                    },
+                                    onReload = {
+                                        gpuFrequencyViewModel.loadData()
+                                        sharedViewModel.loadData()
                                     }
                                 )
                             }

@@ -100,16 +100,16 @@ class GpuFrequencyFragment : Fragment() {
 
         // Collect DeviceViewModel state
         lifecycleScope.launch {
-            // isPrepared
+            // Combine prepared state and chipset selection to trigger single data load
             launch {
-                deviceViewModel.isPrepared.collect { isPrepared ->
+                kotlinx.coroutines.flow.combine(
+                    deviceViewModel.isPrepared,
+                    deviceViewModel.selectedChipset
+                ) { isPrepared, chipset -> isPrepared to chipset }
+                .collect { (isPrepared, chipset) ->
                     if (isPrepared) {
-                        // Load GPU table data when prepared
-                        gpuFrequencyViewModel.loadData()
-                        // Ensure SharedViewModel (New Architecture) also synced/loaded
-                        sharedViewModel.loadData()
-                    } else {
-                        // Not prepared logic
+                         gpuFrequencyViewModel.loadData()
+                         sharedViewModel.loadData()
                     }
                 }
             }
@@ -499,29 +499,31 @@ class GpuFrequencyFragment : Fragment() {
         val TAG_TREE = "TAG_TREE"
         
         // Check if already added to avoid duplication on config change
-        var guiFragment = fm.findFragmentByTag(TAG_GUI)
-        var textFragment = fm.findFragmentByTag(TAG_TEXT)
-        var treeFragment = fm.findFragmentByTag(TAG_TREE)
-        
-        if (guiFragment == null) {
-            guiFragment = com.ireddragonicy.konabessnext.ui.fragments.GuiEditorFragment()
-            transaction.add(fragmentContainer.id, guiFragment, TAG_GUI)
+        // Check if already added to avoid duplication on config change
+        // Helper to detach existing fragments hooked to dead container
+        fun removeIfPresent(tag: String) {
+            val f = fm.findFragmentByTag(tag)
+            if (f != null) transaction.remove(f)
         }
+
+        // Clean slate: Remove any fragments that might be clinging to a stale container ID
+        removeIfPresent(TAG_GUI)
+        removeIfPresent(TAG_TEXT)
+        removeIfPresent(TAG_TREE)
         
-        if (textFragment == null) {
-            textFragment = com.ireddragonicy.konabessnext.ui.fragments.UnifiedRawDtsFragment.newInstance()
-            transaction.add(fragmentContainer.id, textFragment, TAG_TEXT)
-        }
+        // Re-add fragments fresh
+        val guiFragment = com.ireddragonicy.konabessnext.ui.fragments.GuiEditorFragment()
+        val textFragment = com.ireddragonicy.konabessnext.ui.fragments.UnifiedRawDtsFragment.newInstance()
+        val treeFragment = com.ireddragonicy.konabessnext.ui.fragments.VisualTreeFragment.newInstance()
         
-        if (treeFragment == null) {
-            treeFragment = com.ireddragonicy.konabessnext.ui.fragments.VisualTreeFragment.newInstance()
-            transaction.add(fragmentContainer.id, treeFragment, TAG_TREE)
-        }
+        transaction.add(fragmentContainer.id, guiFragment, TAG_GUI)
+        transaction.add(fragmentContainer.id, textFragment, TAG_TEXT)
+        transaction.add(fragmentContainer.id, treeFragment, TAG_TREE)
         
-        // Default State: Show GUI, Hide others.
-        transaction.show(guiFragment!!)
-        if (textFragment != null) transaction.hide(textFragment)
-        if (treeFragment != null) transaction.hide(treeFragment)
+        // Default State: Show GUI only
+        transaction.show(guiFragment)
+        transaction.hide(textFragment)
+        transaction.hide(treeFragment)
         
         transaction.commitNow()
         
@@ -1156,7 +1158,7 @@ class GpuFrequencyFragment : Fragment() {
                         Environment.getExternalStorageDirectory().absolutePath + "/" + exportFilename
 
                     if (dtsPath != null) {
-                        exportSuccess = RootHelper.copyFile(dtsPath!!, exportPath, "644")
+                        exportSuccess = RootHelper.copyFile(dtsPath, exportPath, "644")
                     }
 
                     if (exportSuccess) {

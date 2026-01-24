@@ -18,7 +18,8 @@ import com.ireddragonicy.konabessnext.model.Bin
 @Composable
 fun GpuBinList(
     bins: List<Bin>,
-    onBinClick: (Int) -> Unit
+    onBinClick: (Int) -> Unit,
+    onReload: () -> Unit = {}
 ) {
     val context = LocalContext.current
 
@@ -50,6 +51,39 @@ fun GpuBinList(
                         name = binName,
                         onClick = { onBinClick(index) }
                     )
+                }
+
+                if (bins.isEmpty()) {
+                    item {
+                         Box(
+                            modifier = Modifier.fillMaxWidth().height(300.dp),
+                            contentAlignment = Alignment.Center
+                         ) {
+                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                 Icon(
+                                     painter = painterResource(R.drawable.ic_search),
+                                     contentDescription = null,
+                                     modifier = Modifier.size(48.dp).padding(bottom = 16.dp),
+                                     tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                 )
+                                 Text(
+                                     text = "No GPU Frequency Tables Found",
+                                     style = MaterialTheme.typography.titleMedium,
+                                     color = MaterialTheme.colorScheme.onSurfaceVariant
+                                 )
+                                 Spacer(modifier = Modifier.height(8.dp))
+                                 Text(
+                                      text = "Try re-detecting chipsets or use Deep Scan.",
+                                      style = MaterialTheme.typography.bodySmall,
+                                      color = MaterialTheme.colorScheme.onSurfaceVariant
+                                 )
+                                 Spacer(modifier = Modifier.height(16.dp))
+                                 Button(onClick = onReload) {
+                                     Text("Reload Data")
+                                 }
+                             }
+                         }
+                    }
                 }
             }
         }

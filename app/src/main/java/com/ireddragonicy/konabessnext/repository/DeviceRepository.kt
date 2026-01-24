@@ -305,6 +305,12 @@ class DeviceRepository @Inject constructor(
         for (def: ChipDefinition in ChipInfo.definitions) {
             for (model in def.models) {
                 if (modelContent.contains(model, ignoreCase = true)) {
+                    // Check if strictly contains GPU table structure
+                    if (!isValidGpuDts(content)) {
+                        Log.w(TAG, "DTB $index matches model '$model' but missing GPU table. Skipping.")
+                        return null
+                    }
+
                     Log.d(TAG, "Matched key '$model' to ID '${def.id}'")
                     
                     if (isSingleBin(content)) {
@@ -323,6 +329,12 @@ class DeviceRepository @Inject constructor(
         
         Log.w(TAG, "No mapping found for model: '$modelContent'")
         return null
+    }
+
+    private fun isValidGpuDts(content: String): Boolean {
+        return content.contains("qcom,gpu-pwrlevels") || 
+               content.contains("qcom,gpu-freq-table") ||
+               content.contains("gpu-pwrlevels")
     }
 
     private fun isSingleBin(content: String): Boolean {
