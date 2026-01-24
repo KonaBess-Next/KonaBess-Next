@@ -12,6 +12,8 @@
         android:supportsRtl="true"
         android:requestLegacyExternalStorage="true"
         android:enableOnBackInvokedCallback="true"
+        android:hardwareAccelerated="true"
+        android:largeHeap="true"
         android:theme="@style/Theme.KonaBess">
         <activity
             android:name=".ui.MainActivity"

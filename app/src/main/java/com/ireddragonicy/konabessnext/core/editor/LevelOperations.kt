@@ -5,7 +5,7 @@ import com.ireddragonicy.konabessnext.core.ChipInfo
 import com.ireddragonicy.konabessnext.model.Bin
 import com.ireddragonicy.konabessnext.model.Level
 import com.ireddragonicy.konabessnext.ui.SettingsActivity
-import com.ireddragonicy.konabessnext.ui.adapters.GpuFreqAdapter
+
 import com.ireddragonicy.konabessnext.utils.DtsHelper
 import java.util.regex.Pattern
 
@@ -126,40 +126,6 @@ object LevelOperations {
     @JvmStatic
     fun canAddNewLevel(bins: ArrayList<Bin>?, binID: Int): Boolean = true
 
-    // ===== Adapter Synchronization =====
-
-    @JvmStatic
-    fun updateBinsFromAdapter(
-        bins: ArrayList<Bin>?, binId: Int,
-        items: List<GpuFreqAdapter.FreqItem>
-    ): Boolean {
-        if (bins == null || binId !in bins.indices) return false
-
-        val currentLevels = bins[binId].levels
-        val newLevels = ArrayList<Level>()
-        
-        val availableLevels = ArrayList(currentLevels)
-        
-        for (item in items) {
-            if (item.hasFrequencyValue()) {
-                val iterator = availableLevels.iterator()
-                while (iterator.hasNext()) {
-                    val lvl = iterator.next()
-                    if (getFrequencyFromLevel(lvl) == item.frequencyHz) {
-                        newLevels.add(lvl)
-                        iterator.remove()
-                        break
-                    }
-                }
-            }
-        }
-
-        if (newLevels.size == currentLevels.size && newLevels != currentLevels) {
-            bins[binId].levels = newLevels
-            return true
-        }
-        return false
-    }
 
     // ===== CRUD Operations =====
 
