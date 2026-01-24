@@ -33,7 +33,8 @@
     },
     "models": [
       "kona v2.1",
-      "kona v2"
+      "kona v2",
+      "kona-7230-iot"
     ]
   },
   {
