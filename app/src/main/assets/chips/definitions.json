@@ -1038,5 +1038,41 @@
       "RavelinP",
       "SM4450"
     ]
+  },
+  {
+    "id": "alor",
+    "name": "Snapdragon 8 Elite Gen 5 (Alor)",
+    "maxTableLevels": 18,
+    "ignoreVoltTable": true,
+    "minLevelOffset": 1,
+    "strategyType": "MULTI_BIN",
+    "voltTablePattern": null,
+    "levelCount": 480,
+    "levels": {
+      "49": "50 - LOW_SVS_D3",
+      "50": "51 - LOW_SVS_D2_5",
+      "51": "52 - LOW_SVS_D2",
+      "53": "54 - LOW_SVS_D1_5",
+      "55": "56 - LOW_SVS_D1",
+      "59": "60 - LOW_SVS_D0",
+      "63": "64 - LOW_SVS",
+      "75": "76 - LOW_SVS_P1",
+      "79": "80 - LOW_SVS_L1",
+      "95": "96 - LOW_SVS_L2",
+      "127": "128 - SVS",
+      "143": "144 - SVS_L0",
+      "191": "192 - SVS_L1",
+      "223": "224 - SVS_L2",
+      "255": "256 - NOM",
+      "319": "320 - NOM_L1",
+      "383": "384 - NOM_L2",
+      "415": "416 - TURBO_L1",
+      "431": "432 - TURBO_L2",
+      "447": "448 - TURBO_L3",
+      "451": "452 - TURBO_L4"
+    },
+    "models": [
+      "Alor"
+    ]
   }
 ]
