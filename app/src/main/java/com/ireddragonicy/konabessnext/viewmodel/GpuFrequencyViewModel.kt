@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.isActive
 import javax.inject.Inject
 import androidx.lifecycle.asLiveData
 
@@ -51,26 +52,24 @@ class GpuFrequencyViewModel @Inject constructor(
         return repository.bins.value
     }
 
-    private var isLoading = false
-
-    fun loadData() {
-        // Prevent multiple concurrent loadings
-        if (isLoading) return
-        isLoading = true
-        
-        _binsState.value = UiState.Loading
+    init {
         viewModelScope.launch {
-            try {
-                repository.loadTable()
-                // After loadTable completes, bins are populated
-                val bins = repository.bins.value
-                _binsState.value = UiState.Success(bins)
-            } catch (e: Exception) {
-                _binsState.value = UiState.Error("Failed to load table: ${e.message}", e)
-            } finally {
-                isLoading = false
+            repository.parsedResult.collect { result ->
+                when (result) {
+                    is GpuRepository.ParseResult.Loading -> _binsState.value = UiState.Loading
+                    is GpuRepository.ParseResult.Success -> _binsState.value = UiState.Success(result.bins)
+                    is GpuRepository.ParseResult.Error -> _binsState.value = UiState.Error(result.message)
+                }
             }
         }
+    }
+
+    private var loadJob: kotlinx.coroutines.Job? = null
+
+    fun resetSelection() {
+        // Reset selection on reload to prevent stuck UI
+        selectedBinIndex.value = -1
+        selectedLevelIndex.value = -1
     }
     
     // Delegate operations to repository or handle logic here if repository is pure data

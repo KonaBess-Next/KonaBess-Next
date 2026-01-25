@@ -38,6 +38,7 @@ import com.ireddragonicy.konabessnext.viewmodel.SharedGpuViewModel
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.net.URLEncoder
@@ -106,9 +107,12 @@ class GpuFrequencyFragment : Fragment() {
                     deviceViewModel.isPrepared,
                     deviceViewModel.selectedChipset
                 ) { isPrepared, chipset -> isPrepared to chipset }
+                .distinctUntilChanged()
                 .collect { (isPrepared, chipset) ->
-                    if (isPrepared) {
-                         gpuFrequencyViewModel.loadData()
+                    android.util.Log.d("KonaBessUI", "Observer: isPrepared=$isPrepared, chipset=${chipset?.id}")
+                    if (isPrepared && chipset != null) {
+                         android.util.Log.d("KonaBessUI", "Observer: Triggering loadData()")
+                         gpuFrequencyViewModel.resetSelection()
                          sharedViewModel.loadData()
                     }
                 }
@@ -345,8 +349,6 @@ class GpuFrequencyFragment : Fragment() {
                                                    if (!isSelected) {
                                                        gpuFrequencyViewModel.save(false)
                                                        deviceViewModel.selectChipset(dtb)
-                                                       gpuFrequencyViewModel.loadData()
-                                                       sharedViewModel.loadData()
                                                    }
                                                    showSheet = false
                                                 },

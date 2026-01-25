@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.isActive
 import javax.inject.Inject
 
 @HiltViewModel
@@ -68,22 +69,7 @@ class SharedGpuViewModel @Inject constructor(
     val workbenchState: StateFlow<WorkbenchState> = _workbenchState.asStateFlow()
 
     init {
-        viewModelScope.launch {
-            repository.parsedResult.collect { result ->
-                when (result) {
-                    is GpuRepository.ParseResult.Loading -> {
-                        _workbenchState.value = WorkbenchState.Loading
-                    }
-                    is GpuRepository.ParseResult.Success -> {
-                        _workbenchState.value = WorkbenchState.Ready
-                        precalculateUiModels(result.bins)
-                    }
-                    is GpuRepository.ParseResult.Error -> {
-                        _workbenchState.value = WorkbenchState.Error(result.message)
-                    }
-                }
-            }
-        }
+        // init block removed - we handle state transitions in loadData explicitly
     }
 
     private fun precalculateUiModels(bins: List<Bin>) {
@@ -115,7 +101,6 @@ class SharedGpuViewModel @Inject constructor(
             if (trimmed.contains("qcom,gpu-freq")) {
                 freqHz = fastExtractLong(trimmed)
             } else if (trimmed.contains("qcom,bus-max")) {
-                // Fix: Extract as Long then convert to String to remove 0x prefix if present
                 val valLong = fastExtractLong(trimmed)
                 if (valLong != -1L) busMax = valLong.toString()
             } else if (trimmed.contains("qcom,bus-min")) {
@@ -126,7 +111,6 @@ class SharedGpuViewModel @Inject constructor(
                 if (valLong != -1L) busFreq = valLong.toString()
             } else if (trimmed.contains("qcom,level") || trimmed.contains("qcom,cx-level")) {
                 val voltVal = try { fastExtractLong(trimmed) } catch(e: Exception) { 0L }
-                // Pre-format the label string to save UI composition time
                 val rawLabel = com.ireddragonicy.konabessnext.core.editor.LevelOperations.levelint2str(voltVal)
                 voltLabel = if (rawLabel.isNotEmpty()) "Level $rawLabel" else ""
             }
@@ -147,7 +131,6 @@ class SharedGpuViewModel @Inject constructor(
         )
     }
 
-    // High performance extraction helpers
     private fun fastExtractLong(line: String): Long {
         val start = line.indexOf('<')
         val end = line.indexOf('>')
@@ -157,7 +140,6 @@ class SharedGpuViewModel @Inject constructor(
             val finalStr = if (spaceIndex != -1) valStr.substring(spaceIndex + 1).trim() else valStr
             
             return try {
-                // Handles 0x prefix automatically or decimal
                 if (finalStr.startsWith("0x")) finalStr.substring(2).toLong(16)
                 else finalStr.toLong()
             } catch (e: Exception) { -1L }
@@ -180,20 +162,31 @@ class SharedGpuViewModel @Inject constructor(
     private val _searchState = MutableStateFlow(SearchState())
     val searchState: StateFlow<SearchState> = _searchState.asStateFlow()
 
-    private var isLoading = false
+    private var loadJob: kotlinx.coroutines.Job? = null
 
     fun loadData() {
-        if (isLoading) return
-        isLoading = true
-        _workbenchState.value = WorkbenchState.Loading
-        viewModelScope.launch {
+        android.util.Log.d("KonaBessVM", "loadData called. Cancelling previous job: ${loadJob?.isActive}")
+        loadJob?.cancel()
+        
+        loadJob = viewModelScope.launch {
+            _workbenchState.value = WorkbenchState.Loading
             try {
+                android.util.Log.d("KonaBessVM", "loadData: Invoking repository.loadTable()")
                 repository.loadTable()
+                android.util.Log.d("KonaBessVM", "loadData: repository.loadTable() completed successfully")
+                
+                // Explicitly valid success state
+                _workbenchState.value = WorkbenchState.Ready
+                
+                // Refresh UI models immediately
+                precalculateUiModels(repository.bins.value)
+                
             } catch (e: Exception) {
-                _workbenchState.value = WorkbenchState.Error("Failed to load: ${e.message}")
-                _errorEvent.emit("Failed to load table: ${e.message}")
-            } finally {
-                isLoading = false
+                if (isActive) {
+                    android.util.Log.e("KonaBessVM", "loadData: Error loading table", e)
+                    _workbenchState.value = WorkbenchState.Error("Failed to load: ${e.message}")
+                    _errorEvent.emit("Failed to load table: ${e.message}")
+                }
             }
         }
     }
@@ -303,15 +296,17 @@ class SharedGpuViewModel @Inject constructor(
 
     fun nextSearchResult() {
         val state = _searchState.value
-        if (state.results.isEmpty()) return
-        val next = (state.currentIndex + 1) % state.results.size
+        val results = state.results
+        if (results.isEmpty()) return
+        val next = (state.currentIndex + 1) % results.size
         _searchState.value = state.copy(currentIndex = next)
     }
 
     fun previousSearchResult() {
         val state = _searchState.value
-        if (state.results.isEmpty()) return
-        val prev = (state.currentIndex - 1 + state.results.size) % state.results.size
+        val results = state.results
+        if (results.isEmpty()) return
+        val prev = (state.currentIndex - 1 + results.size) % results.size
         _searchState.value = state.copy(currentIndex = prev)
     }
 

@@ -70,7 +70,7 @@ class GuiEditorFragment : Fragment() {
                                         gpuFrequencyViewModel.selectedBinIndex.value = index
                                     },
                                     onReload = {
-                                        gpuFrequencyViewModel.loadData()
+                                        gpuFrequencyViewModel.resetSelection()
                                         sharedViewModel.loadData()
                                     }
                                 )
