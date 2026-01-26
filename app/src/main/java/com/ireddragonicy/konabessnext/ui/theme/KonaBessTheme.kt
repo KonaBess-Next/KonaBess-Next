@@ -178,19 +178,20 @@ private fun createScheme(
 fun KonaBessTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     dynamicColor: Boolean = true,
-    colorPalette: Int = 0, // 0 = PURPLE/DYNAMIC, 1=PURPLE, 2=BLUE, 3=GREEN, 4=PINK, 5=AMOLED
+    amoledMode: Boolean = false,
+    colorPalette: Int = 0, // 0 = PURPLE/DYNAMIC, 1=PURPLE, 2=BLUE, 3=GREEN, 4=PINK
     content: @Composable () -> Unit
 ) {
-    val colorScheme = when {
+    val context = LocalContext.current
+    
+    // Resolve the base color scheme based on Dynamic Color, Dark Mode, and Palette Preference
+    val baseColorScheme = when {
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            val context = LocalContext.current
-            // Dynamic Color inherently ignores 'colorPalette' unless we manually seed it, which Material3 API doesn't easily support.
-            // So if Dynamic is on, we use system colors.
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         }
         darkTheme -> {
             when (colorPalette) {
-                5 -> PurpleDarkScheme.copy( // AMOLED
+                5 -> PurpleDarkScheme.copy( // Legacy AMOLED mapping, treat as Purple if selected or handle later
                     background = AMOLEDBackground, onBackground = AMOLEDOnBackground,
                     surface = AMOLEDSurface, onSurface = AMOLEDOnSurface
                 )
@@ -202,9 +203,6 @@ fun KonaBessTheme(
         }
         else -> { // Light Theme
             when (colorPalette) {
-                // AMOLED concept doesn't apply to Light mode usually, but if selected we just use PurpleLight or maybe a high contrast? 
-                // Let's stick to PurpleLight for AMOLED selection in Light Mode or maybe just normal behavior.
-                5 -> PurpleLightScheme
                 2 -> createScheme(PurpleLightScheme, BlueLightPrimary, BlueLightPrimaryContainer, BlueLightOnPrimaryContainer, BlueLightSecondary, BlueLightSecondaryContainer, BlueLightOnSecondaryContainer)
                 3 -> createScheme(PurpleLightScheme, GreenLightPrimary, GreenLightPrimaryContainer, GreenLightOnPrimaryContainer, GreenLightSecondary, GreenLightSecondaryContainer, GreenLightOnSecondaryContainer)
                 4 -> createScheme(PurpleLightScheme, PinkLightPrimary, PinkLightPrimaryContainer, PinkLightOnPrimaryContainer, PinkLightSecondary, PinkLightSecondaryContainer, PinkLightOnSecondaryContainer)
@@ -213,8 +211,22 @@ fun KonaBessTheme(
         }
     }
 
+    // Apply AMOLED Black Override if enabled and in Dark Mode
+    val finalColorScheme = if (darkTheme && amoledMode) {
+        baseColorScheme.copy(
+            background = Color.Black,
+            surface = Color.Black,
+            surfaceContainer = Color.Black, // Ensure containers are also black if desired, or keep slight variant?
+            // User requested "Pure black theme", usually this implies background and main surface. 
+            // Material 3 uses surfaceContainer for "surface" distinct from "background".
+            // Let's set the main background and surface to black.
+        )
+    } else {
+        baseColorScheme
+    }
+
     MaterialTheme(
-        colorScheme = colorScheme,
+        colorScheme = finalColorScheme,
         typography = Typography(),
         content = content
     )

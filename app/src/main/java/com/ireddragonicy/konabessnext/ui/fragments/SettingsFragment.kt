@@ -46,6 +46,7 @@ class SettingsFragment : Fragment() {
                 SettingsScreen(
                     currentTheme = currentThemeName,
                     isDynamicColor = prefs!!.getBoolean(SettingsActivity.KEY_DYNAMIC_COLOR, true),
+                    isAmoledMode = prefs!!.getBoolean(SettingsActivity.KEY_AMOLED_MODE, false),
                     currentColorPalette = currentColorPaletteName,
                     currentUserPaletteId = prefs!!.getInt(SettingsActivity.KEY_COLOR_PALETTE, SettingsActivity.PALETTE_DYNAMIC),
                     currentLanguage = currentLanguageName,
@@ -53,6 +54,7 @@ class SettingsFragment : Fragment() {
                     isAutoSave = prefs!!.getBoolean(SettingsActivity.KEY_AUTO_SAVE_GPU_TABLE, false),
                     onThemeClick = { showThemeDialog() },
                     onDynamicColorToggle = { toggleDynamicColor() },
+                    onAmoledModeToggle = { toggleAmoledMode() },
                     onColorPaletteClick = { showColorPaletteDialog() },
                     onLanguageClick = { showLanguageDialog() },
                     onFreqUnitClick = { showFreqUnitDialog() },
@@ -86,18 +88,16 @@ class SettingsFragment : Fragment() {
 
     private fun showColorPaletteDialog() {
         val palettes = arrayOf(
-            "Purple & Teal",
-            "Blue & Orange",
-            "Green & Red",
-            "Pink & Cyan",
-            "Pure AMOLED (Black)"
+            getString(R.string.palette_purple_teal),
+            getString(R.string.palette_blue_orange),
+            getString(R.string.palette_green_red),
+            getString(R.string.palette_pink_cyan)
         )
         val paletteIds = intArrayOf(
             SettingsActivity.PALETTE_PURPLE,
             SettingsActivity.PALETTE_BLUE,
             SettingsActivity.PALETTE_GREEN,
-            SettingsActivity.PALETTE_PINK,
-            SettingsActivity.PALETTE_AMOLED
+            SettingsActivity.PALETTE_PINK
         )
 
         val currentPalette = prefs!!.getInt(SettingsActivity.KEY_COLOR_PALETTE, SettingsActivity.PALETTE_PURPLE)
@@ -213,6 +213,12 @@ class SettingsFragment : Fragment() {
     private fun toggleDynamicColor() {
         val currentState = prefs!!.getBoolean(SettingsActivity.KEY_DYNAMIC_COLOR, true)
         prefs!!.edit().putBoolean(SettingsActivity.KEY_DYNAMIC_COLOR, !currentState).apply()
+        requireActivity().recreate()
+    }
+
+    private fun toggleAmoledMode() {
+        val currentState = prefs!!.getBoolean(SettingsActivity.KEY_AMOLED_MODE, false)
+        prefs!!.edit().putBoolean(SettingsActivity.KEY_AMOLED_MODE, !currentState).apply()
         requireActivity().recreate()
     }
 

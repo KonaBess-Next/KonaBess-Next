@@ -377,4 +377,6 @@
     <string name="btn_add_freq_bottom">Add Frequency to Bottom</string>
     <string name="btn_back">Back</string>
     <string name="btn_curve_editor">Curve Editor</string>
+    <string name="settings_amoled_mode">Pure Black Dark Theme</string>
+    <string name="settings_amoled_mode_desc">Use the pure black theme if dark theme is enabled</string>
 </resources>

@@ -308,8 +308,9 @@ class MainActivity : AppCompatActivity() {
         bottomNav.setContent {
             val prefs = getSharedPreferences(com.ireddragonicy.konabessnext.ui.SettingsActivity.PREFS_NAME, Context.MODE_PRIVATE)
             val isDynamic = prefs.getBoolean(com.ireddragonicy.konabessnext.ui.SettingsActivity.KEY_DYNAMIC_COLOR, true)
+            val isAmoled = prefs.getBoolean(com.ireddragonicy.konabessnext.ui.SettingsActivity.KEY_AMOLED_MODE, false)
             val paletteId = prefs.getInt(com.ireddragonicy.konabessnext.ui.SettingsActivity.KEY_COLOR_PALETTE, 0)
-            KonaBessTheme(dynamicColor = isDynamic, colorPalette = paletteId) {
+            KonaBessTheme(dynamicColor = isDynamic, amoledMode = isAmoled, colorPalette = paletteId) {
                 MainNavigationBar(
                     selectedItem = currentTab.intValue,
                     onItemSelected = { index ->

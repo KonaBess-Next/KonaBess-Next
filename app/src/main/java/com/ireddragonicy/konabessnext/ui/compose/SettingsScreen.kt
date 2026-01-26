@@ -32,13 +32,15 @@ sealed class SettingItem {
 fun SettingsScreen(
     currentTheme: String,
     isDynamicColor: Boolean,
+    isAmoledMode: Boolean, // Add this
     currentColorPalette: String,
-    currentUserPaletteId: Int, // Add this
+    currentUserPaletteId: Int,
     currentLanguage: String,
     currentFreqUnit: String,
     isAutoSave: Boolean,
     onThemeClick: () -> Unit,
     onDynamicColorToggle: () -> Unit,
+    onAmoledModeToggle: () -> Unit, // Add this
     onColorPaletteClick: () -> Unit,
     onLanguageClick: () -> Unit,
     onFreqUnitClick: () -> Unit,
@@ -50,6 +52,14 @@ fun SettingsScreen(
     val themeDesc = androidx.compose.ui.res.stringResource(R.string.settings_theme_desc)
     val dynamicColorTitle = androidx.compose.ui.res.stringResource(R.string.settings_dynamic_color)
     val dynamicColorDesc = androidx.compose.ui.res.stringResource(R.string.settings_dynamic_color_desc)
+    // We can reuse current strings or create new ones later. For now let's reuse palette title or define new ones via literals if string res not available yet.
+    // Assuming we don't have new string resources yet, I will use hardcoded strings for now and ask user to add them later or add them myself.
+    // However, looking at the user request "Black dark theme" and "Use the pure black theme...", I'll see if I can add them to strings.xml or just use "Pure Black Theme" here.
+    // Wait, I can't easily edit strings.xml in the same tool call. I'll stick to a placeholder or reuse.
+    // Actually, I can use "AMOLED Mode" or similar.
+    val amoledTitle = "Pure Black Dark Theme" // Placeholder until strings.xml update
+    val amoledDesc = "Use pure black background" // Placeholder
+
     val paletteTitle = androidx.compose.ui.res.stringResource(R.string.settings_color_palette)
     val paletteDesc = androidx.compose.ui.res.stringResource(R.string.settings_color_palette_desc)
     val langTitle = androidx.compose.ui.res.stringResource(R.string.settings_language)
@@ -61,9 +71,14 @@ fun SettingsScreen(
     val helpTitle = androidx.compose.ui.res.stringResource(R.string.settings_help_about)
     val versionTitle = androidx.compose.ui.res.stringResource(R.string.settings_version_format, BuildConfig.VERSION_NAME)
 
-    val settingsItems = remember(currentTheme, isDynamicColor, currentColorPalette, currentLanguage, currentFreqUnit, isAutoSave, themeTitle, langTitle) {
+    val settingsItems = remember(currentTheme, isDynamicColor, isAmoledMode, currentColorPalette, currentLanguage, currentFreqUnit, isAutoSave) {
         buildList {
             add(SettingItem.Clickable(R.drawable.ic_dark_mode, themeTitle, themeDesc, currentTheme))
+            // Only show AMOLED toggle if not in Light mode? User screenshot showed it under Theme.
+            // Let's assume it's always visible or only when Dark mode is active. User said "Use the pure black theme if dark theme is enabled".
+            // So it enables it *conditionally*. The toggle itself can be always present.
+            add(SettingItem.Toggle(R.drawable.ic_dark_mode, amoledTitle, amoledDesc, isAmoledMode)) 
+            
             add(SettingItem.Toggle(R.drawable.ic_tune, dynamicColorTitle, dynamicColorDesc, isDynamicColor))
             if (!isDynamicColor) {
                 add(SettingItem.Clickable(R.drawable.ic_tune, paletteTitle, paletteDesc, currentColorPalette))
@@ -77,6 +92,7 @@ fun SettingsScreen(
 
     com.ireddragonicy.konabessnext.ui.theme.KonaBessTheme(
         dynamicColor = isDynamicColor,
+        amoledMode = isAmoledMode, // Pass it here
         colorPalette = currentUserPaletteId
     ) {
         Surface(
@@ -118,6 +134,7 @@ fun SettingsScreen(
                                     when (item.title) {
                                         dynamicColorTitle -> onDynamicColorToggle()
                                         autoSaveTitle -> onAutoSaveToggle()
+                                        amoledTitle -> onAmoledModeToggle() // Handle toggle
                                     }
                                 }
                             )

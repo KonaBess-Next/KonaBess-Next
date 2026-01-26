@@ -28,6 +28,7 @@ class SettingsActivity : AppCompatActivity() {
         const val KEY_COLOR_PALETTE = "color_palette"
         const val KEY_AUTO_SAVE_GPU_TABLE = "auto_save_gpu_table"
         const val KEY_DYNAMIC_COLOR = "dynamic_color"
+        const val KEY_AMOLED_MODE = "amoled_mode"
 
         const val FREQ_UNIT_HZ = 0
         const val FREQ_UNIT_MHZ = 1
@@ -121,6 +122,7 @@ class SettingsActivity : AppCompatActivity() {
                 SettingsScreen(
                     currentTheme = currentThemeName,
                     isDynamicColor = prefs.getBoolean(KEY_DYNAMIC_COLOR, true),
+                    isAmoledMode = prefs.getBoolean(KEY_AMOLED_MODE, false),
                     currentColorPalette = currentColorPaletteName,
                     currentUserPaletteId = savedColorPalette,
                     currentLanguage = currentLanguageName,
@@ -128,6 +130,7 @@ class SettingsActivity : AppCompatActivity() {
                     isAutoSave = prefs.getBoolean(KEY_AUTO_SAVE_GPU_TABLE, false),
                     onThemeClick = { showThemeDialog() },
                     onDynamicColorToggle = { toggleDynamicColor() },
+                    onAmoledModeToggle = { toggleAmoledMode() },
                     onColorPaletteClick = { showColorPaletteDialog() },
                     onLanguageClick = { showLanguageDialog() },
                     onFreqUnitClick = { showFreqUnitDialog() },
@@ -137,6 +140,12 @@ class SettingsActivity : AppCompatActivity() {
             }
         }
         setContentView(composeView)
+    }
+
+    private fun toggleAmoledMode() {
+        val current = prefs.getBoolean(KEY_AMOLED_MODE, false)
+        prefs.edit().putBoolean(KEY_AMOLED_MODE, !current).apply()
+        recreate()
     }
 
     private fun applyTheme() {
@@ -261,10 +270,9 @@ class SettingsActivity : AppCompatActivity() {
             getString(R.string.palette_purple_teal),
             getString(R.string.palette_blue_orange),
             getString(R.string.palette_green_red),
-            getString(R.string.palette_pink_cyan),
-            getString(R.string.palette_amoled)
+            getString(R.string.palette_pink_cyan)
         )
-        val paletteIds = intArrayOf(PALETTE_PURPLE, PALETTE_BLUE, PALETTE_GREEN, PALETTE_PINK, PALETTE_AMOLED)
+        val paletteIds = intArrayOf(PALETTE_PURPLE, PALETTE_BLUE, PALETTE_GREEN, PALETTE_PINK)
 
         val currentPalette = savedColorPalette
         var initialSelection = 0
