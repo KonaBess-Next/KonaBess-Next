@@ -8,139 +8,134 @@ on:
 
 jobs:
   build:
+    name: Build and Release
     runs-on: ubuntu-latest
-    
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-      
+      with:
+        fetch-depth: 0
+
     - name: Set up JDK 21
       uses: actions/setup-java@v4
       with:
         java-version: '21'
         distribution: 'temurin'
         cache: gradle
-        
+
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
+
+    - name: Generate Version Name
+      id: version
+      run: |
+        VERSION_NAME=$(date +'%Y.%m.%d.%H.%M.%S')
+        VERSION_CODE=$(date +'%s')
+        echo "Generated Version: $VERSION_NAME Code: $VERSION_CODE"
+        echo "version=$VERSION_NAME" >> $GITHUB_OUTPUT
+        echo "code=$VERSION_CODE" >> $GITHUB_OUTPUT
+
+    - name: Generate Changelog
+      id: changelog
+      shell: bash
+      run: |
+        set -e
+        echo "Generating changelog..."
+        
+        BEFORE="${{ github.event.before }}"
+        AFTER="${{ github.event.after }}"
+        
+        if [[ -z "$BEFORE" || "$BEFORE" == "0000000000000000000000000000000000000000" ]]; then
+          echo "Full history or new branch detected. Fetching last 10 commits."
+          CHANGELOG=$(git log --pretty=format:"* %s (%h)" -n 10)
+        else
+          echo "Comparing $BEFORE to $AFTER"
+          CHANGELOG=$(git log --pretty=format:"* %s (%h)" $BEFORE..$AFTER)
+        fi
+        
+        # Output to GITHUB_OUTPUT with multi-line support
+        echo "changelog<<EOF" >> $GITHUB_OUTPUT
+        echo "$CHANGELOG" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
 
     - name: Decode Keystore
       run: |
         if [ ! -z "${{ secrets.SIGNING_KEY }}" ]; then
           echo "${{ secrets.SIGNING_KEY }}" | base64 -d > ${{ github.workspace }}/keystore.jks
-          echo "✅ Keystore decoded from secrets"
+          echo "Keystore decoded successfully."
         else
-          echo "⚠️ No SIGNING_KEY secret found. Release build might fail or be unsigned if configured to verify."
-          # Fallback or error handling if strictly required
+          echo "No SIGNING_KEY secret found. Release build might be unsigned."
         fi
-      
+
     - name: Build Release APK
       run: |
-        # Use secrets if available, otherwise use debug signing
         if [ ! -z "${{ secrets.SIGNING_KEY }}" ]; then
-          echo "🔐 Building with release keystore from secrets"
+          echo "Building with release keystore..."
           ./gradlew assembleRelease \
+            -PciVersionName="${{ steps.version.outputs.version }}" \
+            -PciVersionCode="${{ steps.version.outputs.code }}" \
             -Pandroid.injected.signing.store.file=${{ github.workspace }}/keystore.jks \
             -Pandroid.injected.signing.store.password=${{ secrets.KEY_STORE_PASSWORD }} \
             -Pandroid.injected.signing.key.alias=${{ secrets.KEY_ALIAS }} \
             -Pandroid.injected.signing.key.password=${{ secrets.KEY_PASSWORD }} \
             --stacktrace
         else
-          echo "⚠️ No SIGNING_KEY secret found. Using debug signing for release build."
-          # Use debug keystore for signing - this ensures APK is always signed
+          echo "Using debug signing for release build."
           ./gradlew assembleRelease \
+            -PciVersionName="${{ steps.version.outputs.version }}" \
+            -PciVersionCode="${{ steps.version.outputs.code }}" \
             -Pandroid.injected.signing.store.file=$HOME/.android/debug.keystore \
             -Pandroid.injected.signing.store.password=android \
             -Pandroid.injected.signing.key.alias=androiddebugkey \
             -Pandroid.injected.signing.key.password=android \
             --stacktrace
         fi
-        echo "✅ Release APK built"
 
     - name: Build Debug APK
-      run: ./gradlew assembleDebug --stacktrace
+      run: ./gradlew assembleDebug -PciVersionName="${{ steps.version.outputs.version }}" -PciVersionCode="${{ steps.version.outputs.code }}" --stacktrace
 
-    - name: List generated APKs
+    - name: Rename APKs
       run: |
-        echo "=== Release APKs ==="
-        find app/build/outputs/apk/release -name "*.apk" -type f 2>/dev/null || echo "No release APKs found"
-        ls -la app/build/outputs/apk/release/ 2>/dev/null || echo "Release directory not found"
-        echo ""
-        echo "=== Debug APKs ==="
-        find app/build/outputs/apk/debug -name "*.apk" -type f 2>/dev/null || echo "No debug APKs found"
-        ls -la app/build/outputs/apk/debug/ 2>/dev/null || echo "Debug directory not found"
+        set -e
+        VERSION="${{ steps.version.outputs.version }}"
         
-    - name: Get version name
-      id: version
-      run: |
-        # Adjusted for Groovy DSL in app/build.gradle
-        VERSION=$(grep -oP "versionName\s*=\s*['\"]\K[^'\"]+" app/build.gradle || echo "1.0.0")
-        BUILD_NUMBER=${{ github.run_number }}
-        echo "version=${VERSION}" >> $GITHUB_OUTPUT
-        echo "build=${BUILD_NUMBER}" >> $GITHUB_OUTPUT
-        echo "tag=v${VERSION}-build${BUILD_NUMBER}" >> $GITHUB_OUTPUT
+        echo "Renaming APKs with version: $VERSION"
         
-    - name: Rename and prepare APK files
-      run: |
-        VERSION=${{ steps.version.outputs.version }}
-        BUILD=${{ steps.version.outputs.build }}
-        
-        echo "=== Listing all generated APKs ==="
-        find app/build/outputs/apk -name "*.apk" -type f
-        
-        rename_apk() {
-            local file=$1
-            local type=$2
-            local filename=$(basename "$file")
-            
-            # Skip if already renamed or metadata
-            if [[ "$filename" == KonaBessNext-v* ]] || [[ "$filename" == "output-metadata.json" ]]; then
-                return
-            fi
-            
-            local new_name="KonaBessNext-v${VERSION}-build${BUILD}"
-            
-            # Parse ABI
-            # Format is usually KonaBess-Next-<abi>-<type>.apk or KonaBess-Next-<type>.apk
-            local temp="${filename#KonaBess-Next-}" # Remove prefix
-            temp="${temp%-${type}.apk}"             # Remove suffix
-            
-            if [[ -z "$temp" ]] || [[ "$temp" == "$filename" ]]; then
-                # Universal or unknown format - assume universal if empty part
-                if [[ -z "$temp" ]] || [[ "$temp" == "release" ]] || [[ "$temp" == "debug" ]]; then
-                     new_name="${new_name}-universal-${type}.apk"
-                else
-                     new_name="${new_name}-${temp}-${type}.apk"
-                fi
-            else
-                # ABI found
-                new_name="${new_name}-${temp}-${type}.apk"
-            fi
-            
-            mv "$file" "$(dirname "$file")/$new_name"
-            echo "✅ Renamed $filename to $new_name"
+        # Function to process APKs
+        process_apks() {
+          local dir=$1
+          local type=$2
+          
+          if [ -d "$dir" ]; then
+            find "$dir" -name "*.apk" -type f | while read file; do
+              filename=$(basename "$file")
+              
+              # Extract ABI if present (simple heuristic based on standard Gradle output)
+              # Standard output often: app-arm64-v8a-release.apk, app-release.apk, etc.
+              # Or KonaBess-Next-release.apk depending on build.gradle configuration
+              
+              # We will try to parse the ABI from the filename or default to 'universal'
+              abi="universal"
+              if [[ "$filename" == *"arm64-v8a"* ]]; then abi="arm64-v8a"; fi
+              if [[ "$filename" == *"armeabi-v7a"* ]]; then abi="armeabi-v7a"; fi
+              if [[ "$filename" == *"x86_64"* ]]; then abi="x86_64"; fi
+              if [[ "$filename" == *"x86"* ]]; then abi="x86"; fi
+              
+              new_name="KonaBessNext-v${VERSION}-${abi}-${type}.apk"
+              mv "$file" "$(dirname "$file")/$new_name"
+              echo "Renamed $filename -> $new_name"
+            done
+          fi
         }
         
-        # Rename all Debug APKs
-        find app/build/outputs/apk/debug -name "*.apk" -type f | while read file; do
-            rename_apk "$file" "debug"
-        done
-        
-        # Rename all Release APKs
-        find app/build/outputs/apk/release -name "*.apk" -type f | while read file; do
-            rename_apk "$file" "release"
-        done
-        
-        # Show APK sizes
-        echo ""
-        echo "=== Final APK Sizes ==="
-        ls -lh app/build/outputs/apk/debug/*.apk 2>/dev/null || true
-        ls -lh app/build/outputs/apk/release/*.apk 2>/dev/null || true
+        process_apks "app/build/outputs/apk/debug" "debug"
+        process_apks "app/build/outputs/apk/release" "release"
 
     - name: VirusTotal Scan
       id: virustotal
-      uses: crazy-max/ghaction-virustotal@v4
       if: github.event_name == 'push'
+      uses: crazy-max/ghaction-virustotal@v4
       with:
         vt_api_key: ${{ secrets.VT_API_KEY }}
         files: |
@@ -150,105 +145,62 @@ jobs:
     - name: Parse VirusTotal Results
       id: vt_parsed
       if: github.event_name == 'push' && steps.virustotal.outputs.analysis != ''
+      shell: bash
       run: |
-        # Parse the comma-separated analysis output into formatted list
         ANALYSIS="${{ steps.virustotal.outputs.analysis }}"
-        echo "Raw analysis: $ANALYSIS"
+        VT_LIST=""
         
-        # Format as markdown bullet list
-        VT_RESULTS=""
         IFS=',' read -ra ENTRIES <<< "$ANALYSIS"
         for entry in "${ENTRIES[@]}"; do
-          # entry format: filename=url
           FILENAME=$(echo "$entry" | cut -d'=' -f1 | xargs basename)
           URL=$(echo "$entry" | cut -d'=' -f2-)
-          VT_RESULTS="${VT_RESULTS}- [${FILENAME}](${URL})\n"
+          VT_LIST="${VT_LIST}- [${FILENAME}](${URL})\n"
         done
         
-        # Use delimiter for multiline output
         echo "vt_results<<EOF" >> $GITHUB_OUTPUT
-        echo -e "$VT_RESULTS" >> $GITHUB_OUTPUT
+        echo -e "$VT_LIST" >> $GITHUB_OUTPUT
         echo "EOF" >> $GITHUB_OUTPUT
-        
-    - name: Delete old pre-releases
-      uses: dev-drprasad/delete-older-releases@v0.3.4
+
+    - name: Create Release
       if: github.event_name == 'push'
-      with:
-        keep_latest: 5
-        delete_tags: true
-        delete_prerelease_only: true
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        
-    - name: Create Pre-Release
       uses: softprops/action-gh-release@v1
-      if: github.event_name == 'push'
       with:
-        tag_name: ${{ steps.version.outputs.tag }}
-        name: Build ${{ steps.version.outputs.version }} (${{ steps.version.outputs.build }})
+        tag_name: "v${{ steps.version.outputs.version }}"
+        name: "Build ${{ steps.version.outputs.version }}"
         body: |
-          ## Automated Build
+          ## Build Information
           
-          **Version:** ${{ steps.version.outputs.version }}
-          **Build Number:** ${{ steps.version.outputs.build }}
-          **Commit:** ${{ github.sha }}
-          **Branch:** ${{ github.ref_name }}
-          
-          ### Artifacts
-          - **Release APK**: Optimized and signed production build.
-          - **Debug APK**: For testing with detailed logs.
-          
-          ### Security Scan
-          **VirusTotal Scan Results:**
-          ${{ steps.vt_parsed.outputs.vt_results }}
-          
-          ### Build Information
-          This is an automated pre-release build.
+          *   **Version:** ${{ steps.version.outputs.version }}
+          *   **Branch:** ${{ github.ref_name }}
+          *   **Commit:** ${{ github.sha }}
           
           ### Changelog
-          ${{ github.event.head_commit.message }}
+          
+          ${{ steps.changelog.outputs.changelog }}
+          
+          ### Security Scan
+          
+          ${{ steps.vt_parsed.outputs.vt_results }}
           
           ---
           Built automatically by GitHub Actions
         draft: false
         prerelease: true
         files: |
-          app/build/outputs/apk/debug/KonaBessNext-*.apk
-          app/build/outputs/apk/release/KonaBessNext-*.apk
+          app/build/outputs/apk/debug/*.apk
+          app/build/outputs/apk/release/*.apk
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        
-    - name: Upload Debug APK as Artifact
+
+    - name: Upload Artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: debug-apk
-        path: app/build/outputs/apk/debug/*.apk
-        retention-days: 30
-        
-    - name: Upload Release APK as Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: release-apk
-        path: app/build/outputs/apk/release/*.apk
+        name: build-artifacts
+        path: |
+          app/build/outputs/apk/debug/*.apk
+          app/build/outputs/apk/release/*.apk
         retention-days: 90
 
     - name: Cleanup Keystore
       if: always()
       run: rm -f ${{ github.workspace }}/keystore.jks
-        
-    - name: Build Summary
-      if: always()
-      run: |
-        echo "## 📊 Build Summary" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
-        echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
-        echo "| Version | ${{ steps.version.outputs.version }} |" >> $GITHUB_STEP_SUMMARY
-        echo "| Build | ${{ steps.version.outputs.build }} |" >> $GITHUB_STEP_SUMMARY
-        echo "| Tag | ${{ steps.version.outputs.tag }} |" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "### 📦 APK Sizes" >> $GITHUB_STEP_SUMMARY
-        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-        ls -lh app/build/outputs/apk/debug/*.apk 2>/dev/null >> $GITHUB_STEP_SUMMARY || true
-        ls -lh app/build/outputs/apk/release/*.apk 2>/dev/null >> $GITHUB_STEP_SUMMARY || true
-        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY

@@ -19,8 +19,28 @@ android {
         applicationId = "com.ireddragonicy.konabessnext"
         minSdk = 28
         targetSdk = 36
-        versionCode = 100
-        versionName = "1.0"
+        
+        // Dynamic Versioning Strategy
+        // If CI properties are present (from GitHub Actions), use them.
+        // Otherwise, generate them locally based on the current timestamp.
+        
+        // Version Code: Unix Timestamp (seconds). Safe until 2038.
+        // Falls back to local timestamp if not on CI.
+        def verCode = project.hasProperty('ciVersionCode') 
+            ? project.property('ciVersionCode').toInteger() 
+            : (System.currentTimeMillis() / 1000).toInteger()
+            
+        // Version Name: yyyy.MM.dd.HH.mm.ss
+        // Falls back to local formatted date if not on CI.
+        def verName = project.hasProperty('ciVersionName') 
+            ? project.property('ciVersionName') 
+            : new Date().format('yyyy.MM.dd.HH.mm.ss')
+
+        versionCode = verCode
+        versionName = verName
+        
+        // Print for debugging/verification during build
+        println "Building Version: $verName (Code: $verCode)"
     }
 
     buildTypes {
