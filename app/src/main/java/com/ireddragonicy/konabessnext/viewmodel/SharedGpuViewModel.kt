@@ -70,7 +70,14 @@ class SharedGpuViewModel @Inject constructor(
     val workbenchState: StateFlow<WorkbenchState> = _workbenchState.asStateFlow()
 
     init {
-        // init block removed - we handle state transitions in loadData explicitly
+        // Observe changes in bins repository to automatically refresh UI models
+        viewModelScope.launch {
+            repository.bins.collect { newBins ->
+                if (newBins.isNotEmpty()) {
+                    precalculateUiModels(newBins)
+                }
+            }
+        }
     }
 
     private fun precalculateUiModels(bins: List<Bin>) {
@@ -190,9 +197,6 @@ class SharedGpuViewModel @Inject constructor(
                 
                 // Explicitly valid success state
                 _workbenchState.value = WorkbenchState.Ready
-                
-                // Refresh UI models immediately
-                precalculateUiModels(repository.bins.value)
                 
             } catch (e: Exception) {
                 if (isActive) {
