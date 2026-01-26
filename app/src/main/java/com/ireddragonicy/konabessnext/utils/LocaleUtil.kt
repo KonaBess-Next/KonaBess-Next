@@ -20,7 +20,7 @@ object LocaleUtil {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val language = prefs.getString(KEY_LANGUAGE, SettingsActivity.LANGUAGE_ENGLISH) ?: SettingsActivity.LANGUAGE_ENGLISH
 
-        val locale = Locale(language)
+        val locale = parseLocale(language)
         Locale.setDefault(locale)
 
         val resources = context.resources
@@ -35,5 +35,18 @@ object LocaleUtil {
         }
 
         return context.createConfigurationContext(configuration)
+    }
+
+    private fun parseLocale(localeStr: String): Locale {
+        // Fix for "zh-rCN" which is a common legacy Android format
+        val normalized = localeStr.replace("-r", "-").replace("_", "-")
+        val parts = normalized.split("-")
+        
+        return when (parts.size) {
+            1 -> Locale(parts[0])
+            2 -> Locale(parts[0], parts[1])
+            3 -> Locale(parts[0], parts[1], parts[2])
+            else -> Locale(localeStr)
+        }
     }
 }

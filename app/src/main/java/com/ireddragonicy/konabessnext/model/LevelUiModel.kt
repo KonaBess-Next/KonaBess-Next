@@ -10,10 +10,10 @@ import androidx.compose.runtime.Immutable
 @Immutable
 data class LevelUiModel(
     val originalIndex: Int,
-    val frequencyLabel: String,
+    val frequencyLabel: UiText,
     val busMin: String,
     val busMax: String,
     val busFreq: String,
-    val voltageLabel: String,
+    val voltageLabel: UiText,
     val isVisible: Boolean // Optimized filtering flag
 )

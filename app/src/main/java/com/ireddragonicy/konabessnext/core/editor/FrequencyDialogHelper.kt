@@ -42,28 +42,24 @@ object FrequencyDialogHelper {
         rawName: String, rawValue: String, paramTitle: String,
         listener: OnFrequencySavedListener
     ) {
-        // Create container layout
         val container = LinearLayout(activity)
         container.orientation = LinearLayout.VERTICAL
         val padding = (16 * activity.resources.displayMetrics.density).toInt()
         container.setPadding(padding, padding, padding, 0)
 
-        // Create horizontal layout for input and unit
         val inputRow = LinearLayout(activity)
         inputRow.orientation = LinearLayout.HORIZONTAL
 
-        // EditText for value
         val editText = EditText(activity)
         editText.inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
         val editParams = LinearLayout.LayoutParams(
             0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f
         )
         editText.layoutParams = editParams
-        editText.hint = "Enter frequency"
+        editText.hint = activity.getString(R.string.enter_frequency)
 
-        // Spinner for unit selection
         val unitSpinner = Spinner(activity)
-        val units = arrayOf("Hz", "MHz", "GHz")
+        val units = arrayOf(activity.getString(R.string.hz), activity.getString(R.string.mhz), activity.getString(R.string.ghz))
         val unitAdapter = ArrayAdapter(
             activity,
             android.R.layout.simple_spinner_item, units
@@ -71,21 +67,18 @@ object FrequencyDialogHelper {
         unitAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         unitSpinner.adapter = unitAdapter
 
-        // Get current frequency in Hz
         var currentHz: Long = 0
         try {
             currentHz = rawValue.toLong()
         } catch (ignored: NumberFormatException) {
         }
 
-        // Get user's preferred unit from settings
         val prefs = activity.getSharedPreferences(
             SettingsActivity.PREFS_NAME, android.content.Context.MODE_PRIVATE
         )
         val preferredUnit = prefs.getInt(SettingsActivity.KEY_FREQ_UNIT, SettingsActivity.FREQ_UNIT_MHZ)
 
-        // Set initial value based on preferred unit
-        val finalCurrentHz = currentHz // Effectively final for use in lambda if needed, but Kotlin captures automatically
+        val finalCurrentHz = currentHz
         when (preferredUnit) {
             SettingsActivity.FREQ_UNIT_HZ -> {
                 editText.setText(currentHz.toString())
@@ -105,18 +98,14 @@ object FrequencyDialogHelper {
             }
         }
 
-        // Add views to row
         inputRow.addView(editText)
         inputRow.addView(unitSpinner)
 
-        // Preview text showing Hz equivalent
         val previewText = TextView(activity)
         previewText.setPadding(0, padding / 2, 0, 0)
         previewText.textSize = 12f
-        previewText.text = "= $finalCurrentHz Hz"
+        previewText.text = "= " + activity.getString(R.string.format_hz, finalCurrentHz)
 
-        // Track previous unit for conversion
-        // Using an IntArray to simulate a mutable integer reference
         val previousUnit = IntArray(1)
         previousUnit[0] = when (preferredUnit) {
             SettingsActivity.FREQ_UNIT_HZ -> 0
@@ -124,17 +113,15 @@ object FrequencyDialogHelper {
             else -> 1
         }
 
-        // Update preview when input changes
         val textWatcher = object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence, start: Int, before: Int, count: Int) {}
             override fun afterTextChanged(s: Editable) {
-                updateFrequencyPreview(editText, unitSpinner, previewText)
+                updateFrequencyPreview(activity, editText, unitSpinner, previewText)
             }
         }
         editText.addTextChangedListener(textWatcher)
 
-        // Update preview AND convert textbox value when unit changes
         unitSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>, view: View, position: Int, id: Long) {
                 val oldUnit = previousUnit[0]
@@ -160,7 +147,7 @@ object FrequencyDialogHelper {
                     }
                     previousUnit[0] = newUnit
                 }
-                updateFrequencyPreview(editText, unitSpinner, previewText)
+                updateFrequencyPreview(activity, editText, unitSpinner, previewText)
             }
 
             override fun onNothingSelected(parent: AdapterView<*>) {}
@@ -201,29 +188,19 @@ object FrequencyDialogHelper {
             .create().show()
     }
 
-    /**
-     * Update the preview text showing Hz equivalent.
-     */
-    private fun updateFrequencyPreview(editText: EditText, unitSpinner: Spinner, previewText: TextView) {
+    private fun updateFrequencyPreview(activity: Activity, editText: EditText, unitSpinner: Spinner, previewText: TextView) {
         try {
             val hz = parseFrequencyToHz(editText.text.toString(), unitSpinner.selectedItemPosition)
             if (hz > 0) {
-                previewText.text = "= " + String.format(Locale.US, "%,d", hz) + " Hz"
+                previewText.text = "= " + activity.getString(R.string.format_hz, hz)
             } else {
-                previewText.text = "= ? Hz"
+                previewText.text = "= ? " + activity.getString(R.string.hz)
             }
         } catch (e: Exception) {
-            previewText.text = "= ? Hz"
+            previewText.text = "= ? " + activity.getString(R.string.hz)
         }
     }
 
-    /**
-     * Parse frequency input to Hz based on selected unit.
-     *
-     * @param value     Input value as string
-     * @param unitIndex 0=Hz, 1=MHz, 2=GHz
-     * @return Frequency in Hz, or -1 if invalid
-     */
     @JvmStatic
     fun parseFrequencyToHz(value: String, unitIndex: Int): Long {
         return try {
@@ -239,16 +216,13 @@ object FrequencyDialogHelper {
         }
     }
 
-    /**
-     * Convert Hz to user's preferred unit for display.
-     */
     @JvmStatic
-    fun formatFrequencyWithUnit(hz: Long, preferredUnit: Int): String {
+    fun formatFrequencyWithUnit(hz: Long, preferredUnit: Int, context: android.content.Context): String {
         return when (preferredUnit) {
-            SettingsActivity.FREQ_UNIT_HZ -> String.format(Locale.US, "%,d Hz", hz)
-            SettingsActivity.FREQ_UNIT_MHZ -> String.format(Locale.US, "%d MHz", hz / 1000000)
-            SettingsActivity.FREQ_UNIT_GHZ -> String.format(Locale.US, "%.3f GHz", hz / 1000000000.0)
-            else -> String.format(Locale.US, "%d MHz", hz / 1000000)
+            SettingsActivity.FREQ_UNIT_HZ -> context.getString(R.string.format_hz, hz)
+            SettingsActivity.FREQ_UNIT_MHZ -> context.getString(R.string.format_mhz, hz / 1000000)
+            SettingsActivity.FREQ_UNIT_GHZ -> context.getString(R.string.format_ghz, hz / 1000000000.0)
+            else -> context.getString(R.string.format_mhz, hz / 1000000)
         }
     }
 }

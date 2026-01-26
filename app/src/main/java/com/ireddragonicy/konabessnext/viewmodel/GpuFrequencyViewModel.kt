@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ireddragonicy.konabessnext.model.Bin
 import com.ireddragonicy.konabessnext.model.EditorState
+import com.ireddragonicy.konabessnext.model.UiText
 import com.ireddragonicy.konabessnext.repository.GpuRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -58,7 +59,7 @@ class GpuFrequencyViewModel @Inject constructor(
                 when (result) {
                     is GpuRepository.ParseResult.Loading -> _binsState.value = UiState.Loading
                     is GpuRepository.ParseResult.Success -> _binsState.value = UiState.Success(result.bins)
-                    is GpuRepository.ParseResult.Error -> _binsState.value = UiState.Error(result.message)
+                    is GpuRepository.ParseResult.Error -> _binsState.value = UiState.Error(UiText.DynamicString(result.message))
                 }
             }
         }

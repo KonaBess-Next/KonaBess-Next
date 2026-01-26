@@ -144,7 +144,7 @@ fun GpuLevelList(
                     ) {
                         Icon(iconBack, null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text("Back")
+                        Text(androidx.compose.ui.res.stringResource(R.string.btn_back))
                     }
                     
                     Button(
@@ -158,7 +158,7 @@ fun GpuLevelList(
                     ) {
                         Icon(iconEdit, null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text("Curve Editor")
+                        Text(androidx.compose.ui.res.stringResource(R.string.btn_curve_editor))
                     }
                 }
             }
@@ -180,7 +180,7 @@ fun GpuLevelList(
                     ) {
                         Icon(iconAdd, null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text("Add Frequency to Top")
+                        Text(androidx.compose.ui.res.stringResource(R.string.btn_add_freq_top))
                     }
                 }
 
@@ -229,7 +229,7 @@ fun GpuLevelList(
                     ) {
                         Icon(iconAdd, null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text("Add Frequency to Bottom")
+                        Text(androidx.compose.ui.res.stringResource(R.string.btn_add_freq_bottom))
                     }
                 }
             }
@@ -261,6 +261,9 @@ fun LevelCard(
     onDragCancel: () -> Unit,
     res: LevelCardResources
 ) {
+    val frequencyText = uiModel.frequencyLabel.asString()
+    val voltageText = uiModel.voltageLabel.asString()
+
     Card(
         onClick = { onLevelClick(uiModel.originalIndex) },
         modifier = modifier,
@@ -302,7 +305,7 @@ fun LevelCard(
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = uiModel.frequencyLabel,
+                    text = frequencyText,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary
@@ -321,10 +324,10 @@ fun LevelCard(
                     }
                 }
 
-                if (uiModel.voltageLabel.isNotEmpty()) {
+                if (voltageText.isNotEmpty()) {
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        text = uiModel.voltageLabel, // Already formatted string
+                        text = voltageText, // Already formatted string
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

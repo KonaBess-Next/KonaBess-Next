@@ -18,6 +18,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+import com.ireddragonicy.konabessnext.model.UiText
+
 @HiltViewModel
 class DeviceViewModel @Inject constructor(
     private val repository: DeviceRepository,
@@ -35,16 +37,6 @@ class DeviceViewModel @Inject constructor(
 
     private val _recommendedIndex = MutableStateFlow<Int?>(null)
     val recommendedIndex: StateFlow<Int?> = _recommendedIndex.asStateFlow()
-
-    init {
-        // Init check
-        if (repository.prepared) {
-            _selectedChipset.value = repository.currentDtb
-            _isPrepared.value = true
-            chipRepository.setCurrentChip(repository.currentDtb?.type)
-        }
-    }
-
     fun detectChipset() {
         _detectionState.value = UiState.Loading
         viewModelScope.launch {
@@ -66,7 +58,7 @@ class DeviceViewModel @Inject constructor(
                          return@launch
                     }
 
-                    _detectionState.value = UiState.Error("No compatible chipset found")
+                    _detectionState.value = UiState.Error(UiText.StringResource(com.ireddragonicy.konabessnext.R.string.no_compatible_chipset_found))
                     _isPrepared.value = false
                     return@launch
                 }
@@ -87,7 +79,8 @@ class DeviceViewModel @Inject constructor(
                 }
             } catch (e: Exception) {
                 Log.e("KonaBessDet", "Detection failed with exception", e)
-                _detectionState.value = UiState.Error("Detection failed: ${e.message}", e)
+                val msg = e.message ?: "Unknown error"
+                _detectionState.value = UiState.Error(UiText.StringResource(com.ireddragonicy.konabessnext.R.string.detection_failed_format, listOf(msg)), e)
                 _isPrepared.value = false
             }
         }
@@ -139,8 +132,8 @@ class DeviceViewModel @Inject constructor(
     val currentChipType: ChipDefinition?
         get() = _selectedChipset.value?.type
 
-    private val _repackState = MutableStateFlow<UiState<String>?>(null)
-    val repackState: StateFlow<UiState<String>?> = _repackState.asStateFlow()
+    private val _repackState = MutableStateFlow<UiState<UiText>?>(null)
+    val repackState: StateFlow<UiState<UiText>?> = _repackState.asStateFlow()
 
     fun packAndFlash(context: Context) {
         _repackState.value = UiState.Loading
@@ -151,13 +144,10 @@ class DeviceViewModel @Inject constructor(
                 // Assuming standard flow:
                 repository.dts2bootImage()
                 repository.writeBootImage()
-                // Reboot logic? 
-                // Repository doesn't have reboot? KonaBessCore.reboot() -> ShellRepository?
-                // I should check ShellRepository.
-                // For now, success message.
-                _repackState.value = UiState.Success("Repack and Flash successful. Please reboot.")
+                _repackState.value = UiState.Success(UiText.StringResource(com.ireddragonicy.konabessnext.R.string.repack_flash_success))
             } catch (e: Exception) {
-                _repackState.value = UiState.Error("Repack failed: ${e.message}", e)
+                val msg = e.message ?: "Unknown error"
+                _repackState.value = UiState.Error(UiText.StringResource(com.ireddragonicy.konabessnext.R.string.repack_failed_format, listOf(msg)), e)
             }
         }
     }
@@ -167,9 +157,10 @@ class DeviceViewModel @Inject constructor(
             try {
                 val bootFile = repository.getBootImageFile()
                 val dest = bootFile.absolutePath
-                _repackState.value = UiState.Success("Backup successful at $dest")
+                _repackState.value = UiState.Success(UiText.StringResource(com.ireddragonicy.konabessnext.R.string.backup_success_at_format, listOf(dest)))
             } catch (e: Exception) {
-                _repackState.value = UiState.Error("Backup failed: ${e.message}", e)
+                val msg = e.message ?: "Unknown error"
+                _repackState.value = UiState.Error(UiText.StringResource(com.ireddragonicy.konabessnext.R.string.backup_failed_format, listOf(msg)), e)
             }
         }
     }
@@ -179,9 +170,10 @@ class DeviceViewModel @Inject constructor(
             try {
                 _repackState.value = UiState.Loading
                 repository.dts2bootImage()
-                _repackState.value = UiState.Success("Packed successfully")
+                _repackState.value = UiState.Success(UiText.StringResource(com.ireddragonicy.konabessnext.R.string.packed_successfully))
             } catch (e: Exception) {
-                _repackState.value = UiState.Error("Packing failed: ${e.message}", e)
+                val msg = e.message ?: "Unknown error"
+                _repackState.value = UiState.Error(UiText.StringResource(com.ireddragonicy.konabessnext.R.string.packing_failed_format, listOf(msg)), e)
             }
         }
     }
@@ -191,9 +183,10 @@ class DeviceViewModel @Inject constructor(
             try {
                 _repackState.value = UiState.Loading
                 repository.writeBootImage()
-                _repackState.value = UiState.Success("Flashed successfully. Please reboot.")
+                _repackState.value = UiState.Success(UiText.StringResource(com.ireddragonicy.konabessnext.R.string.flashed_success))
             } catch (e: Exception) {
-                _repackState.value = UiState.Error("Flashing failed: ${e.message}", e)
+                val msg = e.message ?: "Unknown error"
+                _repackState.value = UiState.Error(UiText.StringResource(com.ireddragonicy.konabessnext.R.string.flashing_failed_format, listOf(msg)), e)
             }
         }
     }
@@ -227,24 +220,29 @@ class DeviceViewModel @Inject constructor(
                 
                 if (results.isEmpty()) {
                     if (!_isPrepared.value) {
-                        _detectionState.value = UiState.Error("Deep Scan: No recognizable GPU structures found.")
+                        _detectionState.value = UiState.Error(UiText.StringResource(com.ireddragonicy.konabessnext.R.string.deep_scan_no_results))
                     }
                 } else {
                     // We found potential candidates.
                     // If we are not prepared (initial detection failed), we keep the state as Error 
                     // (which shows the "Unsupported Device" prompt) but the dialog will appear.
                     if (!_isPrepared.value) {
-                        _detectionState.value = UiState.Error("Deep Scan: Found ${results.size} candidates.", null)
+                         // Pass UiText
+                        _detectionState.value = UiState.Error(UiText.StringResource(com.ireddragonicy.konabessnext.R.string.deep_scan_candidates_format, listOf(results.size)), null)
                     }
                 }
                 
             } catch (e: Exception) {
                  if (!_isPrepared.value) {
-                     _detectionState.value = UiState.Error("Deep Scan failed: ${e.message}", e)
+                     val msg = e.message ?: "Unknown error"
+                     _detectionState.value = UiState.Error(UiText.StringResource(com.ireddragonicy.konabessnext.R.string.deep_scan_failed_format, listOf(msg)), e)
                  }
             }
         }
     }
+    
+    // ... (omitted methods) ...
+    // Note: detectChipset also uses UiState.Error. I must update it too.
 
     fun applyCustomDefinition(result: com.ireddragonicy.konabessnext.core.scanner.DtsScanResult) {
         val def = com.ireddragonicy.konabessnext.core.scanner.DtsScanner.toChipDefinition(result)

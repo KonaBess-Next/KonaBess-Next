@@ -50,12 +50,12 @@ class SettingsActivity : AppCompatActivity() {
         const val LANGUAGE_INDONESIAN = "in"
 
         @JvmStatic
-        fun formatFrequency(frequencyHz: Long, unit: Int): String {
+        fun formatFrequency(frequencyHz: Long, unit: Int, context: Context): String {
             return when (unit) {
-                FREQ_UNIT_HZ -> "$frequencyHz Hz"
-                FREQ_UNIT_MHZ -> "${frequencyHz / 1000000L} MHz"
-                FREQ_UNIT_GHZ -> String.format("%.2f GHz", frequencyHz / 1000000000.0)
-                else -> "${frequencyHz / 1000000L} MHz"
+                FREQ_UNIT_HZ -> context.getString(R.string.format_hz, frequencyHz)
+                FREQ_UNIT_MHZ -> context.getString(R.string.format_mhz, frequencyHz / 1000000L)
+                FREQ_UNIT_GHZ -> context.getString(R.string.format_ghz, frequencyHz / 1000000000.0)
+                else -> context.getString(R.string.format_mhz, frequencyHz / 1000000L)
             }
         }
 
@@ -63,7 +63,7 @@ class SettingsActivity : AppCompatActivity() {
         fun formatFrequency(frequencyHz: Long, context: Context): String {
             val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             val unit = prefs.getInt(KEY_FREQ_UNIT, FREQ_UNIT_MHZ)
-            return formatFrequency(frequencyHz, unit)
+            return formatFrequency(frequencyHz, unit, context)
         }
 
         @JvmStatic
@@ -256,7 +256,13 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun showColorPaletteDialog() {
-        val palettes = arrayOf("Purple & Teal", "Blue & Orange", "Green & Red", "Pink & Cyan", "Pure AMOLED (Black)")
+        val palettes = arrayOf(
+            getString(R.string.palette_purple_teal),
+            getString(R.string.palette_blue_orange),
+            getString(R.string.palette_green_red),
+            getString(R.string.palette_pink_cyan),
+            getString(R.string.palette_amoled)
+        )
         val paletteIds = intArrayOf(PALETTE_PURPLE, PALETTE_BLUE, PALETTE_GREEN, PALETTE_PINK, PALETTE_AMOLED)
 
         val currentPalette = savedColorPalette
@@ -266,7 +272,7 @@ class SettingsActivity : AppCompatActivity() {
         }
 
         MaterialAlertDialogBuilder(this)
-            .setTitle("Color Palette")
+            .setTitle(getString(R.string.color_palette))
             .setSingleChoiceItems(palettes, initialSelection) { dialog, which ->
                 saveColorPalette(paletteIds[which])
                 dialog.dismiss()
@@ -292,8 +298,12 @@ class SettingsActivity : AppCompatActivity() {
 
     private val currentColorPaletteName: String
         get() = when (savedColorPalette) {
-            PALETTE_PURPLE -> "Purple & Teal"; PALETTE_BLUE -> "Blue & Orange"; PALETTE_GREEN -> "Green & Red"
-            PALETTE_PINK -> "Pink & Cyan"; PALETTE_AMOLED -> "Pure AMOLED (Black)"; else -> "Purple & Teal"
+            PALETTE_PURPLE -> getString(R.string.palette_purple_teal)
+            PALETTE_BLUE -> getString(R.string.palette_blue_orange)
+            PALETTE_GREEN -> getString(R.string.palette_green_red)
+            PALETTE_PINK -> getString(R.string.palette_pink_cyan)
+            PALETTE_AMOLED -> getString(R.string.palette_amoled)
+            else -> getString(R.string.palette_purple_teal)
         }
 
     private val currentLanguageIndex: Int

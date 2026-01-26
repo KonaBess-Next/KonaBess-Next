@@ -128,7 +128,7 @@ class MainActivity : AppCompatActivity() {
                             hideRepackLoading()
                             MaterialAlertDialogBuilder(this@MainActivity)
                                 .setTitle(R.string.success)
-                                .setMessage(state.data) // "Repack and Flash successful..."
+                                .setMessage(state.data.asString(this@MainActivity)) // "Repack and Flash successful..."
                                 .setPositiveButton(R.string.reboot) { _, _ -> deviceViewModel.reboot() }
                                 .setNegativeButton(R.string.ok, null)
                                 .show()
@@ -137,7 +137,7 @@ class MainActivity : AppCompatActivity() {
                             hideRepackLoading()
                             MaterialAlertDialogBuilder(this@MainActivity)
                                 .setTitle(R.string.error)
-                                .setMessage(state.message)
+                                .setMessage(state.message.asString(this@MainActivity))
                                 .setPositiveButton(R.string.ok, null)
                                 .show()
                         }

@@ -224,4 +224,150 @@
     <string name="undo">撤销</string>
     <string name="redo">重做</string>
     <string name="applying_config">正在应用配置...</string>
+    
+    <string name="format_hz">%1$d Hz</string>
+    <string name="format_mhz">%1$d MHz</string>
+    <string name="format_ghz">%.2f GHz</string>
+    
+    <string name="palette_purple_teal">紫 &amp; 青</string>
+    <string name="palette_blue_orange">蓝 &amp; 橙</string>
+    <string name="palette_green_red">绿 &amp; 红</string>
+    <string name="palette_pink_cyan">粉 &amp; 青</string>
+    <string name="palette_amoled">纯黑 (AMOLED)</string>
+    <string name="color_palette">配色方案</string>
+    <string name="enter_frequency">输入频率</string>
+    <string name="edit_level">编辑等级</string>
+    <string name="value">数值</string>
+    <string name="frequency">频率</string>
+    <string name="raw_value_hint">数值 (十进制/十六进制)</string>
+    <string name="custom_value">自定义数值</string>
+    <!-- Extracted Strings -->
+    <string name="no_gpu_tables_found">未找到 GPU 频率表</string>
+    <string name="try_redetecting">尝试重新检测芯片组或使用深度扫描。</string>
+    <string name="reload_data">重新加载数据</string>
+    <string name="bin_id_format">Bin %1$d</string>
+    
+    <string name="import_from_file_desc">从文件加载配置</string>
+    <string name="export_to_file_desc">保存配置到文件</string>
+    <string name="import_from_clipboard_desc">从剪贴板粘贴配置</string>
+    <string name="export_to_clipboard_desc">复制配置到剪贴板</string>
+    <string name="export_raw_dts_desc">保存原始设备树源码</string>
+    <string name="backup_boot_image">备份 Boot 镜像</string>
+    <string name="batch_dtb_to_dts">批量 DTB 转 DTS</string>
+    <string name="batch_dtb_to_dts_desc">将多个 .dtb 文件转换为可读文本</string>
+    <string name="converted_files">已转换文件：</string>
+    <string name="open_file">打开文件</string>
+    
+    <string name="save_changes">保存更改</string>
+    <string name="saved">已保存</string>
+    <string name="view_mode_gui">图形界面</string>
+    <string name="view_mode_text">文本</string>
+    <string name="view_mode_tree">树状图</string>
+    <string name="chipset">芯片组</string>
+    <string name="flash">刷入</string>
+    
+    <string name="level_format">等级 %1$s</string>
+    <string name="saved_successfully">保存成功</string>
+    <string name="failed_to_load_format">加载失败：%1$s</string>
+    <string name="history_text_edit">文本编辑</string>
+    <string name="reorder_frequencies">重新排序频率</string>
+    <string name="save_failed_format">保存失败：%1$s</string>
+    
+    <string name="no_compatible_chipset_found">未找到兼容的芯片组</string>
+    <string name="detection_failed_format">检测失败：%1$s</string>
+    <string name="repack_flash_success">打包并刷入成功。请重启。</string>
+    <string name="repack_failed_format">打包失败：%1$s</string>
+    <string name="backup_success_at_format">备份成功于 %1$s</string>
+    <string name="backup_failed_format">备份失败：%1$s</string>
+    <string name="packed_successfully">打包成功</string>
+    <string name="packing_failed_format">打包失败：%1$s</string>
+    <string name="flashed_success">刷入成功。请重启。</string>
+    <string name="flashing_failed_format">刷入失败：%1$s</string>
+    <string name="deep_scan_no_results">深度扫描：未找到可识别的 GPU 结构。</string>
+    <string name="deep_scan_candidates_format">深度扫描：找到 %1$d 个候选。</string>
+    <string name="deep_scan_failed_format">深度扫描失败：%1$s</string>
+    
+    <!-- Settings Strings -->
+    <string name="settings_theme">主题</string>
+    <string name="settings_theme_desc">选择浅色、深色或跟随系统</string>
+    <string name="settings_dynamic_color">动态取色</string>
+    <string name="settings_dynamic_color_desc">使用基于壁纸的颜色 (Material You)</string>
+    <string name="settings_language">语言</string>
+    <string name="settings_language_desc">选择您的首选语言</string>
+    <string name="settings_freq_unit_desc">显示频率单位为 Hz, MHz 或 GHz</string>
+    <string name="settings_auto_save">自动保存 GPU 表</string>
+    <string name="settings_auto_save_desc">每次编辑后自动保存 GPU 频率表</string>
+    <string name="settings_help_about">帮助与关于</string>
+    <string name="settings_version_format">版本 %1$s</string>
+    <string name="settings_color_palette">配色方案</string>
+    <string name="settings_color_palette_desc">选择您的配色方案</string>
+    
+    <!-- Editor Button Strings -->
+    <string name="btn_add_freq_top">顶部添加频率</string>
+    <string name="btn_add_freq_bottom">底部添加频率</string>
+    <string name="btn_back">返回</string>
+    <string name="btn_curve_editor">曲线编辑器</string>
+
+    <!-- Missing Translations -->
+    <string name="add_frequency">添加频率</string>
+    <string name="backup_fail">备份失败</string>
+    <string name="changes_saved">更改已保存</string>
+    <string name="close">关闭</string>
+    <string name="copy">复制</string>
+    <string name="copy_all">复制全部</string>
+    <string name="curve_editor">曲线编辑器</string>
+    <string name="curve_editor_desc">编辑频率/电压曲线</string>
+    <string name="discard">放弃</string>
+    <string name="dts_export_manual_required">无法自动导出 DTS。\n\n请手动提取并附上您设备的 DTS 文件到 GitHub issue 中。</string>
+    <string name="dts_exported_success">DTS 文件已导出至：\n\n%1$s\n\n请将此文件附到 GitHub issue 中以帮助添加对您设备的支持。</string>
+    <string name="edit_description">描述</string>
+    <string name="edit_export">编辑导出</string>
+    <string name="edit_parameter">编辑参数</string>
+    <string name="enter_export_desc">输入此导出的描述</string>
+    <string name="enter_new_filename">输入新文件名</string>
+    <string name="expand_collapse">展开/折叠</string>
+    <string name="export">导出</string>
+    <string name="export_desc">将当前的 GPU 频率和电压表保存到文件以进行备份或分享。</string>
+    <string name="export_raw_dts_msg">将当前编辑的设备树源码文件导出到存储</string>
+    <string name="extracting_dts_files">正在提取设备信息和 DTS 文件…</string>
+    <string name="file_renamed">文件已重命名</string>
+    <string name="gpu_curve_editor_title">曲线编辑器</string>
+    <string name="invalid_value">无效数值</string>
+    <string name="line_count">行数：%d</string>
+    <string name="loading">加载中</string>
+    <string name="loading_file">正在加载文件…</string>
+    <string name="no_results_found">未找到结果</string>
+    <string name="not_found">未找到</string>
+    <string name="open_github">打开 GitHub</string>
+    <string name="preparing_dts_submission">准备提交</string>
+    <string name="processing">处理中</string>
+    <string name="raw_dts_editor">原始 DTS 编辑器</string>
+    <string name="raw_dts_editor_desc">用于直接编辑 DTS 文件的高级文本编辑器</string>
+    <string name="raw_dts_editor_warning_msg">如果操作不当，编辑原始 DTS 可能会导致启动问题。只有在您了解设备树结构的情况下才能继续。\n\n请务必先备份您的 Boot 镜像！</string>
+    <string name="raw_dts_editor_warning_title">⚠️ 警告：高级功能</string>
+    <string name="reboot">重启</string>
+    <string name="rename">重命名</string>
+    <string name="rename_failed">重命名失败</string>
+    <string name="rename_file">重命名文件</string>
+    <string name="saving_file">正在保存文件…</string>
+    <string name="sd_kalamap_qcs">Snapdragon 8 Gen 2 (QCS)</string>
+    <string name="sdg3g3">Snapdragon G3 Gen 3</string>
+    <string name="search">搜索</string>
+    <string name="search_hint">搜索文本…</string>
+    <string name="search_next">下一个匹配</string>
+    <string name="search_previous">上一个匹配</string>
+    <string name="search_result_format">第 %1$d 个，共 %2$d 个</string>
+    <string name="select_bin_first">请先选择一个 Bin</string>
+    <string name="select_chipset">选择芯片组</string>
+    <string name="submit_dts_to_github">提交 DTS 到 GitHub</string>
+    <string name="success">成功</string>
+    <string name="switch_chipset">切换芯片组</string>
+    <string name="switch_chipset_confirm">是否要切换芯片组？</string>
+    <string name="text_copied_to_clipboard">文本已复制到剪贴板</string>
+    <string name="text_view">文本视图</string>
+    <string name="title_select_chipset">选择芯片组</string>
+    <string name="unsaved_changes_msg">您有未保存的更改。您想做什么？</string>
+    <string name="unsaved_changes_title">未保存的更改</string>
+    <string name="visual_view">可视化视图</string>
+    <string name="export_raw_dts">导出原始 DTS</string>
 </resources>

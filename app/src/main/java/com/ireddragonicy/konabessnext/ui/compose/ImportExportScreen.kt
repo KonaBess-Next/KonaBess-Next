@@ -55,18 +55,16 @@ fun ImportExportScreen(
         }
     }
 
-    val actionItems = remember(isPrepared) {
-        listOf(
-            ActionItem(R.drawable.ic_history, "Export History", "View all previous exports", true),
-            ActionItem(R.drawable.ic_import_modern, "Import from File", "Load configuration from a file", isPrepared),
-            ActionItem(R.drawable.ic_save, "Export to File", "Save configuration to a file", isPrepared),
-            ActionItem(R.drawable.ic_clipboard_import, "Import from Clipboard", "Paste configuration from clipboard", isPrepared),
-            ActionItem(R.drawable.ic_clipboard_export, "Export to Clipboard", "Copy configuration to clipboard", isPrepared),
-            ActionItem(R.drawable.ic_code, "Export Raw DTS", "Save raw device tree source", isPrepared),
-            ActionItem(R.drawable.ic_backup, "Backup Boot Image", "Create a backup of your boot image", isPrepared),
-            ActionItem(R.drawable.ic_code, "Batch DTB to DTS", "Convert multiple .dtb files to human-readable text", true)
+    val actionItems = listOf(
+            ActionItem(R.drawable.ic_history, stringResource(R.string.export_history), stringResource(R.string.export_history_desc), true),
+            ActionItem(R.drawable.ic_import_modern, stringResource(R.string.import_from_file), stringResource(R.string.import_from_file_desc), isPrepared),
+            ActionItem(R.drawable.ic_save, stringResource(R.string.export_to_file), stringResource(R.string.export_to_file_desc), isPrepared),
+            ActionItem(R.drawable.ic_clipboard_import, stringResource(R.string.import_from_clipboard), stringResource(R.string.import_from_clipboard_desc), isPrepared),
+            ActionItem(R.drawable.ic_clipboard_export, stringResource(R.string.export_to_clipboard), stringResource(R.string.export_to_clipboard_desc), isPrepared),
+            ActionItem(R.drawable.ic_code, stringResource(R.string.export_raw_dts), stringResource(R.string.export_raw_dts_desc), isPrepared),
+            ActionItem(R.drawable.ic_backup, stringResource(R.string.backup_image), stringResource(R.string.backup_image_desc), isPrepared),
+            ActionItem(R.drawable.ic_code, stringResource(R.string.batch_dtb_to_dts), stringResource(R.string.batch_dtb_to_dts_desc), true)
         )
-    }
 
     com.ireddragonicy.konabessnext.ui.theme.KonaBessTheme {
         if (showSheet) {
@@ -117,7 +115,7 @@ fun ImportExportScreen(
 
                             if (isBatchResult) {
                                 Text(
-                                    text = "Converted Files:",
+                                    text = stringResource(R.string.converted_files),
                                     style = MaterialTheme.typography.titleSmall,
                                     color = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.fillMaxWidth()
@@ -160,7 +158,7 @@ fun ImportExportScreen(
                                                 ) {
                                                     Icon(
                                                         painter = painterResource(if (isBatchResult) R.drawable.ic_folder else R.drawable.ic_content_copy),
-                                                        contentDescription = if (isBatchResult) "Open File" else "Copy",
+                                                        contentDescription = if (isBatchResult) stringResource(R.string.open_file) else stringResource(R.string.copy),
                                                         tint = MaterialTheme.colorScheme.primary,
                                                         modifier = Modifier.size(20.dp)
                                                     )

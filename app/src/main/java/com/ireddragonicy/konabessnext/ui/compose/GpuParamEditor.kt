@@ -16,6 +16,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.ireddragonicy.konabessnext.R
@@ -91,7 +92,7 @@ fun GpuParamEditor(
             containerColor = MaterialTheme.colorScheme.background,
             topBar = {
                 TopAppBar(
-                    title = { Text("Edit Level") },
+                    title = { Text(stringResource(R.string.edit_level)) },
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = MaterialTheme.colorScheme.background,
                         titleContentColor = MaterialTheme.colorScheme.onBackground,
@@ -100,12 +101,12 @@ fun GpuParamEditor(
                     ),
                     navigationIcon = {
                         IconButton(onClick = onBack) {
-                            Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                            Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.back))
                         }
                     },
                     actions = {
                         TextButton(onClick = onDeleteLevel) {
-                             Text("Delete", color = MaterialTheme.colorScheme.error)
+                             Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error)
                         }
                     }
                 )
@@ -269,7 +270,7 @@ fun VoltageSelector(param: ParamItem, onSave: (String, String) -> Unit) {
                     RadioButton(selected = isCustom, onClick = null)
                     Spacer(Modifier.width(16.dp))
                     Text(
-                        text = "Custom Value",
+                        text = stringResource(R.string.custom_value),
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurface
                     )
@@ -283,7 +284,7 @@ fun VoltageSelector(param: ParamItem, onSave: (String, String) -> Unit) {
                         OutlinedTextField(
                             value = customText,
                             onValueChange = { customText = it },
-                            label = { Text("Raw Value (Dec/Hex)") },
+                            label = { Text(stringResource(R.string.raw_value_hint)) },
                             modifier = Modifier.weight(1f),
                             singleLine = true
                         )
@@ -292,7 +293,7 @@ fun VoltageSelector(param: ParamItem, onSave: (String, String) -> Unit) {
                             val encoded = DtsHelper.encodeIntOrHexLine(param.rawName, customText)
                             onSave(encoded, "Updated Voltage to Custom: $customText")
                         }) {
-                            Text("Save")
+                            Text(stringResource(R.string.save))
                         }
                     }
                 }
@@ -308,7 +309,7 @@ fun FrequencyEditor(param: ParamItem, onSave: (String, String) -> Unit) {
     var text by remember { mutableStateOf("") }
     var unitIndex by remember { mutableStateOf(1) } // Default MHz
     var unitsExpanded by remember { mutableStateOf(false) }
-    val units = listOf("Hz", "MHz", "GHz")
+    val units = listOf(stringResource(R.string.hz), stringResource(R.string.mhz), stringResource(R.string.ghz))
     
     // Init logic - handle hex values
     LaunchedEffect(Unit) {
@@ -322,14 +323,16 @@ fun FrequencyEditor(param: ParamItem, onSave: (String, String) -> Unit) {
     val hzValue = remember(text, unitIndex) {
         com.ireddragonicy.konabessnext.core.editor.FrequencyDialogHelper.parseFrequencyToHz(text, unitIndex)
     }
-    val previewText = if (hzValue > 0) "= ${String.format(java.util.Locale.US, "%,d", hzValue)} Hz" else "= ? Hz"
+    
+    // Localized format for preview
+    val previewText = if (hzValue > 0) "= ${stringResource(R.string.format_hz, hzValue)}" else "= ? ${stringResource(R.string.hz)}"
 
     Column {
         Row(verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(
                 value = text,
                 onValueChange = { text = it },
-                label = { Text("Frequency") },
+                label = { Text(stringResource(R.string.frequency)) },
                 modifier = Modifier.weight(1f),
                 keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
                 singleLine = true
@@ -386,7 +389,7 @@ fun FrequencyEditor(param: ParamItem, onSave: (String, String) -> Unit) {
             },
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Save")
+            Text(stringResource(R.string.save))
         }
     }
 }
@@ -409,7 +412,7 @@ fun GenericEditor(param: ParamItem, onSave: (String, String) -> Unit) {
         OutlinedTextField(
             value = text,
             onValueChange = { text = it },
-            label = { Text("Value") },
+            label = { Text(stringResource(R.string.value)) },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true
         )
@@ -423,7 +426,7 @@ fun GenericEditor(param: ParamItem, onSave: (String, String) -> Unit) {
             },
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Save")
+            Text(stringResource(R.string.save))
         }
     }
 }

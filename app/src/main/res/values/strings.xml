@@ -293,4 +293,88 @@
     <string name="switch_chipset_confirm">Do you want to switch the chipset?</string>
     <string name="select_chipset">Select Chipset</string>
     <string name="edit_parameter">Edit Parameter</string>
+
+    <!-- Extracted Strings -->
+    <string name="no_gpu_tables_found">No GPU Frequency Tables Found</string>
+    <string name="try_redetecting">Try re-detecting chipsets or use Deep Scan.</string>
+    <string name="reload_data">Reload Data</string>
+    <string name="bin_id_format">Bin %1$d</string>
+    
+    <string name="import_from_file_desc">Load configuration from a file</string>
+    <string name="export_to_file_desc">Save configuration to a file</string>
+    <string name="import_from_clipboard_desc">Paste configuration from clipboard</string>
+    <string name="export_to_clipboard_desc">Copy configuration to clipboard</string>
+    <string name="export_raw_dts_desc">Save raw device tree source</string>
+    <string name="backup_boot_image">Backup Boot Image</string>
+    <string name="batch_dtb_to_dts">Batch DTB to DTS</string>
+    <string name="batch_dtb_to_dts_desc">Convert multiple .dtb files to human-readable text</string>
+    <string name="converted_files">Converted Files:</string>
+    <string name="open_file">Open File</string>
+    
+    <string name="save_changes">Save Changes</string>
+    <string name="saved">Saved</string>
+    <string name="view_mode_gui">GUI</string>
+    <string name="view_mode_text">Text</string>
+    <string name="view_mode_tree">Tree</string>
+    <string name="chipset">Chipset</string>
+    <string name="flash">Flash</string>
+    
+    <string name="level_format">Level %1$s</string>
+    <string name="saved_successfully">Saved successfully</string>
+    <string name="failed_to_load_format">Failed to load: %1$s</string>
+    <string name="history_text_edit">Text Edit</string>
+    <string name="reorder_frequencies">Reorder frequencies</string>
+    <string name="save_failed_format">Save failed: %1$s</string>
+    
+    <string name="no_compatible_chipset_found">No compatible chipset found</string>
+    <string name="detection_failed_format">Detection failed: %1$s</string>
+    <string name="repack_flash_success">Repack and Flash successful. Please reboot.</string>
+    <string name="repack_failed_format">Repack failed: %1$s</string>
+    <string name="backup_success_at_format">Backup successful at %1$s</string>
+    <string name="backup_failed_format">Backup failed: %1$s</string>
+    <string name="packed_successfully">Packed successfully</string>
+    <string name="packing_failed_format">Packing failed: %1$s</string>
+    <string name="flashed_success">Flashed successfully. Please reboot.</string>
+    <string name="flashing_failed_format">Flashing failed: %1$s</string>
+    <string name="deep_scan_no_results">Deep Scan: No recognizable GPU structures found.</string>
+    <string name="deep_scan_candidates_format">Deep Scan: Found %1$d candidates.</string>
+    <string name="deep_scan_failed_format">Deep Scan failed: %1$s</string>
+    
+    <string name="format_hz">%1$d Hz</string>
+    <string name="format_mhz">%1$d MHz</string>
+    <string name="format_ghz">%.2f GHz</string>
+    
+    <string name="palette_purple_teal">Purple &amp; Teal</string>
+    <string name="palette_blue_orange">Blue &amp; Orange</string>
+    <string name="palette_green_red">Green &amp; Red</string>
+    <string name="palette_pink_cyan">Pink &amp; Cyan</string>
+    <string name="palette_amoled">Pure AMOLED (Black)</string>
+    <string name="color_palette">Color Palette</string>
+    <string name="enter_frequency">Enter frequency</string>
+    <string name="edit_level">Edit Level</string>
+    <string name="value">Value</string>
+    <string name="frequency">Frequency</string>
+    <string name="raw_value_hint">Raw Value (Dec/Hex)</string>
+    <string name="custom_value">Custom Value</string>
+    
+    <!-- Settings Strings -->
+    <string name="settings_theme">Theme</string>
+    <string name="settings_theme_desc">Choose light, dark, or system theme</string>
+    <string name="settings_dynamic_color">Dynamic Color</string>
+    <string name="settings_dynamic_color_desc">Use wallpaper-based colors (Material You)</string>
+    <string name="settings_language">Language</string>
+    <string name="settings_language_desc">Select your preferred language</string>
+    <string name="settings_freq_unit_desc">Display frequency in Hz, MHz, or GHz</string>
+    <string name="settings_auto_save">Auto-save GPU Table</string>
+    <string name="settings_auto_save_desc">Automatically save changes to GPU frequency table</string>
+    <string name="settings_help_about">Help &amp; About</string>
+    <string name="settings_version_format">Version %1$s</string>
+    <string name="settings_color_palette">Color Palette</string>
+    <string name="settings_color_palette_desc">Choose your color scheme</string>
+    
+    <!-- Editor Button Strings -->
+    <string name="btn_add_freq_top">Add Frequency to Top</string>
+    <string name="btn_add_freq_bottom">Add Frequency to Bottom</string>
+    <string name="btn_back">Back</string>
+    <string name="btn_curve_editor">Curve Editor</string>
 </resources>

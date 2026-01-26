@@ -18,6 +18,7 @@
 
 # Keep Kotlin Metadata (Valid for R8)
 -keep class kotlin.Metadata { *; }
+-dontwarn kotlin.Metadata
 
 # Serialization (JSON) - Keep Data Models
 # Necessary because field names are used in JSON

@@ -98,3 +98,6 @@ lint/tmp/
 
 # KonaBess DTS files
 dts/
+
+# Localization Report
+localization_report.md

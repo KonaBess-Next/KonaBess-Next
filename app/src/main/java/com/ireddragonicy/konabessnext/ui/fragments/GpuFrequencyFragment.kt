@@ -152,7 +152,7 @@ class GpuFrequencyFragment : Fragment() {
                     if (state is UiState.Loading) {
                         showLoadingState()
                     } else if (state is UiState.Error) {
-                        showErrorState(activity, state.message)
+                        showErrorState(activity, state.message.asString(requireContext()))
                     } else if (state is UiState.Success) {
                         // Success handled
                     }

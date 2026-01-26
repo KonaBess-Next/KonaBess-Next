@@ -91,7 +91,7 @@ fun GpuEditorToolbar(
                     )
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        text = if (isDirty) "Save Changes" else "Saved", 
+                        text = if (isDirty) androidx.compose.ui.res.stringResource(R.string.save_changes) else androidx.compose.ui.res.stringResource(R.string.saved), 
                         style = MaterialTheme.typography.labelLarge
                     )
                 }
@@ -109,7 +109,7 @@ fun GpuEditorToolbar(
                 ) {
                     Icon(
                         painter = painterResource(R.drawable.ic_undo),
-                        contentDescription = "Undo",
+                        contentDescription = androidx.compose.ui.res.stringResource(R.string.undo),
                         modifier = Modifier.alpha(if (canUndo) 1f else 0.38f)
                     )
                 }
@@ -127,7 +127,7 @@ fun GpuEditorToolbar(
                 ) {
                     Icon(
                         painter = painterResource(R.drawable.ic_redo),
-                        contentDescription = "Redo",
+                        contentDescription = androidx.compose.ui.res.stringResource(R.string.redo),
                         modifier = Modifier.alpha(if (canRedo) 1f else 0.38f)
                     )
                 }
@@ -149,7 +149,7 @@ fun GpuEditorToolbar(
                     }) {
                         Icon(
                             painter = painterResource(R.drawable.ic_history), 
-                            contentDescription = "History",
+                            contentDescription = androidx.compose.ui.res.stringResource(R.string.history),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -181,9 +181,9 @@ fun GpuEditorToolbar(
                         ) {
                             Text(
                                 text = when (mode) {
-                                    SharedGpuViewModel.ViewMode.MAIN_EDITOR -> "GUI"
-                                    SharedGpuViewModel.ViewMode.TEXT_ADVANCED -> "Text"
-                                    SharedGpuViewModel.ViewMode.VISUAL_TREE -> "Tree"
+                                    SharedGpuViewModel.ViewMode.MAIN_EDITOR -> androidx.compose.ui.res.stringResource(R.string.view_mode_gui)
+                                    SharedGpuViewModel.ViewMode.TEXT_ADVANCED -> androidx.compose.ui.res.stringResource(R.string.view_mode_text)
+                                    SharedGpuViewModel.ViewMode.VISUAL_TREE -> androidx.compose.ui.res.stringResource(R.string.view_mode_tree)
                                 },
                                 style = MaterialTheme.typography.labelMedium
                             )
@@ -199,7 +199,7 @@ fun GpuEditorToolbar(
                         },
                         colors = IconButtonDefaults.filledTonalIconButtonColors()
                     ) {
-                        Icon(painter = painterResource(R.drawable.ic_developer_board), contentDescription = "Chipset")
+                        Icon(painter = painterResource(R.drawable.ic_developer_board), contentDescription = androidx.compose.ui.res.stringResource(R.string.chipset))
                     }
                 }
 
@@ -215,7 +215,7 @@ fun GpuEditorToolbar(
                 ) {
                     Icon(painter = painterResource(R.drawable.ic_flash), contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("Flash", style = MaterialTheme.typography.labelLarge)
+                    Text(androidx.compose.ui.res.stringResource(R.string.flash), style = MaterialTheme.typography.labelLarge)
                 }
             }
         }

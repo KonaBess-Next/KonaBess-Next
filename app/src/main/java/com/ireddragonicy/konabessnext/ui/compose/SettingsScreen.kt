@@ -45,17 +45,32 @@ fun SettingsScreen(
     onHelpClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val settingsItems = remember(currentTheme, isDynamicColor, currentColorPalette, currentLanguage, currentFreqUnit, isAutoSave) {
+    val themeTitle = androidx.compose.ui.res.stringResource(R.string.settings_theme)
+    val themeDesc = androidx.compose.ui.res.stringResource(R.string.settings_theme_desc)
+    val dynamicColorTitle = androidx.compose.ui.res.stringResource(R.string.settings_dynamic_color)
+    val dynamicColorDesc = androidx.compose.ui.res.stringResource(R.string.settings_dynamic_color_desc)
+    val paletteTitle = androidx.compose.ui.res.stringResource(R.string.settings_color_palette)
+    val paletteDesc = androidx.compose.ui.res.stringResource(R.string.settings_color_palette_desc)
+    val langTitle = androidx.compose.ui.res.stringResource(R.string.settings_language)
+    val langDesc = androidx.compose.ui.res.stringResource(R.string.settings_language_desc)
+    val freqTitle = androidx.compose.ui.res.stringResource(R.string.gpu_freq_unit)
+    val freqDesc = androidx.compose.ui.res.stringResource(R.string.settings_freq_unit_desc)
+    val autoSaveTitle = androidx.compose.ui.res.stringResource(R.string.settings_auto_save)
+    val autoSaveDesc = androidx.compose.ui.res.stringResource(R.string.settings_auto_save_desc)
+    val helpTitle = androidx.compose.ui.res.stringResource(R.string.settings_help_about)
+    val versionTitle = androidx.compose.ui.res.stringResource(R.string.settings_version_format, BuildConfig.VERSION_NAME)
+
+    val settingsItems = remember(currentTheme, isDynamicColor, currentColorPalette, currentLanguage, currentFreqUnit, isAutoSave, themeTitle, langTitle) {
         buildList {
-            add(SettingItem.Clickable(R.drawable.ic_dark_mode, "Theme", "Choose light, dark, or system theme", currentTheme))
-            add(SettingItem.Toggle(R.drawable.ic_tune, "Dynamic Color", "Use wallpaper-based colors (Material You)", isDynamicColor))
+            add(SettingItem.Clickable(R.drawable.ic_dark_mode, themeTitle, themeDesc, currentTheme))
+            add(SettingItem.Toggle(R.drawable.ic_tune, dynamicColorTitle, dynamicColorDesc, isDynamicColor))
             if (!isDynamicColor) {
-                add(SettingItem.Clickable(R.drawable.ic_tune, "Color Palette", "Choose your color scheme", currentColorPalette))
+                add(SettingItem.Clickable(R.drawable.ic_tune, paletteTitle, paletteDesc, currentColorPalette))
             }
-            add(SettingItem.Clickable(R.drawable.ic_language, "Language", "Select your preferred language", currentLanguage))
-            add(SettingItem.Clickable(R.drawable.ic_frequency, "GPU Frequency Unit", "Display frequency in Hz, MHz, or GHz", currentFreqUnit))
-            add(SettingItem.Toggle(R.drawable.ic_save, "Auto-save GPU Table", "Automatically save changes to GPU frequency table", isAutoSave))
-            add(SettingItem.Clickable(R.drawable.ic_help, "Help & About", "Version ${BuildConfig.VERSION_NAME}", ""))
+            add(SettingItem.Clickable(R.drawable.ic_language, langTitle, langDesc, currentLanguage))
+            add(SettingItem.Clickable(R.drawable.ic_frequency, freqTitle, freqDesc, currentFreqUnit))
+            add(SettingItem.Toggle(R.drawable.ic_save, autoSaveTitle, autoSaveDesc, isAutoSave))
+            add(SettingItem.Clickable(R.drawable.ic_help, helpTitle, versionTitle, ""))
         }
     }
 
@@ -80,11 +95,11 @@ fun SettingsScreen(
                                 currentValue = item.currentValue,
                                 onClick = {
                                     when (item.title) {
-                                        "Theme" -> onThemeClick()
-                                        "Color Palette" -> onColorPaletteClick()
-                                        "Language" -> onLanguageClick()
-                                        "GPU Frequency Unit" -> onFreqUnitClick()
-                                        "Help & About" -> onHelpClick()
+                                        themeTitle -> onThemeClick()
+                                        paletteTitle -> onColorPaletteClick()
+                                        langTitle -> onLanguageClick()
+                                        freqTitle -> onFreqUnitClick()
+                                        helpTitle -> onHelpClick()
                                     }
                                 }
                             )
@@ -97,8 +112,8 @@ fun SettingsScreen(
                                 isChecked = item.isChecked,
                                 onToggle = {
                                     when (item.title) {
-                                        "Dynamic Color" -> onDynamicColorToggle()
-                                        "Auto-save GPU Table" -> onAutoSaveToggle()
+                                        dynamicColorTitle -> onDynamicColorToggle()
+                                        autoSaveTitle -> onAutoSaveToggle()
                                     }
                                 }
                             )

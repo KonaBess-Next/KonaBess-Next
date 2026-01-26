@@ -10,6 +10,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.ireddragonicy.konabessnext.R
 import com.ireddragonicy.konabessnext.utils.ChipStringHelper
@@ -35,12 +36,12 @@ fun GpuBinList(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 itemsIndexed(bins) { index, bin ->
-                    val binName = remember(bin.id) {
+                    val binName = remember(bin.id, context) {
                         try {
                             if (context is android.app.Activity) {
                                 ChipStringHelper.convertBins(bin.id, context)
                             } else {
-                                "Bin ${bin.id}"
+                                context.getString(R.string.bin_id_format, bin.id)
                             }
                         } catch (e: Exception) {
                             context.getString(R.string.unknown_table) + bin.id
@@ -67,19 +68,19 @@ fun GpuBinList(
                                      tint = MaterialTheme.colorScheme.onSurfaceVariant
                                  )
                                  Text(
-                                     text = "No GPU Frequency Tables Found",
+                                     text = stringResource(R.string.no_gpu_tables_found),
                                      style = MaterialTheme.typography.titleMedium,
                                      color = MaterialTheme.colorScheme.onSurfaceVariant
                                  )
                                  Spacer(modifier = Modifier.height(8.dp))
                                  Text(
-                                      text = "Try re-detecting chipsets or use Deep Scan.",
+                                      text = stringResource(R.string.try_redetecting),
                                       style = MaterialTheme.typography.bodySmall,
                                       color = MaterialTheme.colorScheme.onSurfaceVariant
                                  )
                                  Spacer(modifier = Modifier.height(16.dp))
                                  Button(onClick = onReload) {
-                                     Text("Reload Data")
+                                     Text(stringResource(R.string.reload_data))
                                  }
                              }
                          }
