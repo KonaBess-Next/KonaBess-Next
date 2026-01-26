@@ -22,7 +22,12 @@ jobs:
       with:
         java-version: '21'
         distribution: 'temurin'
-        cache: gradle
+
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v3
+      with:
+        # Enable build cache to be uploaded/downloaded
+        cache-read-only: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master' }}
 
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
@@ -73,6 +78,8 @@ jobs:
         if [ ! -z "${{ secrets.SIGNING_KEY }}" ]; then
           echo "Building with release keystore..."
           ./gradlew assembleRelease \
+            --build-cache \
+            --parallel \
             -PciVersionName="${{ steps.version.outputs.version }}" \
             -PciVersionCode="${{ steps.version.outputs.code }}" \
             -Pandroid.injected.signing.store.file=${{ github.workspace }}/keystore.jks \
@@ -83,6 +90,8 @@ jobs:
         else
           echo "Using debug signing for release build."
           ./gradlew assembleRelease \
+            --build-cache \
+            --parallel \
             -PciVersionName="${{ steps.version.outputs.version }}" \
             -PciVersionCode="${{ steps.version.outputs.code }}" \
             -Pandroid.injected.signing.store.file=$HOME/.android/debug.keystore \
@@ -93,7 +102,7 @@ jobs:
         fi
 
     - name: Build Debug APK
-      run: ./gradlew assembleDebug -PciVersionName="${{ steps.version.outputs.version }}" -PciVersionCode="${{ steps.version.outputs.code }}" --stacktrace
+      run: ./gradlew assembleDebug --build-cache --parallel -PciVersionName="${{ steps.version.outputs.version }}" -PciVersionCode="${{ steps.version.outputs.code }}" --stacktrace
 
     - name: Rename APKs
       run: |
