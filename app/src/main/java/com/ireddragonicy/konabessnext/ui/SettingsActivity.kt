@@ -122,6 +122,7 @@ class SettingsActivity : AppCompatActivity() {
                     currentTheme = currentThemeName,
                     isDynamicColor = prefs.getBoolean(KEY_DYNAMIC_COLOR, true),
                     currentColorPalette = currentColorPaletteName,
+                    currentUserPaletteId = savedColorPalette,
                     currentLanguage = currentLanguageName,
                     currentFreqUnit = currentFreqUnitName,
                     isAutoSave = prefs.getBoolean(KEY_AUTO_SAVE_GPU_TABLE, false),

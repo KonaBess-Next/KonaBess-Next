@@ -37,7 +37,16 @@ class DeviceViewModel @Inject constructor(
 
     private val _recommendedIndex = MutableStateFlow<Int?>(null)
     val recommendedIndex: StateFlow<Int?> = _recommendedIndex.asStateFlow()
+    init {
+        Log.d("KonaBessVM", "DeviceViewModel created: ${System.identityHashCode(this)}")
+    }
+
     fun detectChipset() {
+        Log.d("KonaBessVM", "detectChipset called. Current state: ${_detectionState.value}, isPrepared: ${_isPrepared.value}")
+        if (_detectionState.value is UiState.Loading) {
+            Log.d("KonaBessVM", "detectChipset: Already loading, ignoring.")
+            return
+        }
         _detectionState.value = UiState.Loading
         viewModelScope.launch {
             try {

@@ -16,7 +16,7 @@ import java.util.regex.Pattern
 
 object KonaBessCore {
     // Constants
-    private val REQUIRED_BINARIES = arrayOf("dtc", "magiskboot")
+    private val REQUIRED_BINARIES = arrayOf("magiskboot")
     private val DTB_MAGIC = byteArrayOf(0xD0.toByte(), 0x0D.toByte(), 0xFE.toByte(), 0xED.toByte())
     private const val DTB_HEADER_SIZE = 8
     private const val BYTE_MASK = 0xFF
@@ -170,18 +170,20 @@ object KonaBessCore {
         unpackBootImage(context)
         dtb_num = dtbSplit(context)
 
-        val batchCmd = StringBuilder()
-        batchCmd.append("cd ").append(filesDir)
-
         for (i in 0 until dtb_num) {
-            batchCmd.append(" && ./dtc -I dtb -O dts ")
-                    .append(i).append(".dtb -o ").append(i).append(".dts")
-                    .append(" && rm -f ").append(i).append(".dtb")
+            val dtbFile = File(filesDir, "$i.dtb")
+            val dtsFile = File(filesDir, "$i.dts")
+            
+            try {
+                com.ireddragonicy.konabessnext.core.native.DtcNative.dtbToDts(dtbFile.absolutePath, dtsFile.absolutePath)
+                dtbFile.delete()
+            } catch (e: Exception) {
+                throw IOException("DTB to DTS conversion failed for index $i: ${e.message}", e)
+            }
         }
         
-        val output = RootHelper.execShForOutput(batchCmd.toString())
         if (dtb_num > 0 && !File(filesDir, "${dtb_num - 1}.dts").exists()) {
-            throw IOException("DTB to DTS batch conversion failed: " + output.joinToString("\n"))
+            throw IOException("DTB to DTS conversion verification failed.")
         }
     }
 
@@ -264,13 +266,21 @@ object KonaBessCore {
     @JvmStatic
     @Throws(IOException::class)
     fun dts2bootImage(context: Context) {
+        // Convert all DTS back to DTB
+        for (i in 0 until dtb_num) {
+            val dtsPath = File(filesDir, "$i.dts").absolutePath
+            val dtbPath = File(filesDir, "$i.dtb").absolutePath
+            try {
+                com.ireddragonicy.konabessnext.core.native.DtcNative.dtsToDtb(dtsPath, dtbPath)
+            } catch (e: Exception) {
+                throw IOException("DTS to DTB conversion failed for index $i: ${e.message}", e)
+            }
+        }
+
+        // Repack using magiskboot
         val batchCmd = StringBuilder()
         batchCmd.append("cd ").append(filesDir)
         
-        for (i in 0 until dtb_num) {
-            batchCmd.append(" && ./dtc -I dts -O dtb ")
-                    .append(i).append(".dts -o ").append(i).append(".dtb")
-        }
         val outputFilename = if (dtb_type == DtbType.KERNEL_DTB) "kernel_dtb" else "dtb"
         batchCmd.append(" && cat")
         for (i in 0 until dtb_num) {

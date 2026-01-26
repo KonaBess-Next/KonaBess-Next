@@ -261,13 +261,10 @@ class ImportExportViewModel @Inject constructor(
             val total = sourceUris.size
             var successCount = 0
             val successPaths = StringBuilder()
-            val dtcPath = File(context.filesDir, "dtc").absolutePath
+            // val dtcPath = File(context.filesDir, "dtc").absolutePath // Removed shell dtc
             val cacheDir = context.cacheDir
             
             try {
-                // Ensure dtc is executable
-                RootHelper.exec("chmod 755 $dtcPath")
-
                 sourceUris.forEachIndexed { index, uri ->
                     val currentProgress = "Converting ${index + 1}/$total..."
                     _batchProgress.value = currentProgress
@@ -301,10 +298,20 @@ class ImportExportViewModel @Inject constructor(
                         val tempOutput = File(cacheDir, "temp_output.dts")
                         if (tempOutput.exists()) tempOutput.delete()
 
-                        // Step C: Execute
-                        val result = RootHelper.exec("$dtcPath -I dtb -O dts \"${tempInput.absolutePath}\" -o \"${tempOutput.absolutePath}\"")
+                        // Step C: Execute JNI
+                        var isSuccess = false
+                        var errorMsg = ""
+                        try {
+                            com.ireddragonicy.konabessnext.core.native.DtcNative.dtbToDts(
+                                tempInput.absolutePath, 
+                                tempOutput.absolutePath
+                            )
+                            isSuccess = true
+                        } catch (e: Exception) {
+                            errorMsg = e.message ?: "Unknown JNI error"
+                        }
                         
-                        if (result.isSuccess && tempOutput.exists() && tempOutput.length() > 0) {
+                        if (isSuccess && tempOutput.exists() && tempOutput.length() > 0) {
                             // Step D: Save to same folder or fallback
                             if (realPath != null) {
                                 val sourceFolder = File(realPath).parent
@@ -330,8 +337,7 @@ class ImportExportViewModel @Inject constructor(
                                 _errorEvent.emit("Could not resolve path for $originalName. Skipping.")
                             }
                         } else {
-                            val errorLog = result.err.joinToString("\n")
-                            _errorEvent.emit("Failed to convert $originalName: $errorLog")
+                            _errorEvent.emit("Failed to convert $originalName: $errorMsg")
                         }
 
                         // Step E: Cleanup

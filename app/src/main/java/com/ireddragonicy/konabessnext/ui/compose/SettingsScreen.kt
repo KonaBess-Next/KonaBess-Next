@@ -33,6 +33,7 @@ fun SettingsScreen(
     currentTheme: String,
     isDynamicColor: Boolean,
     currentColorPalette: String,
+    currentUserPaletteId: Int, // Add this
     currentLanguage: String,
     currentFreqUnit: String,
     isAutoSave: Boolean,
@@ -74,7 +75,10 @@ fun SettingsScreen(
         }
     }
 
-    com.ireddragonicy.konabessnext.ui.theme.KonaBessTheme {
+    com.ireddragonicy.konabessnext.ui.theme.KonaBessTheme(
+        dynamicColor = isDynamicColor,
+        colorPalette = currentUserPaletteId
+    ) {
         Surface(
             modifier = modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.background

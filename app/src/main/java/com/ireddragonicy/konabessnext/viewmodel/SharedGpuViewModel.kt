@@ -177,7 +177,11 @@ class SharedGpuViewModel @Inject constructor(
 
     private var loadJob: kotlinx.coroutines.Job? = null
 
-    fun loadData() {
+    fun loadData(force: Boolean = false) {
+        if (!force && _workbenchState.value is WorkbenchState.Ready) {
+            android.util.Log.d("KonaBessVM", "loadData: Already ready, skipping reload")
+            return
+        }
         android.util.Log.d("KonaBessVM", "loadData called. Cancelling previous job: ${loadJob?.isActive}")
         loadJob?.cancel()
         

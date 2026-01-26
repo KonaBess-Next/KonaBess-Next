@@ -64,7 +64,13 @@ import androidx.compose.ui.res.stringResource
 
 @AndroidEntryPoint
 class GpuFrequencyFragment : Fragment() {
+    companion object {
+        private const val CONTAINER_ID = 0x123456
+    }
     private var contentContainer: LinearLayout? = null
+    private var toolbarContainer: LinearLayout? = null
+    private var statusContainer: android.widget.FrameLayout? = null
+    private var fragmentContainer: android.widget.FrameLayout? = null
     // PreparationListener removed
     private var needsReload = false
 
@@ -87,9 +93,53 @@ class GpuFrequencyFragment : Fragment() {
         inflater: LayoutInflater, container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View? {
-        contentContainer = LinearLayout(requireContext())
-        contentContainer!!.orientation = LinearLayout.VERTICAL
-        // Removed padding for edge-to-edge immersive UI
+        contentContainer = LinearLayout(requireContext()).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+        }
+
+        // Toolbar Container (Toolbar + Warnings)
+        toolbarContainer = LinearLayout(requireContext()).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
+        }
+        contentContainer!!.addView(toolbarContainer)
+
+        // Main Frame for switching between content and status (Loading/Error)
+        val mainFrame = android.widget.FrameLayout(requireContext()).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                0, 1.0f
+            )
+        }
+        contentContainer!!.addView(mainFrame)
+
+        // Status Container (Loading, Error, Prompt)
+        statusContainer = android.widget.FrameLayout(requireContext()).apply {
+            layoutParams = android.widget.FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+            visibility = View.GONE
+        }
+        mainFrame.addView(statusContainer)
+
+        // Fragment Container (The Editor) - Stable ID
+        fragmentContainer = android.widget.FrameLayout(requireContext()).apply {
+            id = CONTAINER_ID
+            layoutParams = android.widget.FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+            visibility = View.GONE
+        }
+        mainFrame.addView(fragmentContainer)
 
         loadContent()
         return contentContainer
@@ -109,35 +159,37 @@ class GpuFrequencyFragment : Fragment() {
                 ) { isPrepared, chipset -> isPrepared to chipset }
                 .distinctUntilChanged()
                 .collect { (isPrepared, chipset) ->
-                    android.util.Log.d("KonaBessUI", "Observer: isPrepared=$isPrepared, chipset=${chipset?.id}")
+                    android.util.Log.d("KonaBessUI", "Observer: isPrepared=$isPrepared, chipset=${chipset?.id}, ViewModel=${System.identityHashCode(deviceViewModel)}")
                     if (isPrepared && chipset != null) {
-                         android.util.Log.d("KonaBessUI", "Observer: Triggering loadData()")
-                         gpuFrequencyViewModel.resetSelection()
-                         sharedViewModel.loadData()
+                         android.util.Log.d("KonaBessUI", "Observer: Triggering loadData check")
+                         val currentState = sharedViewModel.workbenchState.value
+                         android.util.Log.d("KonaBessUI", "Observer: sharedViewModel state=$currentState")
+                         if (currentState !is com.ireddragonicy.konabessnext.viewmodel.SharedGpuViewModel.WorkbenchState.Ready) {
+                             android.util.Log.d("KonaBessUI", "Observer: Loading data...")
+                             gpuFrequencyViewModel.resetSelection()
+                             sharedViewModel.loadData(false)
+                         } else {
+                             android.util.Log.d("KonaBessUI", "Observer: Data already ready. Skipping load.")
+                         }
                     }
                 }
             }
 
             // Observe binsState to show GPU editor when data is loaded
+            // Combine binsState and isPrepared to strictly control UI visibility
             launch {
-                gpuFrequencyViewModel.binsState.collect { state ->
+                kotlinx.coroutines.flow.combine(
+                    gpuFrequencyViewModel.binsState,
+                    deviceViewModel.isPrepared
+                ) { state, isPrepared -> state to isPrepared }
+                .collect { (state, isPrepared) ->
+                    // Only update UI if device is prepared
+                    if (!isPrepared) return@collect
+
                     when (state) {
-                        is UiState.Loading -> {
-                            if (deviceViewModel.isPrepared.value) {
-                                showLoadingState()
-                            }
-                        }
-                        is UiState.Success -> {
-                            if (deviceViewModel.isPrepared.value) {
-                                showGpuEditor(activity)
-                            }
-                        }
-                        is UiState.Error -> {
-                            if (deviceViewModel.isPrepared.value) {
-                                // Show error for GPU loading
-                                showErrorState(activity)
-                            }
-                        }
+                        is UiState.Loading -> showLoadingState()
+                        is UiState.Success -> showGpuEditor(activity)
+                        is UiState.Error -> showErrorState(activity)
                     }
                 }
             }
@@ -228,41 +280,44 @@ class GpuFrequencyFragment : Fragment() {
         }
     }
 
-    private var gpuEditorContainer: LinearLayout? = null
-    private var dataArea: LinearLayout? = null
-
+    private fun setStatusView(view: View?) {
+        statusContainer?.removeAllViews()
+        if (view != null) {
+            statusContainer?.addView(view)
+            statusContainer?.visibility = View.VISIBLE
+            fragmentContainer?.visibility = View.GONE
+            toolbarContainer?.visibility = View.GONE
+        } else {
+            statusContainer?.visibility = View.GONE
+        }
+    }
+    
     @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
     private fun showGpuEditor(activity: MainActivity) {
         if (!isAdded) return
 
-        contentContainer!!.removeAllViews()
-        contentContainer!!.gravity = Gravity.NO_GRAVITY
-        
+        // Clear previous toolbar/warnings
+        toolbarContainer?.removeAllViews()
+        toolbarContainer?.visibility = View.VISIBLE
+        statusContainer?.visibility = View.GONE
+        fragmentContainer?.visibility = View.VISIBLE
 
-        
-        // Root Workbench Container
-        gpuEditorContainer = LinearLayout(requireContext())
-        gpuEditorContainer!!.orientation = LinearLayout.VERTICAL
-        gpuEditorContainer!!.layoutParams = LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
-        )
-        contentContainer!!.addView(gpuEditorContainer)
-        
-        // Compose Toolbar (replaces legacy GpuActionToolbar)
+        // Compose Toolbar
         val toolbarComposeView = androidx.compose.ui.platform.ComposeView(requireContext())
         toolbarComposeView.setContent {
-            com.ireddragonicy.konabessnext.ui.theme.KonaBessTheme {
+            val prefs = requireContext().getSharedPreferences(com.ireddragonicy.konabessnext.ui.SettingsActivity.PREFS_NAME, android.content.Context.MODE_PRIVATE)
+            val isDynamic = prefs.getBoolean(com.ireddragonicy.konabessnext.ui.SettingsActivity.KEY_DYNAMIC_COLOR, true)
+            val paletteId = prefs.getInt(com.ireddragonicy.konabessnext.ui.SettingsActivity.KEY_COLOR_PALETTE, 0)
+            com.ireddragonicy.konabessnext.ui.theme.KonaBessTheme(dynamicColor = isDynamic, colorPalette = paletteId) {
                 val isDirty by gpuFrequencyViewModel.isDirty.collectAsState()
                 val canUndo by gpuFrequencyViewModel.canUndo.collectAsState()
                 val canRedo by gpuFrequencyViewModel.canRedo.collectAsState()
                 val history by gpuFrequencyViewModel.history.collectAsState()
                 val currentMode by sharedViewModel.viewMode.collectAsState()
-                val definitions by sharedViewModel.definitions.collectAsState()
                 val currentChip by sharedViewModel.currentChip.collectAsState()
 
                 var showSheet by remember { mutableStateOf(false) }
                 var sheetType by remember { mutableStateOf("NONE") }
-                @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
                 val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
                 if (showSheet) {
@@ -281,26 +336,11 @@ class GpuFrequencyFragment : Fragment() {
                                 .navigationBarsPadding()
                         ) {
                             if (sheetType == "HISTORY") {
-                                Text(
-                                    text = "Edit History",
-                                    style = MaterialTheme.typography.headlineSmall,
-                                    modifier = Modifier.padding(bottom = 16.dp)
-                                )
-                                LazyColumn(
-                                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
+                                Text("Edit History", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(bottom = 16.dp))
+                                LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                     items(history) { item ->
-                                        Card(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            colors = CardDefaults.cardColors(
-                                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                                            )
-                                        ) {
-                                            Text(
-                                                text = item,
-                                                modifier = Modifier.padding(16.dp),
-                                                style = MaterialTheme.typography.bodyMedium
-                                            )
+                                        Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)) {
+                                            Text(text = item, modifier = Modifier.padding(16.dp), style = MaterialTheme.typography.bodyMedium)
                                         }
                                     }
                                 }
@@ -311,11 +351,7 @@ class GpuFrequencyFragment : Fragment() {
                                 val detectionState by deviceViewModel.detectionState.collectAsState()
                                 val selectedDtb by deviceViewModel.selectedChipset.collectAsState()
                                 
-                                Text(
-                                    text = "Select Data Source (DTS)",
-                                    style = MaterialTheme.typography.headlineSmall,
-                                    modifier = Modifier.padding(bottom = 8.dp)
-                                )
+                                Text("Select Data Source (DTS)", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(bottom = 8.dp))
                                 Text(
                                     text = "Multi-DTS device detected. Please select which configuration to edit.",
                                     style = MaterialTheme.typography.bodySmall,
@@ -338,71 +374,30 @@ class GpuFrequencyFragment : Fragment() {
                                         Text("Reading boot image...", style = MaterialTheme.typography.bodyMedium)
                                     }
                                 } else {
-                                    LazyColumn(
-                                        modifier = Modifier.heightIn(max = 400.dp),
-                                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
+                                    LazyColumn(modifier = Modifier.heightIn(max = 400.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                         items(dtbs) { dtb ->
                                             val isSelected = dtb.id == selectedDtb?.id
                                             Card(
-                                                onClick = {
-                                                   if (!isSelected) {
-                                                       gpuFrequencyViewModel.save(false)
-                                                       deviceViewModel.selectChipset(dtb)
-                                                   }
-                                                   showSheet = false
+                                                onClick = { 
+                                                    if (!isSelected) { gpuFrequencyViewModel.save(false); deviceViewModel.selectChipset(dtb) }
+                                                    showSheet = false 
                                                 },
                                                 modifier = Modifier.fillMaxWidth(),
-                                                colors = CardDefaults.cardColors(
-                                                    containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer 
-                                                                    else MaterialTheme.colorScheme.surfaceContainerHigh
-                                                )
+                                                colors = CardDefaults.cardColors(containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh)
                                             ) {
-                                                Row(
-                                                    modifier = Modifier.padding(16.dp),
-                                                    verticalAlignment = Alignment.CenterVertically
-                                                ) {
+                                                Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                                                     Column(modifier = Modifier.weight(1f)) {
-                                                        Text(
-                                                            text = "DTS ${dtb.id}: ${dtb.type.name}",
-                                                            style = MaterialTheme.typography.titleMedium
-                                                        )
-                                                        Text(
-                                                            text = "ID: ${dtb.type.id}",
-                                                            style = MaterialTheme.typography.bodySmall
-                                                        )
+                                                        Text("DTS ${dtb.id}: ${dtb.type.name}", style = MaterialTheme.typography.titleMedium)
+                                                        Text("ID: ${dtb.type.id}", style = MaterialTheme.typography.bodySmall)
                                                     }
-                                                    if (isSelected) {
-                                                        Icon(
-                                                            painter = painterResource(R.drawable.ic_check),
-                                                            contentDescription = null,
-                                                            tint = MaterialTheme.colorScheme.primary
-                                                        )
-                                                    }
+                                                    if (isSelected) Icon(painter = painterResource(R.drawable.ic_check), contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                                                 }
                                             }
                                         }
-
                                         item {
-                                            Card(
-                                                onClick = {
-                                                    showSheet = false
-                                                    showManualSetupDialog(requireActivity() as MainActivity)
-                                                },
-                                                modifier = Modifier.fillMaxWidth(),
-                                                colors = CardDefaults.cardColors(
-                                                    containerColor = MaterialTheme.colorScheme.surfaceContainer
-                                                )
-                                            ) {
-                                                Row(
-                                                    modifier = Modifier.padding(16.dp),
-                                                    verticalAlignment = Alignment.CenterVertically
-                                                ) {
-                                                    Icon(
-                                                        painter = painterResource(R.drawable.ic_search),
-                                                        contentDescription = null,
-                                                        modifier = Modifier.padding(end = 16.dp)
-                                                    )
+                                            Card(onClick = { showSheet = false; showManualSetupDialog(requireActivity() as MainActivity) }, modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)) {
+                                                Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                                                    Icon(painter = painterResource(R.drawable.ic_search), contentDescription = null, modifier = Modifier.padding(end = 16.dp))
                                                     Column(modifier = Modifier.weight(1f)) {
                                                         Text(
                                                             text = "Manual Setup / Deep Scan",
@@ -428,35 +423,15 @@ class GpuFrequencyFragment : Fragment() {
                 }
 
                 com.ireddragonicy.konabessnext.ui.compose.GpuEditorToolbar(
-                    isDirty = isDirty,
-                    canUndo = canUndo,
-                    canRedo = canRedo,
-                    historyCount = history.size,
-                    currentViewMode = currentMode,
-                    showChipsetSelector = true,
-                    onSave = { gpuFrequencyViewModel.save(true) },
-                    onUndo = { gpuFrequencyViewModel.undo() },
-                    onRedo = { gpuFrequencyViewModel.redo() },
-                    onShowHistory = { 
-                        sheetType = "HISTORY"
-                        showSheet = true
-                    },
-                    onViewModeChanged = { mode -> updateViewMode(mode) },
-                    onChipsetClick = {
-                        sheetType = "CHIPSET"
-                        showSheet = true
-                    },
+                    isDirty = isDirty, canUndo = canUndo, canRedo = canRedo, historyCount = history.size, currentViewMode = currentMode,
+                    showChipsetSelector = true, onSave = { gpuFrequencyViewModel.save(true) }, onUndo = { gpuFrequencyViewModel.undo() },
+                    onRedo = { gpuFrequencyViewModel.redo() }, onShowHistory = { sheetType = "HISTORY"; showSheet = true },
+                    onViewModeChanged = { mode -> updateViewMode(mode) }, onChipsetClick = { sheetType = "CHIPSET"; showSheet = true },
                     onFlashClick = { activity.startRepack() }
                 )
             }
         }
-        
-        val density = resources.displayMetrics.density
-        val toolbarParams = LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-        )
-        toolbarParams.setMargins(0, 0, 0, 0)
-        gpuEditorContainer!!.addView(toolbarComposeView, toolbarParams)
+        toolbarContainer!!.addView(toolbarComposeView)
 
         // Check for custom/unsupported definition (Added below toolbar)
         val currentChip = deviceViewModel.currentChipType
@@ -480,57 +455,43 @@ class GpuFrequencyFragment : Fragment() {
             warningText.typeface = android.graphics.Typeface.DEFAULT_BOLD
             
             warningCard.addView(warningText)
-            gpuEditorContainer!!.addView(warningCard)
+            toolbarContainer!!.addView(warningCard)
         }
 
-        // Fragment Container for Frames (GUI / Text / Tree)
-        val fragmentContainer = android.widget.FrameLayout(requireContext())
-        fragmentContainer.id = View.generateViewId()
-        val containerParams = LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1.0f
-        )
-        gpuEditorContainer!!.addView(fragmentContainer, containerParams)
-
-        // Initialize Fragments
+        // Initialize Fragments if needed
         val fm = childFragmentManager
         val transaction = fm.beginTransaction()
         
-        // Define tags
         val TAG_GUI = "TAG_GUI"
         val TAG_TEXT = "TAG_TEXT"
         val TAG_TREE = "TAG_TREE"
         
-        // Check if already added to avoid duplication on config change
-        // Check if already added to avoid duplication on config change
-        // Helper to detach existing fragments hooked to dead container
-        fun removeIfPresent(tag: String) {
-            val f = fm.findFragmentByTag(tag)
-            if (f != null) transaction.remove(f)
+        // We only add if they don't exist. If they exist (restored), we just show the right one.
+        var guiFragment = fm.findFragmentByTag(TAG_GUI)
+        var textFragment = fm.findFragmentByTag(TAG_TEXT)
+        var treeFragment = fm.findFragmentByTag(TAG_TREE)
+        
+        if (guiFragment == null) {
+            guiFragment = com.ireddragonicy.konabessnext.ui.fragments.GuiEditorFragment()
+            transaction.add(CONTAINER_ID, guiFragment, TAG_GUI)
         }
-
-        // Clean slate: Remove any fragments that might be clinging to a stale container ID
-        removeIfPresent(TAG_GUI)
-        removeIfPresent(TAG_TEXT)
-        removeIfPresent(TAG_TREE)
+        if (textFragment == null) {
+            textFragment = com.ireddragonicy.konabessnext.ui.fragments.UnifiedRawDtsFragment.newInstance()
+            transaction.add(CONTAINER_ID, textFragment, TAG_TEXT)
+        }
+        if (treeFragment == null) {
+            treeFragment = com.ireddragonicy.konabessnext.ui.fragments.VisualTreeFragment.newInstance()
+            transaction.add(CONTAINER_ID, treeFragment, TAG_TREE)
+        }
         
-        // Re-add fragments fresh
-        val guiFragment = com.ireddragonicy.konabessnext.ui.fragments.GuiEditorFragment()
-        val textFragment = com.ireddragonicy.konabessnext.ui.fragments.UnifiedRawDtsFragment.newInstance()
-        val treeFragment = com.ireddragonicy.konabessnext.ui.fragments.VisualTreeFragment.newInstance()
+        // Ensure state match
+        // We'll let updateViewMode handle visibility logic, but here we commit additions
+        if (!transaction.isEmpty) {
+            transaction.commitNow()
+        }
         
-        transaction.add(fragmentContainer.id, guiFragment, TAG_GUI)
-        transaction.add(fragmentContainer.id, textFragment, TAG_TEXT)
-        transaction.add(fragmentContainer.id, treeFragment, TAG_TREE)
-        
-        // Default State: Show GUI only
-        transaction.show(guiFragment)
-        transaction.hide(textFragment)
-        transaction.hide(treeFragment)
-        
-        transaction.commitNow()
-        
-        // Sync ViewModel state (default)
-        sharedViewModel.switchViewMode(com.ireddragonicy.konabessnext.viewmodel.SharedGpuViewModel.ViewMode.MAIN_EDITOR)
+        // Trigger mode update to show correct one
+        sharedViewModel.viewMode.value.let { updateViewMode(it) }
     }
 
     private fun updateViewMode(mode: com.ireddragonicy.konabessnext.viewmodel.SharedGpuViewModel.ViewMode) {
@@ -572,15 +533,18 @@ class GpuFrequencyFragment : Fragment() {
     */
 
     private fun showPromptState(activity: MainActivity) {
-        contentContainer!!.removeAllViews()
-        contentContainer!!.gravity = Gravity.CENTER
-
+        val container = LinearLayout(requireContext()).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+        }
+        
         // Create a modern Material You card
-        val card = MaterialCardView(requireContext())
-        card.cardElevation = 12f
-        card.radius = 28f
-        val cardPadding = 56
-        card.setContentPadding(cardPadding, cardPadding, cardPadding, cardPadding)
+        val card = MaterialCardView(requireContext()).apply {
+            cardElevation = 12f
+            radius = 28f
+            val cardPadding = 56
+            setContentPadding(cardPadding, cardPadding, cardPadding, cardPadding)
+        }
 
         // Get theme color for card background
         val typedValue = TypedValue()
@@ -589,31 +553,34 @@ class GpuFrequencyFragment : Fragment() {
         )
         card.setCardBackgroundColor(typedValue.data)
 
-        val cardContent = LinearLayout(requireContext())
-        cardContent.orientation = LinearLayout.VERTICAL
-        cardContent.gravity = Gravity.CENTER
+        val cardContent = LinearLayout(requireContext()).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+        }
 
         // Add icon
-        val icon = ImageView(requireContext())
-        icon.setImageResource(R.drawable.ic_developer_board)
-        requireContext().theme.resolveAttribute(
-            com.google.android.material.R.attr.colorPrimary, typedValue, true
-        )
-        icon.setColorFilter(typedValue.data)
+        val icon = ImageView(requireContext()).apply {
+            setImageResource(R.drawable.ic_developer_board)
+            requireContext().theme.resolveAttribute(
+                com.google.android.material.R.attr.colorPrimary, typedValue, true
+            )
+            setColorFilter(typedValue.data)
+        }
         val iconParams = LinearLayout.LayoutParams(140, 140)
         iconParams.setMargins(0, 0, 0, 40)
         cardContent.addView(icon, iconParams)
 
         // Add title
-        val title = TextView(requireContext())
-        title.text = "Detect Chipset"
-        title.textSize = 26f
-        title.textAlignment = View.TEXT_ALIGNMENT_CENTER
-        title.setTypeface(null, android.graphics.Typeface.BOLD)
-        requireContext().theme.resolveAttribute(
-            com.google.android.material.R.attr.colorOnPrimaryContainer, typedValue, true
-        )
-        title.setTextColor(typedValue.data)
+        val title = TextView(requireContext()).apply {
+            text = "Detect Chipset"
+            textSize = 26f
+            textAlignment = View.TEXT_ALIGNMENT_CENTER
+            setTypeface(null, android.graphics.Typeface.BOLD)
+            requireContext().theme.resolveAttribute(
+                com.google.android.material.R.attr.colorOnPrimaryContainer, typedValue, true
+            )
+            setTextColor(typedValue.data)
+        }
         val titleParams = LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         )
@@ -621,15 +588,16 @@ class GpuFrequencyFragment : Fragment() {
         cardContent.addView(title, titleParams)
 
         // Add description message
-        val message = TextView(requireContext())
-        message.setText(R.string.gpu_prep_prompt)
-        message.textSize = 15f
-        message.textAlignment = View.TEXT_ALIGNMENT_CENTER
-        message.alpha = 0.85f
-        requireContext().theme.resolveAttribute(
-            com.google.android.material.R.attr.colorOnPrimaryContainer, typedValue, true
-        )
-        message.setTextColor(typedValue.data)
+        val message = TextView(requireContext()).apply {
+            setText(R.string.gpu_prep_prompt)
+            textSize = 15f
+            textAlignment = View.TEXT_ALIGNMENT_CENTER
+            alpha = 0.85f
+            requireContext().theme.resolveAttribute(
+                com.google.android.material.R.attr.colorOnPrimaryContainer, typedValue, true
+            )
+            setTextColor(typedValue.data)
+        }
         val messageParams = LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         )
@@ -637,14 +605,15 @@ class GpuFrequencyFragment : Fragment() {
         cardContent.addView(message, messageParams)
 
         // Add Material You button
-        val button = MaterialButton(requireContext())
-        button.setText(R.string.gpu_prep_start)
-        button.cornerRadius = 32
-        button.elevation = 6f
-        val buttonPadding = 24
-        button.setPadding(buttonPadding * 2, buttonPadding, buttonPadding * 2, buttonPadding)
-        button.textSize = 16f
-        button.setOnClickListener { startPreparation(activity) }
+        val button = MaterialButton(requireContext()).apply {
+            setText(R.string.gpu_prep_start)
+            cornerRadius = 32
+            elevation = 6f
+            val buttonPadding = 24
+            setPadding(buttonPadding * 2, buttonPadding, buttonPadding * 2, buttonPadding)
+            textSize = 16f
+            setOnClickListener { startPreparation(activity) }
+        }
         val buttonParams = LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
         )
@@ -653,43 +622,43 @@ class GpuFrequencyFragment : Fragment() {
 
         card.addView(cardContent)
 
-
         // Add card to container with margin
         val cardParams = LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         )
         cardParams.setMargins(40, 0, 40, 0)
-        contentContainer!!.addView(card, cardParams)
+        container.addView(card, cardParams)
+        
+        setStatusView(container)
     }
 
     private fun showLoadingState() {
-        contentContainer!!.removeAllViews()
-        contentContainer!!.gravity = Gravity.CENTER
-
-        val progressBar = ProgressBar(requireContext())
-        val message = TextView(requireContext())
-        message.setText(R.string.gpu_prep_loading)
-        message.setPadding(0, 24, 0, 0)
-        message.textAlignment = View.TEXT_ALIGNMENT_CENTER
-
-        contentContainer!!.addView(progressBar)
-        contentContainer!!.addView(
-            message, LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
-            )
-        )
+        val container = LinearLayout(requireContext()).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+        }
+        container.addView(ProgressBar(requireContext()))
+        container.addView(TextView(requireContext()).apply {
+            setText(R.string.gpu_prep_loading)
+            textAlignment = View.TEXT_ALIGNMENT_CENTER
+            setPadding(0, 24, 0, 0)
+        })
+        setStatusView(container)
     }
 
     private fun showErrorState(activity: MainActivity, customMessage: String? = null) {
-        contentContainer!!.removeAllViews()
-        contentContainer!!.gravity = Gravity.CENTER
+        val container = LinearLayout(requireContext()).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+        }
 
         // Create a modern Material You error card
-        val card = MaterialCardView(requireContext())
-        card.cardElevation = 12f
-        card.radius = 28f
-        val cardPadding = 56
-        card.setContentPadding(cardPadding, cardPadding, cardPadding, cardPadding)
+        val card = MaterialCardView(requireContext()).apply {
+            cardElevation = 12f
+            radius = 28f
+            val cardPadding = 56
+            setContentPadding(cardPadding, cardPadding, cardPadding, cardPadding)
+        }
 
         // Get theme color for error card background
         val typedValue = TypedValue()
@@ -698,31 +667,34 @@ class GpuFrequencyFragment : Fragment() {
         )
         card.setCardBackgroundColor(typedValue.data)
 
-        val cardContent = LinearLayout(requireContext())
-        cardContent.orientation = LinearLayout.VERTICAL
-        cardContent.gravity = Gravity.CENTER
+        val cardContent = LinearLayout(requireContext()).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+        }
 
         // Add error icon
-        val icon = ImageView(requireContext())
-        icon.setImageResource(android.R.drawable.ic_dialog_alert)
-        requireContext().theme.resolveAttribute(
-            com.google.android.material.R.attr.colorError, typedValue, true
-        )
-        icon.setColorFilter(typedValue.data)
+        val icon = ImageView(requireContext()).apply {
+            setImageResource(android.R.drawable.ic_dialog_alert)
+            requireContext().theme.resolveAttribute(
+                com.google.android.material.R.attr.colorError, typedValue, true
+            )
+            setColorFilter(typedValue.data)
+        }
         val iconParams = LinearLayout.LayoutParams(140, 140)
         iconParams.setMargins(0, 0, 0, 40)
         cardContent.addView(icon, iconParams)
 
         // Add title
-        val title = TextView(requireContext())
-        title.text = "Detection Failed"
-        title.textSize = 26f
-        title.textAlignment = View.TEXT_ALIGNMENT_CENTER
-        title.setTypeface(null, android.graphics.Typeface.BOLD)
-        requireContext().theme.resolveAttribute(
-            com.google.android.material.R.attr.colorOnErrorContainer, typedValue, true
-        )
-        title.setTextColor(typedValue.data)
+        val title = TextView(requireContext()).apply {
+            text = "Detection Failed"
+            textSize = 26f
+            textAlignment = View.TEXT_ALIGNMENT_CENTER
+            setTypeface(null, android.graphics.Typeface.BOLD)
+            requireContext().theme.resolveAttribute(
+                com.google.android.material.R.attr.colorOnErrorContainer, typedValue, true
+            )
+            setTextColor(typedValue.data)
+        }
         val titleParams = LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         )
@@ -730,15 +702,16 @@ class GpuFrequencyFragment : Fragment() {
         cardContent.addView(title, titleParams)
 
         // Add error message
-        val message = TextView(requireContext())
-        message.text = customMessage ?: getString(R.string.gpu_prep_failed)
-        message.textSize = 15f
-        message.textAlignment = View.TEXT_ALIGNMENT_CENTER
-        message.alpha = 0.85f
-        requireContext().theme.resolveAttribute(
-            com.google.android.material.R.attr.colorOnErrorContainer, typedValue, true
-        )
-        message.setTextColor(typedValue.data)
+        val message = TextView(requireContext()).apply {
+            text = customMessage ?: getString(R.string.gpu_prep_failed)
+            textSize = 15f
+            textAlignment = View.TEXT_ALIGNMENT_CENTER
+            alpha = 0.85f
+            requireContext().theme.resolveAttribute(
+                com.google.android.material.R.attr.colorOnErrorContainer, typedValue, true
+            )
+            setTextColor(typedValue.data)
+        }
         val messageParams = LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
         )
@@ -746,14 +719,15 @@ class GpuFrequencyFragment : Fragment() {
         cardContent.addView(message, messageParams)
 
         // Add retry button
-        val retryButton = MaterialButton(requireContext())
-        retryButton.setText(R.string.gpu_prep_retry)
-        retryButton.cornerRadius = 32
-        retryButton.elevation = 6f
-        val buttonPadding = 24
-        retryButton.setPadding(buttonPadding * 2, buttonPadding, buttonPadding * 2, buttonPadding)
-        retryButton.textSize = 16f
-        retryButton.setOnClickListener { startPreparation(activity) }
+        val retryButton = MaterialButton(requireContext()).apply {
+            setText(R.string.gpu_prep_retry)
+            cornerRadius = 32
+            elevation = 6f
+            val buttonPadding = 24
+            setPadding(buttonPadding * 2, buttonPadding, buttonPadding * 2, buttonPadding)
+            textSize = 16f
+            setOnClickListener { startPreparation(activity) }
+        }
         val buttonParams = LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
         )
@@ -764,14 +738,16 @@ class GpuFrequencyFragment : Fragment() {
         val submitDtsButton = MaterialButton(
             requireContext(), null,
             com.google.android.material.R.attr.materialButtonOutlinedStyle
-        )
-        submitDtsButton.setText(R.string.submit_dts_to_github)
-        submitDtsButton.cornerRadius = 32
-        submitDtsButton.setPadding(buttonPadding * 2, buttonPadding, buttonPadding * 2, buttonPadding)
-        submitDtsButton.textSize = 14f
-        submitDtsButton.setIconResource(R.drawable.ic_share)
-        submitDtsButton.iconGravity = MaterialButton.ICON_GRAVITY_TEXT_START
-        submitDtsButton.setOnClickListener { submitDtsToGitHub(activity) }
+        ).apply {
+            setText(R.string.submit_dts_to_github)
+            cornerRadius = 32
+            val buttonPadding = 24
+            setPadding(buttonPadding * 2, buttonPadding, buttonPadding * 2, buttonPadding)
+            textSize = 14f
+            setIconResource(R.drawable.ic_share)
+            iconGravity = MaterialButton.ICON_GRAVITY_TEXT_START
+            setOnClickListener { submitDtsToGitHub(activity) }
+        }
         val submitParams = LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
         )
@@ -783,16 +759,18 @@ class GpuFrequencyFragment : Fragment() {
         val deepScanButton = MaterialButton(
             requireContext(), null,
             com.google.android.material.R.attr.materialButtonOutlinedStyle
-        )
-        deepScanButton.text = "Deep Scan DTS Structure"
-        deepScanButton.cornerRadius = 32
-        deepScanButton.setPadding(buttonPadding * 2, buttonPadding, buttonPadding * 2, buttonPadding)
-        deepScanButton.textSize = 14f
-        deepScanButton.setIconResource(R.drawable.ic_search) // Ensure this icon exists or use generic
-        deepScanButton.iconGravity = MaterialButton.ICON_GRAVITY_TEXT_START
-        deepScanButton.setOnClickListener { 
-            deviceViewModel.performDeepScan() 
-            Toast.makeText(context, "Scanning DTS files...", Toast.LENGTH_SHORT).show()
+        ).apply {
+            text = "Deep Scan DTS Structure"
+            cornerRadius = 32
+            val buttonPadding = 24
+            setPadding(buttonPadding * 2, buttonPadding, buttonPadding * 2, buttonPadding)
+            textSize = 14f
+            setIconResource(R.drawable.ic_search) // Ensure this icon exists or use generic
+            iconGravity = MaterialButton.ICON_GRAVITY_TEXT_START
+            setOnClickListener { 
+                deviceViewModel.performDeepScan() 
+                Toast.makeText(context, "Scanning DTS files...", Toast.LENGTH_SHORT).show()
+            }
         }
         val scanParams = LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
@@ -802,11 +780,12 @@ class GpuFrequencyFragment : Fragment() {
         cardContent.addView(deepScanButton, scanParams)
 
         // Add "Manual Setup" button
-        val manualSetupButton = MaterialButton(requireContext(), null, com.google.android.material.R.attr.borderlessButtonStyle)
-        manualSetupButton.text = "Manual Setup"
-        manualSetupButton.textSize = 14f
-        manualSetupButton.setOnClickListener {
-            showManualSetupDialog(activity)
+        val manualSetupButton = MaterialButton(requireContext(), null, com.google.android.material.R.attr.borderlessButtonStyle).apply {
+            text = "Manual Setup"
+            textSize = 14f
+            setOnClickListener {
+                showManualSetupDialog(activity)
+            }
         }
         val manualParams = LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
@@ -1085,7 +1064,7 @@ class GpuFrequencyFragment : Fragment() {
             return
         }
         needsReload = false;
-        loadContent();
+        sharedViewModel.loadData(true)
     }
 
     /**

@@ -33,7 +33,7 @@ class DeviceRepository @Inject constructor(
 
     companion object {
         private const val TAG = "KonaBessDet"
-        private val REQUIRED_BINARIES = arrayOf("dtc", "magiskboot")
+        private val REQUIRED_BINARIES = arrayOf("magiskboot")
         private val DTB_MAGIC = byteArrayOf(0xD0.toByte(), 0x0D.toByte(), 0xFE.toByte(), 0xED.toByte())
         private const val DTB_HEADER_SIZE = 8
         private const val BYTE_MASK = 0xFF
@@ -353,21 +353,17 @@ class DeviceRepository @Inject constructor(
         
         Log.d(TAG, "bootImage2dts: dtbNum after split: $dtbNum")
         
-        val batchCmd = StringBuilder()
-        batchCmd.append("cd $filesDir")
-        
+        Log.d(TAG, "Executing batch conversion via JNI")
         for (i in 0 until dtbNum) {
-             batchCmd.append(" && ./dtc -I dtb -O dts ")
-                     .append(i).append(".dtb -o ").append(i).append(".dts")
-                     .append(" && rm -f ").append(i).append(".dtb")
-        }
-        val cmdStr = batchCmd.toString()
-        Log.d(TAG, "Executing batch conversion: $cmdStr")
-        val output = shellRepository.execForOutput(cmdStr)
-        
-        if (dtbNum > 0 && !File(filesDir, "${dtbNum - 1}.dts").exists()) {
-             Log.e(TAG, "DTS conversion failed. Magiskboot output could be useful here.")
-             throw IOException("DTB to DTS batch conversion failed: " + output.joinToString("\n"))
+             val inputFile = File(filesDir, "$i.dtb").absolutePath
+             val outputFile = File(filesDir, "$i.dts").absolutePath
+             try {
+                 com.ireddragonicy.konabessnext.core.native.DtcNative.dtbToDts(inputFile, outputFile)
+                 File(inputFile).delete()
+             } catch(e: Exception) {
+                 Log.e(TAG, "JNI DTC Failed for index $i", e)
+                 throw IOException("DTC Conversion failed for $i.dtb: ${e.message}")
+             }
         }
     }
     
@@ -471,15 +467,19 @@ class DeviceRepository @Inject constructor(
     }
     
     suspend fun dts2bootImage() = withContext(Dispatchers.IO) {
-        val batchCmd = StringBuilder()
-        batchCmd.append("cd $filesDir")
-        
         for (i in 0 until dtbNum) {
-             batchCmd.append(" && ./dtc -I dts -O dtb ")
-                     .append(i).append(".dts -o ").append(i).append(".dtb")
+             val inputFile = File(filesDir, "$i.dts").absolutePath
+             val outputFile = File(filesDir, "$i.dtb").absolutePath
+             try {
+                 com.ireddragonicy.konabessnext.core.native.DtcNative.dtsToDtb(inputFile, outputFile)
+             } catch(e: Exception) {
+                 throw IOException("DTS to DTB conversion failed for $i.dts: ${e.message}")
+             }
         }
         
         val outputFilename = if (dtbType == DtbType.KERNEL_DTB) "kernel_dtb" else "dtb"
+        val batchCmd = StringBuilder()
+        batchCmd.append("cd $filesDir")
         batchCmd.append(" && cat")
         for (i in 0 until dtbNum) {
             batchCmd.append(" ").append(i).append(".dtb")

@@ -105,7 +105,13 @@ class MainActivity : AppCompatActivity() {
 
         // Check if device is prepared
         // We observe logic in UI, but initial check trigger is fine here
-        if (!deviceViewModel.isPrepared.value) { // Accessing StateFlow value directly for initial check
+        // Check if device is prepared or detection already started
+        val isPrep = deviceViewModel.isPrepared.value
+        val detState = deviceViewModel.detectionState.value
+        android.util.Log.d("KonaBessApp", "MainActivity onCreate: isPrepared=$isPrep, detectionState=$detState, ViewModel=${System.identityHashCode(deviceViewModel)}")
+
+        if (!isPrep && detState == null) {
+            android.util.Log.d("KonaBessApp", "MainActivity: Triggering initial detectChipset()")
             deviceViewModel.detectChipset()
         }
 
@@ -300,7 +306,10 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupBottomNavigation() {
         bottomNav.setContent {
-            KonaBessTheme {
+            val prefs = getSharedPreferences(com.ireddragonicy.konabessnext.ui.SettingsActivity.PREFS_NAME, Context.MODE_PRIVATE)
+            val isDynamic = prefs.getBoolean(com.ireddragonicy.konabessnext.ui.SettingsActivity.KEY_DYNAMIC_COLOR, true)
+            val paletteId = prefs.getInt(com.ireddragonicy.konabessnext.ui.SettingsActivity.KEY_COLOR_PALETTE, 0)
+            KonaBessTheme(dynamicColor = isDynamic, colorPalette = paletteId) {
                 MainNavigationBar(
                     selectedItem = currentTab.intValue,
                     onItemSelected = { index ->

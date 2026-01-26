@@ -47,6 +47,7 @@ class SettingsFragment : Fragment() {
                     currentTheme = currentThemeName,
                     isDynamicColor = prefs!!.getBoolean(SettingsActivity.KEY_DYNAMIC_COLOR, true),
                     currentColorPalette = currentColorPaletteName,
+                    currentUserPaletteId = prefs!!.getInt(SettingsActivity.KEY_COLOR_PALETTE, SettingsActivity.PALETTE_DYNAMIC),
                     currentLanguage = currentLanguageName,
                     currentFreqUnit = currentFreqUnitName,
                     isAutoSave = prefs!!.getBoolean(SettingsActivity.KEY_AUTO_SAVE_GPU_TABLE, false),
