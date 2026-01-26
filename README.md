@@ -60,35 +60,12 @@ The application operates by unpacking the Boot or Vendor Boot image, decompiling
 
 ## Supported Devices
 
-### Snapdragon 8 Series
-| Chipset | Model |
+### Supported Chipsets
+| Series | Supported Models |
 |:---|:---|
-| **Snapdragon 8 Elite Gen 5** | (Newest) |
-| **Snapdragon 8s Gen 4** | (Latest Support) |
-| **Snapdragon 8s Gen 3** | |
-| **Snapdragon 8 Gen 3** | |
-| **Snapdragon 8 Gen 2** | |
-| **Snapdragon 8+ Gen 1** | |
-| **Snapdragon 8 Gen 1** | |
-| **Snapdragon 888** | |
-| **Snapdragon 865** | (Original Target) |
-| **Snapdragon 855** | |
-
-### Snapdragon 7 Series
-| Chipset |
-|:---|
-| **Snapdragon 7+ Gen 3** |
-| **Snapdragon 7+ Gen 2** |
-| **Snapdragon 7 Gen 1** |
-| **Snapdragon 780G** |
-| **Snapdragon 778G** |
-| **Snapdragon 765** |
-| **Snapdragon 750** |
-
-### Snapdragon 6 Series
-| Chipset |
-|:---|
-| **Snapdragon 690** |
+| **Snapdragon 8** | 8 Elite Gen 5, 8 Elite, 8s Gen 4, 8s Gen 3, 8 Gen 3, 8 Gen 2, 8+ Gen 1, 8 Gen 1, 888, 865, 855 |
+| **Snapdragon 7** | 7+ Gen 3, 7+ Gen 2, 7 Gen 1, 780G, 778G, 765, 750 |
+| **Snapdragon 6** | 690 |
 
 ## Prerequisites
 

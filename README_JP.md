@@ -60,35 +60,12 @@
 
 ## サポートされているデバイス
 
-### Snapdragon 8 シリーズ
-| チップセット | モデル |
+### サポートされているチップセット (Supported Chipsets)
+| シリーズ | サポートされているモデル |
 |:---|:---|
-| **Snapdragon 8 Elite Gen 5** | (最新) |
-| **Snapdragon 8s Gen 4** | (最新サポート) |
-| **Snapdragon 8s Gen 3** | |
-| **Snapdragon 8 Gen 3** | |
-| **Snapdragon 8 Gen 2** | |
-| **Snapdragon 8+ Gen 1** | |
-| **Snapdragon 8 Gen 1** | |
-| **Snapdragon 888** | |
-| **Snapdragon 865** | (当初のターゲット) |
-| **Snapdragon 855** | |
-
-### Snapdragon 7 シリーズ
-| チップセット |
-|:---|
-| **Snapdragon 7+ Gen 3** |
-| **Snapdragon 7+ Gen 2** |
-| **Snapdragon 7 Gen 1** |
-| **Snapdragon 780G** |
-| **Snapdragon 778G** |
-| **Snapdragon 765** |
-| **Snapdragon 750** |
-
-### Snapdragon 6 シリーズ
-| チップセット |
-|:---|
-| **Snapdragon 690** |
+| **Snapdragon 8** | 8 Elite Gen 5, 8 Elite, 8s Gen 4, 8s Gen 3, 8 Gen 3, 8 Gen 2, 8+ Gen 1, 8 Gen 1, 888, 865, 855 |
+| **Snapdragon 7** | 7+ Gen 3, 7+ Gen 2, 7 Gen 1, 780G, 778G, 765, 750 |
+| **Snapdragon 6** | 690 |
 
 ## 前提条件
 

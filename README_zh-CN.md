@@ -60,35 +60,12 @@
 
 ## 支持设备
 
-### 骁龙 8 系列 (Snapdragon 8 Series)
-| 芯片组 | 型号 |
+### 支持的芯片组 (Supported Chipsets)
+| 系列 | 支持的型号 |
 |:---|:---|
-| **Snapdragon 8 Elite Gen 5** | (最新) |
-| **Snapdragon 8s Gen 4** | (最新支持) |
-| **Snapdragon 8s Gen 3** | |
-| **Snapdragon 8 Gen 3** | |
-| **Snapdragon 8 Gen 2** | |
-| **Snapdragon 8+ Gen 1** | |
-| **Snapdragon 8 Gen 1** | |
-| **Snapdragon 888** | |
-| **Snapdragon 865** | (最初目标) |
-| **Snapdragon 855** | |
-
-### 骁龙 7 系列 (Snapdragon 7 Series)
-| 芯片组 |
-|:---|
-| **Snapdragon 7+ Gen 3** |
-| **Snapdragon 7+ Gen 2** |
-| **Snapdragon 7 Gen 1** |
-| **Snapdragon 780G** |
-| **Snapdragon 778G** |
-| **Snapdragon 765** |
-| **Snapdragon 750** |
-
-### 骁龙 6 系列 (Snapdragon 6 Series)
-| 芯片组 |
-|:---|
-| **Snapdragon 690** |
+| **骁龙 8** | 8 Elite Gen 5, 8 Elite, 8s Gen 4, 8s Gen 3, 8 Gen 3, 8 Gen 2, 8+ Gen 1, 8 Gen 1, 888, 865, 855 |
+| **骁龙 7** | 7+ Gen 3, 7+ Gen 2, 7 Gen 1, 780G, 778G, 765, 750 |
+| **骁龙 6** | 690 |
 
 ##前提条件
 

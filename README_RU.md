@@ -60,35 +60,12 @@
 
 ## Поддерживаемые устройства
 
-### Snapdragon 8 Series
-| Чипсет | Модель |
+### Поддерживаемые чипсеты (Supported Chipsets)
+| Серия | Поддерживаемые модели |
 |:---|:---|
-| **Snapdragon 8 Elite Gen 5** | (Новейший) |
-| **Snapdragon 8s Gen 4** | (Последняя поддержка) |
-| **Snapdragon 8s Gen 3** | |
-| **Snapdragon 8 Gen 3** | |
-| **Snapdragon 8 Gen 2** | |
-| **Snapdragon 8+ Gen 1** | |
-| **Snapdragon 8 Gen 1** | |
-| **Snapdragon 888** | |
-| **Snapdragon 865** | (Оригинальная цель) |
-| **Snapdragon 855** | |
-
-### Snapdragon 7 Series
-| Чипсет |
-|:---|
-| **Snapdragon 7+ Gen 3** |
-| **Snapdragon 7+ Gen 2** |
-| **Snapdragon 7 Gen 1** |
-| **Snapdragon 780G** |
-| **Snapdragon 778G** |
-| **Snapdragon 765** |
-| **Snapdragon 750** |
-
-### Snapdragon 6 Series
-| Чипсет |
-|:---|
-| **Snapdragon 690** |
+| **Snapdragon 8** | 8 Elite Gen 5, 8 Elite, 8s Gen 4, 8s Gen 3, 8 Gen 3, 8 Gen 2, 8+ Gen 1, 8 Gen 1, 888, 865, 855 |
+| **Snapdragon 7** | 7+ Gen 3, 7+ Gen 2, 7 Gen 1, 780G, 778G, 765, 750 |
+| **Snapdragon 6** | 690 |
 
 ## Предварительные требования
 
