@@ -28,6 +28,11 @@ sealed class SettingItem {
     ) : SettingItem()
 }
 
+sealed class SettingsListItem {
+    data class Header(val title: String) : SettingsListItem()
+    data class Setting(val item: SettingItem) : SettingsListItem()
+}
+
 @Composable
 fun SettingsScreen(
     currentTheme: String,
@@ -43,6 +48,8 @@ fun SettingsScreen(
     onFreqUnitClick: () -> Unit,
     onAutoSaveToggle: () -> Unit,
     onHelpClick: () -> Unit,
+    isAmoledMode: Boolean,
+    onAmoledModeToggle: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val themeTitle = androidx.compose.ui.res.stringResource(R.string.settings_theme)
@@ -59,18 +66,31 @@ fun SettingsScreen(
     val autoSaveDesc = androidx.compose.ui.res.stringResource(R.string.settings_auto_save_desc)
     val helpTitle = androidx.compose.ui.res.stringResource(R.string.settings_help_about)
     val versionTitle = androidx.compose.ui.res.stringResource(R.string.settings_version_format, BuildConfig.VERSION_NAME)
+    val amoledTitle = androidx.compose.ui.res.stringResource(R.string.palette_amoled)
 
-    val settingsItems = remember(currentTheme, isDynamicColor, currentColorPalette, currentLanguage, currentFreqUnit, isAutoSave, themeTitle, langTitle) {
+    val settingsItems = remember(currentTheme, isDynamicColor, currentColorPalette, currentLanguage, currentFreqUnit, isAutoSave, isAmoledMode, themeTitle) {
         buildList {
-            add(SettingItem.Clickable(R.drawable.ic_dark_mode, themeTitle, themeDesc, currentTheme))
-            add(SettingItem.Toggle(R.drawable.ic_tune, dynamicColorTitle, dynamicColorDesc, isDynamicColor))
+            // Appearance section
+            add(SettingsListItem.Header("Appearance"))
+            add(SettingsListItem.Setting(SettingItem.Clickable(R.drawable.ic_dark_mode, themeTitle, themeDesc, currentTheme)))
+            add(SettingsListItem.Setting(SettingItem.Toggle(R.drawable.ic_dark_mode, amoledTitle, "Pure black background in Dark Mode", isAmoledMode)))
+            add(SettingsListItem.Setting(SettingItem.Toggle(R.drawable.ic_tune, dynamicColorTitle, dynamicColorDesc, isDynamicColor)))
             if (!isDynamicColor) {
-                add(SettingItem.Clickable(R.drawable.ic_tune, paletteTitle, paletteDesc, currentColorPalette))
+                add(SettingsListItem.Setting(SettingItem.Clickable(R.drawable.ic_tune, paletteTitle, paletteDesc, currentColorPalette)))
             }
-            add(SettingItem.Clickable(R.drawable.ic_language, langTitle, langDesc, currentLanguage))
-            add(SettingItem.Clickable(R.drawable.ic_frequency, freqTitle, freqDesc, currentFreqUnit))
-            add(SettingItem.Toggle(R.drawable.ic_save, autoSaveTitle, autoSaveDesc, isAutoSave))
-            add(SettingItem.Clickable(R.drawable.ic_help, helpTitle, versionTitle, ""))
+
+            // Localization section
+            add(SettingsListItem.Header("Localization"))
+            add(SettingsListItem.Setting(SettingItem.Clickable(R.drawable.ic_language, langTitle, langDesc, currentLanguage)))
+            add(SettingsListItem.Setting(SettingItem.Clickable(R.drawable.ic_frequency, freqTitle, freqDesc, currentFreqUnit)))
+
+            // Behavior section
+            add(SettingsListItem.Header("Behavior"))
+            add(SettingsListItem.Setting(SettingItem.Toggle(R.drawable.ic_save, autoSaveTitle, autoSaveDesc, isAutoSave)))
+
+            // About section
+            add(SettingsListItem.Header("About"))
+            add(SettingsListItem.Setting(SettingItem.Clickable(R.drawable.ic_help, helpTitle, versionTitle, "")))
         }
     }
 
@@ -85,38 +105,46 @@ fun SettingsScreen(
                     .statusBarsPadding(),
                 contentPadding = PaddingValues(vertical = 8.dp)
             ) {
-                items(settingsItems) { item ->
-                    when (item) {
-                        is SettingItem.Clickable -> {
-                            SettingsClickableItem(
-                                icon = painterResource(item.iconRes),
-                                title = item.title,
-                                subtitle = item.subtitle,
-                                currentValue = item.currentValue,
-                                onClick = {
-                                    when (item.title) {
-                                        themeTitle -> onThemeClick()
-                                        paletteTitle -> onColorPaletteClick()
-                                        langTitle -> onLanguageClick()
-                                        freqTitle -> onFreqUnitClick()
-                                        helpTitle -> onHelpClick()
-                                    }
-                                }
-                            )
+                items(settingsItems) { listItem ->
+                    when (listItem) {
+                        is SettingsListItem.Header -> {
+                            SettingsSectionHeader(title = listItem.title)
                         }
-                        is SettingItem.Toggle -> {
-                            SettingsToggleItem(
-                                icon = painterResource(item.iconRes),
-                                title = item.title,
-                                subtitle = item.subtitle,
-                                isChecked = item.isChecked,
-                                onToggle = {
-                                    when (item.title) {
-                                        dynamicColorTitle -> onDynamicColorToggle()
-                                        autoSaveTitle -> onAutoSaveToggle()
-                                    }
+                        is SettingsListItem.Setting -> {
+                            when (val item = listItem.item) {
+                                is SettingItem.Clickable -> {
+                                    SettingsClickableItem(
+                                        icon = painterResource(item.iconRes),
+                                        title = item.title,
+                                        subtitle = item.subtitle,
+                                        currentValue = item.currentValue,
+                                        onClick = {
+                                            when (item.title) {
+                                                themeTitle -> onThemeClick()
+                                                paletteTitle -> onColorPaletteClick()
+                                                langTitle -> onLanguageClick()
+                                                freqTitle -> onFreqUnitClick()
+                                                helpTitle -> onHelpClick()
+                                            }
+                                        }
+                                    )
                                 }
-                            )
+                                is SettingItem.Toggle -> {
+                                    SettingsToggleItem(
+                                        icon = painterResource(item.iconRes),
+                                        title = item.title,
+                                        subtitle = item.subtitle,
+                                        isChecked = item.isChecked,
+                                        onToggle = {
+                                            when (item.title) {
+                                                dynamicColorTitle -> onDynamicColorToggle()
+                                                autoSaveTitle -> onAutoSaveToggle()
+                                                amoledTitle -> onAmoledModeToggle()
+                                            }
+                                        }
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -128,6 +156,21 @@ fun SettingsScreen(
             }
         }
     }
+}
+
+@Composable
+private fun SettingsSectionHeader(
+    title: String,
+    modifier: Modifier = Modifier
+) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 16.dp)
+    )
 }
 
 @Composable

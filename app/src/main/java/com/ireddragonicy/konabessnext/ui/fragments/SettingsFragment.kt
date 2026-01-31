@@ -56,7 +56,9 @@ class SettingsFragment : Fragment() {
                     onLanguageClick = { showLanguageDialog() },
                     onFreqUnitClick = { showFreqUnitDialog() },
                     onAutoSaveToggle = { toggleAutoSave() },
-                    onHelpClick = { showHelpDialog() }
+                    onHelpClick = { showHelpDialog() },
+                    isAmoledMode = prefs!!.getBoolean(SettingsActivity.KEY_AMOLED_MODE, false),
+                    onAmoledModeToggle = { toggleAmoledMode() }
                 )
             }
         }
@@ -76,7 +78,7 @@ class SettingsFragment : Fragment() {
             .setSingleChoiceItems(themes, currentTheme) { dialog, which ->
                 prefs!!.edit().putInt(SettingsActivity.KEY_THEME, which).apply()
                 dialog.dismiss()
-                SettingsActivity.applyThemeFromSettings(requireContext())
+                dialog.dismiss()
                 requireActivity().recreate()
             }
             .setNegativeButton(getString(R.string.cancel), null)
@@ -88,15 +90,13 @@ class SettingsFragment : Fragment() {
             "Purple & Teal",
             "Blue & Orange",
             "Green & Red",
-            "Pink & Cyan",
-            "Pure AMOLED (Black)"
+            "Pink & Cyan"
         )
         val paletteIds = intArrayOf(
             SettingsActivity.PALETTE_PURPLE,
             SettingsActivity.PALETTE_BLUE,
             SettingsActivity.PALETTE_GREEN,
-            SettingsActivity.PALETTE_PINK,
-            SettingsActivity.PALETTE_AMOLED
+            SettingsActivity.PALETTE_PINK
         )
 
         val currentPalette = prefs!!.getInt(SettingsActivity.KEY_COLOR_PALETTE, SettingsActivity.PALETTE_PURPLE)
@@ -215,6 +215,12 @@ class SettingsFragment : Fragment() {
         requireActivity().recreate()
     }
 
+    private fun toggleAmoledMode() {
+        val currentState = prefs!!.getBoolean(SettingsActivity.KEY_AMOLED_MODE, false)
+        prefs!!.edit().putBoolean(SettingsActivity.KEY_AMOLED_MODE, !currentState).apply()
+        requireActivity().recreate()
+    }
+
     private val currentThemeName: String
         get() {
             val names = arrayOf(
@@ -267,7 +273,6 @@ class SettingsFragment : Fragment() {
                 SettingsActivity.PALETTE_BLUE -> "Blue & Orange"
                 SettingsActivity.PALETTE_GREEN -> "Green & Red"
                 SettingsActivity.PALETTE_PINK -> "Pink & Cyan"
-                SettingsActivity.PALETTE_AMOLED -> "Pure AMOLED (Black)"
                 else -> "Purple & Teal"
             }
         }

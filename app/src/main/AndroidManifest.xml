@@ -14,7 +14,7 @@
         android:enableOnBackInvokedCallback="true"
         android:hardwareAccelerated="true"
         android:largeHeap="true"
-        android:theme="@style/Theme.KonaBess">
+        android:theme="@style/Theme.Material3.DayNight.NoActionBar">
         <activity
             android:name=".ui.MainActivity"
             android:exported="true"

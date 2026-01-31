@@ -37,7 +37,7 @@ class ExportHistoryActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
 
         // Apply theme
-        applyColorPalette()
+
 
         setContentView(R.layout.activity_export_history)
 
@@ -107,17 +107,5 @@ class ExportHistoryActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun applyColorPalette() {
-        val prefs = getSharedPreferences("KonaBessSettings", Context.MODE_PRIVATE)
-        val palette = prefs.getInt("color_palette", 0)
 
-        when (palette) {
-            1 -> setTheme(R.style.Theme_KonaBess_Purple)
-            2 -> setTheme(R.style.Theme_KonaBess_Blue)
-            3 -> setTheme(R.style.Theme_KonaBess_Green)
-            4 -> setTheme(R.style.Theme_KonaBess_Pink)
-            5 -> setTheme(R.style.Theme_KonaBess_AMOLED)
-            else -> setTheme(R.style.Theme_KonaBess)
-        }
-    }
 }

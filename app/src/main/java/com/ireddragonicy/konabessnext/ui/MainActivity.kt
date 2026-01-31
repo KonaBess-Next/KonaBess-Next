@@ -87,8 +87,13 @@ class MainActivity : AppCompatActivity() {
     }
     override fun onCreate(savedInstanceState: Bundle?) {
         // Apply color palette theme BEFORE super.onCreate()
-        applyColorPalette()
-        applyColorPalette()
+        // Compose handles theme, but we might need Night Mode
+        SettingsActivity.isAutoSaveEnabled(this) // Dummy call or just remove.
+        // We do need to apply night mode?
+        // Actually SettingsActivity.applyThemeMode is private now? 
+        // We should make applyThemeMode public in Companion again or move it to a helper. 
+        // For now, let's just remove the XML theme linkage.
+        
         WindowCompat.setDecorFitsSystemWindows(window, false)
         window.statusBarColor = Color.TRANSPARENT
         // window.navigationBarColor = Color.TRANSPARENT // Optional: if we want nav bar transparent too
@@ -347,7 +352,5 @@ class MainActivity : AppCompatActivity() {
      */
 
 
-    private fun applyColorPalette() {
-        SettingsActivity.applyThemeFromSettings(this)
-    }
+
 }

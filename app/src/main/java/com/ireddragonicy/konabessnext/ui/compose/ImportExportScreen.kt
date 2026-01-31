@@ -2,7 +2,7 @@ package com.ireddragonicy.konabessnext.ui.compose
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -23,6 +23,11 @@ data class ActionItem(
 
 enum class BottomSheetType {
     NONE, EXPORT_FILE, IMPORT_CLIPBOARD, EXPORT_CLIPBOARD, EXPORT_RESULT
+}
+
+sealed class ImportExportListItem {
+    data class Header(val title: String) : ImportExportListItem()
+    data class Action(val item: ActionItem, val index: Int) : ImportExportListItem()
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -55,16 +60,30 @@ fun ImportExportScreen(
         }
     }
 
-    val actionItems = listOf(
-            ActionItem(R.drawable.ic_history, stringResource(R.string.export_history), stringResource(R.string.export_history_desc), true),
-            ActionItem(R.drawable.ic_import_modern, stringResource(R.string.import_from_file), stringResource(R.string.import_from_file_desc), isPrepared),
-            ActionItem(R.drawable.ic_save, stringResource(R.string.export_to_file), stringResource(R.string.export_to_file_desc), isPrepared),
-            ActionItem(R.drawable.ic_clipboard_import, stringResource(R.string.import_from_clipboard), stringResource(R.string.import_from_clipboard_desc), isPrepared),
-            ActionItem(R.drawable.ic_clipboard_export, stringResource(R.string.export_to_clipboard), stringResource(R.string.export_to_clipboard_desc), isPrepared),
-            ActionItem(R.drawable.ic_code, stringResource(R.string.export_raw_dts), stringResource(R.string.export_raw_dts_desc), isPrepared),
-            ActionItem(R.drawable.ic_backup, stringResource(R.string.backup_image), stringResource(R.string.backup_image_desc), isPrepared),
-            ActionItem(R.drawable.ic_code, stringResource(R.string.batch_dtb_to_dts), stringResource(R.string.batch_dtb_to_dts_desc), true)
-        )
+    // Build grouped list items
+    val listItems = remember(isPrepared) {
+        buildList {
+            // History section
+            add(ImportExportListItem.Header("History"))
+            add(ImportExportListItem.Action(ActionItem(R.drawable.ic_history, "Export History", "View and export edit history", true), 0))
+
+            // File Operations section
+            add(ImportExportListItem.Header("File Operations"))
+            add(ImportExportListItem.Action(ActionItem(R.drawable.ic_import_modern, "Import from File", "Load GPU configuration from file", isPrepared), 1))
+            add(ImportExportListItem.Action(ActionItem(R.drawable.ic_save, "Export to File", "Save GPU configuration to file", isPrepared), 2))
+
+            // Clipboard section
+            add(ImportExportListItem.Header("Clipboard"))
+            add(ImportExportListItem.Action(ActionItem(R.drawable.ic_clipboard_import, "Import from Clipboard", "Paste configuration from clipboard", isPrepared), 3))
+            add(ImportExportListItem.Action(ActionItem(R.drawable.ic_clipboard_export, "Export to Clipboard", "Copy configuration to clipboard", isPrepared), 4))
+
+            // Advanced section
+            add(ImportExportListItem.Header("Advanced"))
+            add(ImportExportListItem.Action(ActionItem(R.drawable.ic_code, "Export Raw DTS", "Export device tree source", isPrepared), 5))
+            add(ImportExportListItem.Action(ActionItem(R.drawable.ic_backup, "Backup Boot Image", "Create boot image backup", isPrepared), 6))
+            add(ImportExportListItem.Action(ActionItem(R.drawable.ic_code, "Batch DTB to DTS", "Convert multiple DTB files", true), 7))
+        }
+    }
 
     com.ireddragonicy.konabessnext.ui.theme.KonaBessTheme {
         if (showSheet) {
@@ -228,40 +247,46 @@ fun ImportExportScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .statusBarsPadding(),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                contentPadding = PaddingValues(vertical = 8.dp)
             ) {
-                itemsIndexed(actionItems) { index, item ->
-                    ActionCard(
-                        icon = painterResource(item.iconRes),
-                        title = item.title,
-                        description = item.description,
-                        enabled = item.enabled,
-                        onClick = {
-                            when (index) {
-                                0 -> onExportHistory()
-                                1 -> onImportFromFile()
-                                2 -> {
-                                    sheetType = BottomSheetType.EXPORT_FILE
-                                    textInput = ""
-                                    showSheet = true
-                                }
-                                3 -> {
-                                    sheetType = BottomSheetType.IMPORT_CLIPBOARD
-                                    textInput = ""
-                                    showSheet = true
-                                }
-                                4 -> {
-                                    sheetType = BottomSheetType.EXPORT_CLIPBOARD
-                                    textInput = ""
-                                    showSheet = true
-                                }
-                                5 -> onExportRawDts()
-                                6 -> onBackupBootImage()
-                                7 -> onBatchDtbToDts()
-                            }
+                items(listItems) { listItem ->
+                    when (listItem) {
+                        is ImportExportListItem.Header -> {
+                            SectionHeader(title = listItem.title)
                         }
-                    )
+                        is ImportExportListItem.Action -> {
+                            ActionListItem(
+                                icon = painterResource(listItem.item.iconRes),
+                                title = listItem.item.title,
+                                description = listItem.item.description,
+                                enabled = listItem.item.enabled,
+                                onClick = {
+                                    when (listItem.index) {
+                                        0 -> onExportHistory()
+                                        1 -> onImportFromFile()
+                                        2 -> {
+                                            sheetType = BottomSheetType.EXPORT_FILE
+                                            textInput = ""
+                                            showSheet = true
+                                        }
+                                        3 -> {
+                                            sheetType = BottomSheetType.IMPORT_CLIPBOARD
+                                            textInput = ""
+                                            showSheet = true
+                                        }
+                                        4 -> {
+                                            sheetType = BottomSheetType.EXPORT_CLIPBOARD
+                                            textInput = ""
+                                            showSheet = true
+                                        }
+                                        5 -> onExportRawDts()
+                                        6 -> onBackupBootImage()
+                                        7 -> onBatchDtbToDts()
+                                    }
+                                }
+                            )
+                        }
+                    }
                 }
                 
                 // Bottom spacer for navigation bar
@@ -274,7 +299,22 @@ fun ImportExportScreen(
 }
 
 @Composable
-fun ActionCard(
+private fun SectionHeader(
+    title: String,
+    modifier: Modifier = Modifier
+) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 16.dp)
+    )
+}
+
+@Composable
+private fun ActionListItem(
     icon: Painter,
     title: String,
     description: String,
@@ -282,29 +322,23 @@ fun ActionCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Card(
+    Surface(
         onClick = onClick,
         modifier = modifier.fillMaxWidth(),
         enabled = enabled,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-            contentColor = MaterialTheme.colorScheme.onSurface,
-            disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.5f),
-            disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        color = MaterialTheme.colorScheme.background
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
                 painter = icon,
                 contentDescription = null,
-                modifier = Modifier.size(32.dp),
+                modifier = Modifier.size(28.dp),
                 tint = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
             )
             Column(modifier = Modifier.weight(1f)) {
@@ -313,7 +347,7 @@ fun ActionCard(
                     style = MaterialTheme.typography.titleMedium,
                     color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
                 )
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(2.dp))
                 Text(
                     text = description,
                     style = MaterialTheme.typography.bodySmall,

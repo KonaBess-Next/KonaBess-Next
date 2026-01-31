@@ -573,257 +573,83 @@ class GpuFrequencyFragment : Fragment() {
 
     private fun showPromptState(activity: MainActivity) {
         contentContainer!!.removeAllViews()
-        contentContainer!!.gravity = Gravity.CENTER
+        contentContainer!!.gravity = Gravity.FILL // Fill to allow Surface to cover background
 
-        // Create a modern Material You card
-        val card = MaterialCardView(requireContext())
-        card.cardElevation = 12f
-        card.radius = 28f
-        val cardPadding = 56
-        card.setContentPadding(cardPadding, cardPadding, cardPadding, cardPadding)
-
-        // Get theme color for card background
-        val typedValue = TypedValue()
-        requireContext().theme.resolveAttribute(
-            com.google.android.material.R.attr.colorPrimaryContainer, typedValue, true
-        )
-        card.setCardBackgroundColor(typedValue.data)
-
-        val cardContent = LinearLayout(requireContext())
-        cardContent.orientation = LinearLayout.VERTICAL
-        cardContent.gravity = Gravity.CENTER
-
-        // Add icon
-        val icon = ImageView(requireContext())
-        icon.setImageResource(R.drawable.ic_developer_board)
-        requireContext().theme.resolveAttribute(
-            com.google.android.material.R.attr.colorPrimary, typedValue, true
-        )
-        icon.setColorFilter(typedValue.data)
-        val iconParams = LinearLayout.LayoutParams(140, 140)
-        iconParams.setMargins(0, 0, 0, 40)
-        cardContent.addView(icon, iconParams)
-
-        // Add title
-        val title = TextView(requireContext())
-        title.text = "Detect Chipset"
-        title.textSize = 26f
-        title.textAlignment = View.TEXT_ALIGNMENT_CENTER
-        title.setTypeface(null, android.graphics.Typeface.BOLD)
-        requireContext().theme.resolveAttribute(
-            com.google.android.material.R.attr.colorOnPrimaryContainer, typedValue, true
-        )
-        title.setTextColor(typedValue.data)
-        val titleParams = LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-        )
-        titleParams.setMargins(0, 0, 0, 20)
-        cardContent.addView(title, titleParams)
-
-        // Add description message
-        val message = TextView(requireContext())
-        message.setText(R.string.gpu_prep_prompt)
-        message.textSize = 15f
-        message.textAlignment = View.TEXT_ALIGNMENT_CENTER
-        message.alpha = 0.85f
-        requireContext().theme.resolveAttribute(
-            com.google.android.material.R.attr.colorOnPrimaryContainer, typedValue, true
-        )
-        message.setTextColor(typedValue.data)
-        val messageParams = LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-        )
-        messageParams.setMargins(0, 0, 0, 40)
-        cardContent.addView(message, messageParams)
-
-        // Add Material You button
-        val button = MaterialButton(requireContext())
-        button.setText(R.string.gpu_prep_start)
-        button.cornerRadius = 32
-        button.elevation = 6f
-        val buttonPadding = 24
-        button.setPadding(buttonPadding * 2, buttonPadding, buttonPadding * 2, buttonPadding)
-        button.textSize = 16f
-        button.setOnClickListener { startPreparation(activity) }
-        val buttonParams = LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
-        )
-        buttonParams.gravity = Gravity.CENTER_HORIZONTAL
-        cardContent.addView(button, buttonParams)
-
-        card.addView(cardContent)
-
-
-        // Add card to container with margin
-        val cardParams = LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-        )
-        cardParams.setMargins(40, 0, 40, 0)
-        contentContainer!!.addView(card, cardParams)
+        val composeView = androidx.compose.ui.platform.ComposeView(requireContext())
+        composeView.setContent {
+            com.ireddragonicy.konabessnext.ui.theme.KonaBessTheme {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        com.ireddragonicy.konabessnext.ui.compose.DetectionPromptScreen(
+                            onStartClick = { startPreparation(activity) }
+                        )
+                    }
+                }
+            }
+        }
+        
+        contentContainer!!.addView(composeView, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
+        ))
     }
 
     private fun showLoadingState() {
         contentContainer!!.removeAllViews()
-        contentContainer!!.gravity = Gravity.CENTER
+        contentContainer!!.gravity = Gravity.FILL
 
-        val progressBar = ProgressBar(requireContext())
-        val message = TextView(requireContext())
-        message.setText(R.string.gpu_prep_loading)
-        message.setPadding(0, 24, 0, 0)
-        message.textAlignment = View.TEXT_ALIGNMENT_CENTER
+        val composeView = androidx.compose.ui.platform.ComposeView(requireContext())
+        composeView.setContent {
+            com.ireddragonicy.konabessnext.ui.theme.KonaBessTheme {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background
+                ) {
+                    com.ireddragonicy.konabessnext.ui.compose.LoadingScreen()
+                }
+            }
+        }
 
-        contentContainer!!.addView(progressBar)
-        contentContainer!!.addView(
-            message, LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
-            )
-        )
+        contentContainer!!.addView(composeView, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
+        ))
     }
 
     private fun showErrorState(activity: MainActivity, customMessage: String? = null) {
         contentContainer!!.removeAllViews()
-        contentContainer!!.gravity = Gravity.CENTER
+        contentContainer!!.gravity = Gravity.FILL
+        
+        val message = customMessage ?: getString(R.string.gpu_prep_failed)
 
-        // Create a modern Material You error card
-        val card = MaterialCardView(requireContext())
-        card.cardElevation = 12f
-        card.radius = 28f
-        val cardPadding = 56
-        card.setContentPadding(cardPadding, cardPadding, cardPadding, cardPadding)
-
-        // Get theme color for error card background
-        val typedValue = TypedValue()
-        requireContext().theme.resolveAttribute(
-            com.google.android.material.R.attr.colorErrorContainer, typedValue, true
-        )
-        card.setCardBackgroundColor(typedValue.data)
-
-        val cardContent = LinearLayout(requireContext())
-        cardContent.orientation = LinearLayout.VERTICAL
-        cardContent.gravity = Gravity.CENTER
-
-        // Add error icon
-        val icon = ImageView(requireContext())
-        icon.setImageResource(android.R.drawable.ic_dialog_alert)
-        requireContext().theme.resolveAttribute(
-            com.google.android.material.R.attr.colorError, typedValue, true
-        )
-        icon.setColorFilter(typedValue.data)
-        val iconParams = LinearLayout.LayoutParams(140, 140)
-        iconParams.setMargins(0, 0, 0, 40)
-        cardContent.addView(icon, iconParams)
-
-        // Add title
-        val title = TextView(requireContext())
-        title.text = "Detection Failed"
-        title.textSize = 26f
-        title.textAlignment = View.TEXT_ALIGNMENT_CENTER
-        title.setTypeface(null, android.graphics.Typeface.BOLD)
-        requireContext().theme.resolveAttribute(
-            com.google.android.material.R.attr.colorOnErrorContainer, typedValue, true
-        )
-        title.setTextColor(typedValue.data)
-        val titleParams = LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-        )
-        titleParams.setMargins(0, 0, 0, 20)
-        cardContent.addView(title, titleParams)
-
-        // Add error message
-        val message = TextView(requireContext())
-        message.text = customMessage ?: getString(R.string.gpu_prep_failed)
-        message.textSize = 15f
-        message.textAlignment = View.TEXT_ALIGNMENT_CENTER
-        message.alpha = 0.85f
-        requireContext().theme.resolveAttribute(
-            com.google.android.material.R.attr.colorOnErrorContainer, typedValue, true
-        )
-        message.setTextColor(typedValue.data)
-        val messageParams = LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-        )
-        messageParams.setMargins(0, 0, 0, 40)
-        cardContent.addView(message, messageParams)
-
-        // Add retry button
-        val retryButton = MaterialButton(requireContext())
-        retryButton.setText(R.string.gpu_prep_retry)
-        retryButton.cornerRadius = 32
-        retryButton.elevation = 6f
-        val buttonPadding = 24
-        retryButton.setPadding(buttonPadding * 2, buttonPadding, buttonPadding * 2, buttonPadding)
-        retryButton.textSize = 16f
-        retryButton.setOnClickListener { startPreparation(activity) }
-        val buttonParams = LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
-        )
-        buttonParams.gravity = Gravity.CENTER_HORIZONTAL
-        cardContent.addView(retryButton, buttonParams)
-
-        // Add "Submit DTS to GitHub" button for unsupported devices
-        val submitDtsButton = MaterialButton(
-            requireContext(), null,
-            com.google.android.material.R.attr.materialButtonOutlinedStyle
-        )
-        submitDtsButton.setText(R.string.submit_dts_to_github)
-        submitDtsButton.cornerRadius = 32
-        submitDtsButton.setPadding(buttonPadding * 2, buttonPadding, buttonPadding * 2, buttonPadding)
-        submitDtsButton.textSize = 14f
-        submitDtsButton.setIconResource(R.drawable.ic_share)
-        submitDtsButton.iconGravity = MaterialButton.ICON_GRAVITY_TEXT_START
-        submitDtsButton.setOnClickListener { submitDtsToGitHub(activity) }
-        val submitParams = LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
-        )
-        submitParams.gravity = Gravity.CENTER_HORIZONTAL
-        submitParams.setMargins(0, 24, 0, 0)
-        cardContent.addView(submitDtsButton, submitParams)
-
-        // Add "Deep Scan" button for unsupported devices
-        val deepScanButton = MaterialButton(
-            requireContext(), null,
-            com.google.android.material.R.attr.materialButtonOutlinedStyle
-        )
-        deepScanButton.text = "Deep Scan DTS Structure"
-        deepScanButton.cornerRadius = 32
-        deepScanButton.setPadding(buttonPadding * 2, buttonPadding, buttonPadding * 2, buttonPadding)
-        deepScanButton.textSize = 14f
-        deepScanButton.setIconResource(R.drawable.ic_search) // Ensure this icon exists or use generic
-        deepScanButton.iconGravity = MaterialButton.ICON_GRAVITY_TEXT_START
-        deepScanButton.setOnClickListener { 
-            deviceViewModel.performDeepScan() 
-            Toast.makeText(context, "Scanning DTS files...", Toast.LENGTH_SHORT).show()
+        val composeView = androidx.compose.ui.platform.ComposeView(requireContext())
+        composeView.setContent {
+            com.ireddragonicy.konabessnext.ui.theme.KonaBessTheme {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        com.ireddragonicy.konabessnext.ui.compose.ErrorScreen(
+                            message = message,
+                            onRetryClick = { startPreparation(activity) },
+                            onSubmitDtsClick = { submitDtsToGitHub(activity) },
+                            onDeepScanClick = { 
+                                deviceViewModel.performDeepScan()
+                                Toast.makeText(context, "Scanning DTS files...", Toast.LENGTH_SHORT).show()
+                            }
+                        )
+                    }
+                }
+            }
         }
-        val scanParams = LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
-        )
-        scanParams.gravity = Gravity.CENTER_HORIZONTAL
-        scanParams.setMargins(0, 24, 0, 0)
-        cardContent.addView(deepScanButton, scanParams)
 
-        // Add "Manual Setup" button
-        val manualSetupButton = MaterialButton(requireContext(), null, com.google.android.material.R.attr.borderlessButtonStyle)
-        manualSetupButton.text = "Manual Setup"
-        manualSetupButton.textSize = 14f
-        manualSetupButton.setOnClickListener {
-            showManualSetupDialog(activity)
-        }
-        val manualParams = LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
-        )
-        manualParams.gravity = Gravity.CENTER_HORIZONTAL
-        manualParams.setMargins(0, 8, 0, 0)
-        cardContent.addView(manualSetupButton, manualParams)
-
-        card.addView(cardContent)
-
-        // Add card to container with margin
-        val cardParams = LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-        )
-        cardParams.setMargins(40, 0, 40, 0)
-        contentContainer!!.addView(card, cardParams)
+        contentContainer!!.addView(composeView, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
+        ))
     }
+
 
     private fun showScanResultsDialog(activity: MainActivity, results: List<com.ireddragonicy.konabessnext.core.scanner.DtsScanResult>) {
         if (results.size == 1) {

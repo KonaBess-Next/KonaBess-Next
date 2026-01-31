@@ -17,7 +17,7 @@ class KonaBessApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        SettingsActivity.applyThemeFromSettings(this)
+
 
         // Ensure RootHelper static initializer runs (or object is initialized), then pre-cache shell
         try {

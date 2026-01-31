@@ -28,6 +28,7 @@ class SettingsActivity : AppCompatActivity() {
         const val KEY_COLOR_PALETTE = "color_palette"
         const val KEY_AUTO_SAVE_GPU_TABLE = "auto_save_gpu_table"
         const val KEY_DYNAMIC_COLOR = "dynamic_color"
+        const val KEY_AMOLED_MODE = "amoled_mode"
 
         const val FREQ_UNIT_HZ = 0
         const val FREQ_UNIT_MHZ = 1
@@ -42,7 +43,6 @@ class SettingsActivity : AppCompatActivity() {
         const val PALETTE_BLUE = 2
         const val PALETTE_GREEN = 3
         const val PALETTE_PINK = 4
-        const val PALETTE_AMOLED = 5
 
         const val LANGUAGE_ENGLISH = "en"
         const val LANGUAGE_GERMAN = "de"
@@ -67,41 +67,9 @@ class SettingsActivity : AppCompatActivity() {
         }
 
         @JvmStatic
-        fun applyThemeFromSettings(context: Context) {
-            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            val dynamicColor = prefs.getBoolean(KEY_DYNAMIC_COLOR, true)
-
-            if (dynamicColor) {
-                context.setTheme(R.style.Theme_KonaBess)
-            } else {
-                val palette = prefs.getInt(KEY_COLOR_PALETTE, PALETTE_PURPLE)
-                when (palette) {
-                    PALETTE_PURPLE -> context.setTheme(R.style.Theme_KonaBess_Purple)
-                    PALETTE_BLUE -> context.setTheme(R.style.Theme_KonaBess_Blue)
-                    PALETTE_GREEN -> context.setTheme(R.style.Theme_KonaBess_Green)
-                    PALETTE_PINK -> context.setTheme(R.style.Theme_KonaBess_Pink)
-                    PALETTE_AMOLED -> context.setTheme(R.style.Theme_KonaBess_AMOLED)
-                    else -> context.setTheme(R.style.Theme_KonaBess_Purple)
-                }
-            }
-
-            val theme = prefs.getInt(KEY_THEME, THEME_SYSTEM)
-            applyThemeMode(theme)
-        }
-
-        @JvmStatic
         fun isAutoSaveEnabled(context: Context): Boolean {
             val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             return prefs.getBoolean(KEY_AUTO_SAVE_GPU_TABLE, false)
-        }
-
-        private fun applyThemeMode(theme: Int) {
-            val modes = intArrayOf(
-                AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM,
-                AppCompatDelegate.MODE_NIGHT_NO,
-                AppCompatDelegate.MODE_NIGHT_YES
-            )
-            AppCompatDelegate.setDefaultNightMode(modes[theme])
         }
     }
 
@@ -113,47 +81,46 @@ class SettingsActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        applyTheme()
+        updateThemeMode()
         super.onCreate(savedInstanceState)
 
         val composeView = ComposeView(this).apply {
             setContent {
-                SettingsScreen(
-                    currentTheme = currentThemeName,
-                    isDynamicColor = prefs.getBoolean(KEY_DYNAMIC_COLOR, true),
-                    currentColorPalette = currentColorPaletteName,
-                    currentLanguage = currentLanguageName,
-                    currentFreqUnit = currentFreqUnitName,
-                    isAutoSave = prefs.getBoolean(KEY_AUTO_SAVE_GPU_TABLE, false),
-                    onThemeClick = { showThemeDialog() },
-                    onDynamicColorToggle = { toggleDynamicColor() },
-                    onColorPaletteClick = { showColorPaletteDialog() },
-                    onLanguageClick = { showLanguageDialog() },
-                    onFreqUnitClick = { showFreqUnitDialog() },
-                    onAutoSaveToggle = { toggleAutoSave() },
-                    onHelpClick = { showHelpDialog() }
-                )
+                com.ireddragonicy.konabessnext.ui.theme.KonaBessTheme {
+                     SettingsScreen(
+                        currentTheme = currentThemeName,
+                        isDynamicColor = prefs.getBoolean(KEY_DYNAMIC_COLOR, true),
+                        currentColorPalette = currentColorPaletteName,
+                        currentLanguage = currentLanguageName,
+                        currentFreqUnit = currentFreqUnitName,
+                        isAutoSave = prefs.getBoolean(KEY_AUTO_SAVE_GPU_TABLE, false),
+                        onThemeClick = { showThemeDialog() },
+                        onDynamicColorToggle = { toggleDynamicColor() },
+                        onColorPaletteClick = { showColorPaletteDialog() },
+                        onLanguageClick = { showLanguageDialog() },
+                        onFreqUnitClick = { showFreqUnitDialog() },
+                        onAutoSaveToggle = { toggleAutoSave() },
+                        onHelpClick = { showHelpDialog() },
+                        isAmoledMode = prefs.getBoolean(KEY_AMOLED_MODE, false),
+                        onAmoledModeToggle = { toggleAmoledMode() }
+                    )
+                }
             }
         }
         setContentView(composeView)
     }
 
-    private fun applyTheme() {
-        val dynamicColor = prefs.getBoolean(KEY_DYNAMIC_COLOR, true)
+    // Removed applyTheme() method as it uses XML styles
+    private fun applyThemeMode(theme: Int) {
+        val modes = intArrayOf(
+            AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM,
+            AppCompatDelegate.MODE_NIGHT_NO,
+            AppCompatDelegate.MODE_NIGHT_YES
+        )
+        AppCompatDelegate.setDefaultNightMode(modes[theme])
+    }
 
-        if (dynamicColor) {
-            setTheme(R.style.Theme_KonaBess)
-        } else {
-            val palette = prefs.getInt(KEY_COLOR_PALETTE, PALETTE_PURPLE)
-            when (palette) {
-                PALETTE_PURPLE -> setTheme(R.style.Theme_KonaBess_Purple)
-                PALETTE_BLUE -> setTheme(R.style.Theme_KonaBess_Blue)
-                PALETTE_GREEN -> setTheme(R.style.Theme_KonaBess_Green)
-                PALETTE_PINK -> setTheme(R.style.Theme_KonaBess_Pink)
-                PALETTE_AMOLED -> setTheme(R.style.Theme_KonaBess_AMOLED)
-                else -> setTheme(R.style.Theme_KonaBess_Purple)
-            }
-        }
+    private fun updateThemeMode() {
         applyThemeMode(savedTheme)
     }
 
@@ -189,7 +156,7 @@ class SettingsActivity : AppCompatActivity() {
             .setSingleChoiceItems(themes, savedTheme) { dialog, which ->
                 saveTheme(which)
                 dialog.dismiss()
-                applyTheme()
+                updateThemeMode()
                 recreate()
             }
             .setNegativeButton(getString(R.string.cancel), null)
@@ -255,15 +222,19 @@ class SettingsActivity : AppCompatActivity() {
         recreate()
     }
 
+    private fun toggleAmoledMode() {
+        prefs.edit().putBoolean(KEY_AMOLED_MODE, !isAmoledModeEnabled).apply()
+        recreate()
+    }
+
     private fun showColorPaletteDialog() {
         val palettes = arrayOf(
             getString(R.string.palette_purple_teal),
             getString(R.string.palette_blue_orange),
             getString(R.string.palette_green_red),
-            getString(R.string.palette_pink_cyan),
-            getString(R.string.palette_amoled)
+            getString(R.string.palette_pink_cyan)
         )
-        val paletteIds = intArrayOf(PALETTE_PURPLE, PALETTE_BLUE, PALETTE_GREEN, PALETTE_PINK, PALETTE_AMOLED)
+        val paletteIds = intArrayOf(PALETTE_PURPLE, PALETTE_BLUE, PALETTE_GREEN, PALETTE_PINK)
 
         val currentPalette = savedColorPalette
         var initialSelection = 0
@@ -302,7 +273,6 @@ class SettingsActivity : AppCompatActivity() {
             PALETTE_BLUE -> getString(R.string.palette_blue_orange)
             PALETTE_GREEN -> getString(R.string.palette_green_red)
             PALETTE_PINK -> getString(R.string.palette_pink_cyan)
-            PALETTE_AMOLED -> getString(R.string.palette_amoled)
             else -> getString(R.string.palette_purple_teal)
         }
 
@@ -315,6 +285,7 @@ class SettingsActivity : AppCompatActivity() {
 
     private val isAutoSaveEnabled: Boolean get() = prefs.getBoolean(KEY_AUTO_SAVE_GPU_TABLE, false)
     private val isDynamicColorEnabled: Boolean get() = prefs.getBoolean(KEY_DYNAMIC_COLOR, true)
+    private val isAmoledModeEnabled: Boolean get() = prefs.getBoolean(KEY_AMOLED_MODE, false)
     private val savedLanguage: String get() = prefs.getString(KEY_LANGUAGE, LANGUAGE_ENGLISH) ?: LANGUAGE_ENGLISH
     private val savedTheme: Int get() = prefs.getInt(KEY_THEME, THEME_SYSTEM)
     private val savedFreqUnit: Int get() = prefs.getInt(KEY_FREQ_UNIT, FREQ_UNIT_MHZ)
