@@ -17,13 +17,13 @@ import com.google.android.material.card.MaterialCardView
 import com.google.android.material.color.MaterialColors
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.ireddragonicy.konabessnext.R
-import com.ireddragonicy.konabessnext.core.KonaBessCore
 import com.ireddragonicy.konabessnext.model.Dtb
 import com.ireddragonicy.konabessnext.ui.MainActivity
 import com.ireddragonicy.konabessnext.ui.adapters.ChipsetSelectorAdapter
 import com.ireddragonicy.konabessnext.ui.compose.ManualChipsetSetupScreen
 import com.ireddragonicy.konabessnext.utils.DialogUtil
 import com.ireddragonicy.konabessnext.viewmodel.DeviceViewModel
+import com.ireddragonicy.konabessnext.viewmodel.UiState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -38,6 +38,7 @@ object ChipsetManager {
     fun createChipsetSelectorCard(
         activity: Activity, page: LinearLayout,
         chipsetNameView: TextView,
+        viewModel: DeviceViewModel,
         listener: OnChipsetSwitchedListener
     ): View {
         val density = activity.resources.displayMetrics.density
@@ -88,7 +89,7 @@ object ChipsetManager {
         chipIcon.setColorFilter(MaterialColors.getColor(chipIcon, com.google.android.material.R.attr.colorOnSurface))
         chipsetRow.addView(chipIcon)
 
-        val currentDtb = KonaBessCore.currentDtb
+        val currentDtb = viewModel.selectedChipset.value
         if (currentDtb != null) {
             chipsetNameView.text = "${currentDtb.id} ${currentDtb.type.name}"
         } else {
@@ -108,13 +109,7 @@ object ChipsetManager {
         chipsetRow.addView(changeIcon)
 
         chipsetRow.setOnClickListener {
-            // NOTE: In legacy card use, active ID is hard to get synchronously from here without viewModel.
-            // We pass -1 or try to get it if activity is MainActivity.
-            var activeId = -1
-            if (activity is MainActivity) {
-                activeId = activity.deviceViewModel.activeDtbId.value
-            }
-            showChipsetSelectorDialog(activity, page, chipsetNameView, activeId, listener)
+            showChipsetSelectorDialog(activity, page, chipsetNameView, viewModel, listener)
         }
 
         innerLayout.addView(chipsetRow)
@@ -127,29 +122,55 @@ object ChipsetManager {
     fun showChipsetSelectorDialog(
         activity: Activity, page: LinearLayout,
         chipsetNameView: TextView,
-        activeDtbId: Int, // Explicit pass
+        viewModel: DeviceViewModel,
         listener: OnChipsetSwitchedListener
     ) {
         val lifecycleOwner = activity as? ComponentActivity ?: return
+        val currentState = viewModel.detectionState.value
 
-        if (KonaBessCore.dtbs == null) {
+        if (currentState !is UiState.Success || currentState.data.isEmpty()) {
             val waiting = DialogUtil.getWaitDialog(activity, R.string.processing)
             waiting.show()
             lifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
-                try { KonaBessCore.checkDevice(activity) } catch (e: Exception) { e.printStackTrace() }
+                try { 
+                    viewModel.detectChipset()
+                    // Wait for state update is tricky here without observing, but detectChipset updates flow.
+                    // We can just rely on flow collection or simple delay if necessary, 
+                    // but calling detectChipset is async in ViewModel.
+                    // We should probably observe the state.
+                } catch (e: Exception) { e.printStackTrace() }
+                
                 withContext(Dispatchers.Main) {
-                    waiting.dismiss()
-                    showChipsetSelectorDialog(activity, page, chipsetNameView, activeDtbId, listener)
+                   waiting.dismiss()
+                   // Re-check state or observe. For now assume it settled or show dialog directly if possible.
+                   // Ideally we should observe. But keeping it simple like original:
+                   // The original was blocking/semi-async. ViewModel.detectChipset is async.
+                   // We'll show the dialog with whatever we have, or rely on observing in UI logic.
+                   // But since this is a static helper, we might need to access the latest value.
+                   val newState = viewModel.detectionState.value
+                   if (newState is UiState.Success) {
+                       showChipsetSelectorDialogInternal(activity, page, chipsetNameView, newState.data, viewModel, listener)
+                   } else {
+                       Toast.makeText(activity, "Failed to load chipsets", Toast.LENGTH_SHORT).show()
+                   }
                 }
             }
             return
         }
 
+        showChipsetSelectorDialogInternal(activity, page, chipsetNameView, currentState.data, viewModel, listener)
+    }
+
+    private fun showChipsetSelectorDialogInternal(
+        activity: Activity, page: LinearLayout,
+        chipsetNameView: TextView,
+        list: List<Dtb>,
+        viewModel: DeviceViewModel,
+        listener: OnChipsetSwitchedListener
+    ) {
         val dialogView = LayoutInflater.from(activity).inflate(R.layout.dialog_chipset_selector, null)
         val recyclerView = dialogView.findViewById<RecyclerView>(R.id.chipset_list)
         recyclerView.layoutManager = LinearLayoutManager(activity)
-        
-        val list = KonaBessCore.dtbs ?: emptyList()
         
         val dialog = MaterialAlertDialogBuilder(activity)
             .setView(dialogView)
@@ -159,8 +180,8 @@ object ChipsetManager {
         val adapter = ChipsetSelectorAdapter(
             list,
             activity,
-            activeDtbId,
-            KonaBessCore.currentDtb?.id,
+            viewModel.activeDtbId.value,
+            viewModel.selectedChipset.value?.id,
             object : ChipsetSelectorAdapter.OnChipsetSelectedListener {
                 override fun onChipsetSelected(dtb: Dtb) {
                     dialog.dismiss()

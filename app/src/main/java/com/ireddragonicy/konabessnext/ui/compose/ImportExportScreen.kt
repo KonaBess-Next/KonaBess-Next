@@ -149,6 +149,7 @@ fun ImportExportScreen(
                                 color = MaterialTheme.colorScheme.surfaceVariant,
                                 shape = RoundedCornerShape(12.dp)
                             ) {
+                                @Suppress("DEPRECATION")
                                 val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
                                 Box(modifier = Modifier.padding(16.dp)) {
                                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {

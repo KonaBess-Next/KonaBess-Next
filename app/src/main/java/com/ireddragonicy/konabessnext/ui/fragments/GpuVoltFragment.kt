@@ -43,7 +43,7 @@ class GpuVoltFragment : Fragment() {
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
-            setBackgroundColor(resources.getColor(android.R.color.background_light)) // Or theme color
+            setBackgroundColor(androidx.core.content.ContextCompat.getColor(requireContext(), android.R.color.background_light)) // Or theme color
         }
 
         // Toolbar

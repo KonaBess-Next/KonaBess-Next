@@ -213,7 +213,7 @@ class GpuFrequencyViewModel @Inject constructor(
                 try {
                      val decoded = com.ireddragonicy.konabessnext.utils.DtsHelper.decode_int_line(line)
                      val newValue = decoded.value + offset
-                     bin.header[i] = com.ireddragonicy.konabessnext.utils.DtsHelper.encodeIntOrHexLine(decoded.name ?: "", newValue.toString())
+                     bin.header[i] = com.ireddragonicy.konabessnext.utils.DtsHelper.encodeIntOrHexLine(decoded.name, newValue.toString())
                      break
                 } catch (e: Exception) { }
             }
@@ -227,7 +227,7 @@ class GpuFrequencyViewModel @Inject constructor(
                 try {
                      val decoded = com.ireddragonicy.konabessnext.utils.DtsHelper.decode_int_line(line)
                      val newValue = decoded.value + offset
-                     bin.header[i] = com.ireddragonicy.konabessnext.utils.DtsHelper.encodeIntOrHexLine(decoded.name ?: "", newValue.toString())
+                     bin.header[i] = com.ireddragonicy.konabessnext.utils.DtsHelper.encodeIntOrHexLine(decoded.name, newValue.toString())
                      break
                 } catch (e: Exception) { }
             }

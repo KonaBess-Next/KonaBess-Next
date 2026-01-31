@@ -19,7 +19,6 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.Observer
 import com.ireddragonicy.konabessnext.ui.MainActivity
 import com.ireddragonicy.konabessnext.core.editor.ChipsetManager
-import com.ireddragonicy.konabessnext.core.KonaBessCore
 
 import com.google.android.material.button.MaterialButtonToggleGroup
 
@@ -189,17 +188,14 @@ class GpuActionToolbar @JvmOverloads constructor(
                          // We just ignore the text updates since the button is icon-only.
                          val dummyTextView = android.widget.TextView(activity)
                          
-                         var activeId = -1
-                         if (activity is MainActivity) {
-                             activeId = activity.deviceViewModel.activeDtbId.value
-                         }
+                         val activeId = (activity as MainActivity).deviceViewModel.activeDtbId.value
                          
                          chipsetListener?.let { listener ->
                              ChipsetManager.showChipsetSelectorDialog(
                                  activity, 
                                  parentViewForVolt as LinearLayout, 
                                  dummyTextView, 
-                                 activeId,
+                                 activity.deviceViewModel,
                                  listener
                              )
                          }
@@ -215,7 +211,7 @@ class GpuActionToolbar @JvmOverloads constructor(
             // Flash Button
             btnFlash = createMaterialButton(activity, "Flash", R.drawable.ic_flash)
             btnFlash!!.setOnClickListener {
-                (activity as MainActivity).startRepack()
+                activity.startRepack()
             }
             btnFlash!!.layoutParams = LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
             

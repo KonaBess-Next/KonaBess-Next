@@ -78,42 +78,42 @@ class GuiEditorFragment : Fragment() {
                                 )
                             }
                         }
-                    } else if (selectedBinIndex == null || selectedBinIndex == -1) {
+                    } else if (selectedBinIndex == -1) {
                         com.ireddragonicy.konabessnext.ui.compose.GpuBinList(
                             bins = bins,
                             isLoading = workbenchState is SharedGpuViewModel.WorkbenchState.Loading,
                             onBinClick = { gpuFrequencyViewModel.selectedBinIndex.value = it },
                             onReload = { sharedViewModel.loadData() }
                         )
-                    } else if (selectedLevelIndex == null || selectedLevelIndex == -1) {
-                        val uiModels = binUiModels[selectedBinIndex!!]
+                    } else if (selectedLevelIndex == -1) {
+                        val uiModels = binUiModels[selectedBinIndex]
                         if (uiModels != null) {
                             com.ireddragonicy.konabessnext.ui.compose.GpuLevelList(
                                 uiModels = uiModels,
                                 onLevelClick = { gpuFrequencyViewModel.selectedLevelIndex.value = it },
-                                onAddLevelTop = { sharedViewModel.addFrequencyWrapper(selectedBinIndex!!, true) },
-                                onAddLevelBottom = { sharedViewModel.addFrequencyWrapper(selectedBinIndex!!, false) },
-                                onDuplicateLevel = { sharedViewModel.duplicateFrequency(selectedBinIndex!!, it) },
-                                onDeleteLevel = { sharedViewModel.removeFrequency(selectedBinIndex!!, it) },
-                                onReorder = { from, to -> sharedViewModel.reorderFrequency(selectedBinIndex!!, from, to) },
+                                onAddLevelTop = { sharedViewModel.addFrequencyWrapper(selectedBinIndex, true) },
+                                onAddLevelBottom = { sharedViewModel.addFrequencyWrapper(selectedBinIndex, false) },
+                                onDuplicateLevel = { sharedViewModel.duplicateFrequency(selectedBinIndex, it) },
+                                onDeleteLevel = { sharedViewModel.removeFrequency(selectedBinIndex, it) },
+                                onReorder = { from, to -> sharedViewModel.reorderFrequency(selectedBinIndex, from, to) },
                                 onBack = { gpuFrequencyViewModel.selectedBinIndex.value = -1 },
-                                onOpenCurveEditor = { (requireActivity() as MainActivity).openCurveEditor(selectedBinIndex!!) }
+                                onOpenCurveEditor = { (requireActivity() as MainActivity).openCurveEditor(selectedBinIndex) }
                             )
                         } else {
                             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
                         }
                     } else {
-                        val level = bins.getOrNull(selectedBinIndex!!)?.levels?.getOrNull(selectedLevelIndex!!)
+                        val level = bins.getOrNull(selectedBinIndex)?.levels?.getOrNull(selectedLevelIndex)
                         if (level != null) {
                             com.ireddragonicy.konabessnext.ui.compose.GpuParamEditor(
                                 level = level,
                                 onBack = { gpuFrequencyViewModel.selectedLevelIndex.value = -1 },
                                 onDeleteLevel = {
-                                    sharedViewModel.removeFrequency(selectedBinIndex!!, selectedLevelIndex!!)
+                                    sharedViewModel.removeFrequency(selectedBinIndex, selectedLevelIndex)
                                     gpuFrequencyViewModel.selectedLevelIndex.value = -1 
                                 },
                                 onUpdateParam = { lineIdx, encoded, history ->
-                                    sharedViewModel.updateParameter(selectedBinIndex!!, selectedLevelIndex!!, lineIdx, encoded, history)
+                                    sharedViewModel.updateParameter(selectedBinIndex, selectedLevelIndex, lineIdx, encoded, history)
                                 }
                             )
                         }

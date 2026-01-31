@@ -176,7 +176,7 @@ object FrequencyDialogHelper {
                     if (existingLine == encodedLine) {
                         return@setPositiveButton
                     }
-                    val freqLabel = SettingsActivity.formatFrequency(hzValue, activity)
+                    val freqLabel = com.ireddragonicy.konabessnext.utils.FrequencyFormatter.format(activity, hzValue)
                     listener.onSaved(lineIndex, encodedLine, freqLabel)
                     Toast.makeText(activity, R.string.save_success, Toast.LENGTH_SHORT).show()
                 } catch (e: Exception) {
@@ -218,11 +218,6 @@ object FrequencyDialogHelper {
 
     @JvmStatic
     fun formatFrequencyWithUnit(hz: Long, preferredUnit: Int, context: android.content.Context): String {
-        return when (preferredUnit) {
-            SettingsActivity.FREQ_UNIT_HZ -> context.getString(R.string.format_hz, hz)
-            SettingsActivity.FREQ_UNIT_MHZ -> context.getString(R.string.format_mhz, hz / 1000000)
-            SettingsActivity.FREQ_UNIT_GHZ -> context.getString(R.string.format_ghz, hz / 1000000000.0)
-            else -> context.getString(R.string.format_mhz, hz / 1000000)
-        }
+        return com.ireddragonicy.konabessnext.utils.FrequencyFormatter.format(context, hz, preferredUnit)
     }
 }

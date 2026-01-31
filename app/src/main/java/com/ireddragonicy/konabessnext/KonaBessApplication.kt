@@ -24,7 +24,7 @@ class KonaBessApplication : Application() {
             // Configure Shell builder before creating the shell
             Shell.enableVerboseLogging = false
             Shell.setDefaultBuilder(Shell.Builder.create()
-                .setFlags(Shell.FLAG_REDIRECT_STDERR)
+                .setFlags(@Suppress("DEPRECATION") Shell.FLAG_REDIRECT_STDERR)
                 .setTimeout(10))
             
             // Accessing the object instance to force initialization if needed

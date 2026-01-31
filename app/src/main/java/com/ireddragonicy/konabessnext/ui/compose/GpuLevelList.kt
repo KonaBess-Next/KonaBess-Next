@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -52,7 +53,7 @@ fun GpuLevelList(
     val iconMenu = rememberVectorPainter(Icons.Default.Menu)
     val iconDelete = rememberVectorPainter(Icons.Default.Delete)
     val iconAdd = rememberVectorPainter(Icons.Default.Add)
-    val iconBack = rememberVectorPainter(Icons.Filled.ArrowBack)
+    val iconBack = rememberVectorPainter(Icons.AutoMirrored.Filled.ArrowBack)
     val iconEdit = rememberVectorPainter(Icons.Filled.Edit)
 
     // 2. Mutable State for Drag-and-Drop

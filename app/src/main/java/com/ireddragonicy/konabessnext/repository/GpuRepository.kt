@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.flowOn
 
 @Singleton
+@OptIn(kotlinx.coroutines.FlowPreview::class)
 class GpuRepository @Inject constructor(
     private val deviceRepository: DeviceRepository,
     private val chipRepository: com.ireddragonicy.konabessnext.repository.ChipRepository

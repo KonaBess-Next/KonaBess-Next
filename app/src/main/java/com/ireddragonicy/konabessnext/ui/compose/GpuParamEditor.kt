@@ -10,6 +10,7 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -39,15 +40,15 @@ fun GpuParamEditor(
         val params = remember(level) {
             level.lines.mapIndexed { index, line ->
                 val decoded = DtsHelper.decode_hex_line(line)
-                val name = decoded.name ?: ""
-                val rawValue = decoded.value ?: ""
+                val name = decoded.name
+                val rawValue = decoded.value
                 val title = ChipStringHelper.convertLevelParams(name, context)
                 
                 // Format value for display
                 val displayValue = try {
                     if (name == "qcom,gpu-freq") {
                         val hz = if (rawValue.startsWith("0x")) java.lang.Long.decode(rawValue) else rawValue.toLong()
-                        com.ireddragonicy.konabessnext.ui.SettingsActivity.formatFrequency(hz, context)
+                        com.ireddragonicy.konabessnext.utils.FrequencyFormatter.format(context, hz)
                     } else if (name == "qcom,level" || name == "qcom,cx-level") {
                         val lvl = if (rawValue.startsWith("0x")) java.lang.Long.decode(rawValue) else rawValue.toLong()
                         val idx = com.ireddragonicy.konabessnext.core.editor.LevelOperations.levelint2int(lvl)
@@ -101,7 +102,7 @@ fun GpuParamEditor(
                     ),
                     navigationIcon = {
                         IconButton(onClick = onBack) {
-                            Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.back))
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back))
                         }
                     },
                     actions = {
@@ -208,8 +209,8 @@ fun EditParamSheetContent(
 @Composable
 fun VoltageSelector(param: ParamItem, onSave: (String, String) -> Unit) {
     // Voltage Logic
-    val levels = com.ireddragonicy.konabessnext.core.ChipInfo.rpmh_levels?.level_str() ?: emptyArray()
-    val values = com.ireddragonicy.konabessnext.core.ChipInfo.rpmh_levels?.levels() ?: intArrayOf()
+    val levels = com.ireddragonicy.konabessnext.core.ChipInfo.rpmh_levels.level_str()
+    val values = com.ireddragonicy.konabessnext.core.ChipInfo.rpmh_levels.levels()
     
     val currentLong = try { 
         if (param.rawValue.startsWith("0x")) java.lang.Long.decode(param.rawValue) else param.rawValue.toLong() 
@@ -383,7 +384,7 @@ fun FrequencyEditor(param: ParamItem, onSave: (String, String) -> Unit) {
             onClick = {
                 if (hzValue > 0) {
                     val encoded = DtsHelper.encodeIntOrHexLine(param.rawName, hzValue.toString())
-                    val label = com.ireddragonicy.konabessnext.ui.SettingsActivity.formatFrequency(hzValue, context)
+                    val label = com.ireddragonicy.konabessnext.utils.FrequencyFormatter.format(context, hzValue)
                     onSave(encoded, "Updated Frequency to $label")
                 }
             },

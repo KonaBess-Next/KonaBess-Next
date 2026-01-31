@@ -169,15 +169,19 @@ fun KonaBessTheme(
         SideEffect {
             val activity = view.context.findActivity()
             if (activity != null) {
+                @Suppress("DEPRECATION")
                 val window = activity.window
+                @Suppress("DEPRECATION")
                 window.statusBarColor = Color.Transparent.toArgb() 
                 
                 WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !effectiveDarkTheme
                 
                 if (effectiveDarkTheme && amoledMode) {
+                     @Suppress("DEPRECATION")
                      window.navigationBarColor = Color.Black.toArgb()
                      WindowCompat.getInsetsController(window, view).isAppearanceLightNavigationBars = false
                 } else {
+                     @Suppress("DEPRECATION")
                      window.navigationBarColor = colorScheme.surface.toArgb() 
                      WindowCompat.getInsetsController(window, view).isAppearanceLightNavigationBars = !effectiveDarkTheme
                 }

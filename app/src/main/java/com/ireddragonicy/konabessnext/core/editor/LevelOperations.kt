@@ -103,24 +103,8 @@ object LevelOperations {
 
     @JvmStatic
     fun getFrequencyFromLevel(lvl: Level): Long {
-        // Fast path string parsing without Regex overhead
-        // Format: qcom,gpu-freq = <587000000>;
-        for (line in lvl.lines) {
-            if (line.contains("qcom,gpu-freq")) {
-                val start = line.indexOf('<')
-                val end = line.indexOf('>')
-                if (start != -1 && end != -1 && end > start) {
-                    val valStr = line.substring(start + 1, end).trim()
-                    return try {
-                        if (valStr.startsWith("0x")) valStr.substring(2).toLong(16)
-                        else valStr.toLong()
-                    } catch (e: Exception) {
-                        0L
-                    }
-                }
-            }
-        }
-        return 0L
+        // Delegate to the model which delegates to the helper
+        return lvl.frequency
     }
 
     @JvmStatic
@@ -189,7 +173,7 @@ object LevelOperations {
     fun getFrequencyLabel(level: Level, activity: Activity): String {
         return try {
             val freq = getFrequencyFromLevel(level)
-            SettingsActivity.formatFrequency(freq, activity)
+            com.ireddragonicy.konabessnext.utils.FrequencyFormatter.format(activity, freq)
         } catch (e: Exception) {
             "Unknown"
         }

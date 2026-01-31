@@ -4,11 +4,11 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.util.Log
 import com.ireddragonicy.konabessnext.core.ChipInfo
+import com.ireddragonicy.konabessnext.core.processor.BootImageProcessor
 import com.ireddragonicy.konabessnext.model.ChipDefinition
 import com.ireddragonicy.konabessnext.model.Dtb
 import com.ireddragonicy.konabessnext.model.DtbType
 import com.ireddragonicy.konabessnext.utils.AssetsUtil
-import com.ireddragonicy.konabessnext.core.KonaBessCore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -16,9 +16,6 @@ import java.io.BufferedReader
 import java.io.File
 import java.io.FileReader
 import java.io.IOException
-import java.nio.file.Files
-import java.nio.file.Paths
-import java.util.Arrays
 import java.util.regex.Pattern
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -27,20 +24,17 @@ import javax.inject.Singleton
 class DeviceRepository @Inject constructor(
     @ApplicationContext private val context: Context,
     private val shellRepository: ShellRepository,
+    private val bootImageProcessor: BootImageProcessor,
     private val prefs: SharedPreferences
 ) {
 
     companion object {
         private const val TAG = "KonaBessDet"
         private val REQUIRED_BINARIES = arrayOf("dtc", "magiskboot")
-        private val DTB_MAGIC = byteArrayOf(0xD0.toByte(), 0x0D.toByte(), 0xFE.toByte(), 0xED.toByte())
-        private const val DTB_HEADER_SIZE = 8
-        private const val BYTE_MASK = 0xFF
         
         private val MODEL_PROPERTY = Pattern.compile("model\\s*=\\s*\"([^\"]+)\"")
         private val COMPATIBLE_PROPERTY = Pattern.compile("compatible\\s*=\\s*([^;]+);")
         
-        private const val PREFS_NAME = "KonaBessChipset"
         private const val KEY_LAST_DTB_ID = "last_dtb_id"
         private const val KEY_LAST_CHIP_TYPE = "last_chip_type"
 
@@ -84,7 +78,6 @@ class DeviceRepository @Inject constructor(
         val dtsFile = File(filesDir, "$dtbIndex.dts")
         if (dtsFile.exists()) {
             dtsPath = dtsFile.absolutePath
-            KonaBessCore.dts_path = dtsPath
             ChipInfo.current = def
             currentDtb = Dtb(dtbIndex, def)
             prepared = true
@@ -181,7 +174,6 @@ class DeviceRepository @Inject constructor(
 
     fun chooseTarget(dtb: Dtb) {
         dtsPath = "$filesDir/${dtb.id}.dts"
-        KonaBessCore.dts_path = dtsPath
         ChipInfo.current = dtb.type
         currentDtb = dtb
         prepared = (dtb.type.strategyType.isNotEmpty())
@@ -192,7 +184,6 @@ class DeviceRepository @Inject constructor(
         val file = File(filesDir, "$index.dts")
         if (file.exists()) {
             dtsPath = file.absolutePath
-            KonaBessCore.dts_path = dtsPath
         }
     }
 
@@ -235,7 +226,7 @@ class DeviceRepository @Inject constructor(
                 val dtsModel = MODEL_PROPERTY.matcher(content).let { if (it.find()) sanitizeString(it.group(1) ?: "") else "" }
                 val dtsCompatibles = mutableListOf<String>()
                 val compMatcher = Pattern.compile("\"([^\"]+)\"").matcher(COMPATIBLE_PROPERTY.matcher(content).let { if (it.find()) it.group(1) ?: "" else "" })
-                while (compMatcher.find()) { dtsCompatibles.add(compMatcher.group(1)) }
+                while (compMatcher.find()) { dtsCompatibles.add(compMatcher.group(1) ?: "") }
 
                 if (activeDtbId == -1) {
                     if (runningCompatibles.intersect(dtsCompatibles.toSet()).isNotEmpty()) {
@@ -295,50 +286,12 @@ class DeviceRepository @Inject constructor(
     private fun readFileToString(file: File): String = BufferedReader(FileReader(file)).use { it.readText() }
 
     suspend fun bootImage2dts() = withContext(Dispatchers.IO) {
-        unpackBootImage()
-        dtbNum = dtbSplit()
-        for (i in 0 until dtbNum) shellRepository.exec("cd $filesDir && ./dtc -I dtb -O dts $i.dtb -o $i.dts && rm -f $i.dtb")
-    }
-    
-    private suspend fun unpackBootImage() {
-        shellRepository.exec("cd $filesDir && ./magiskboot unpack boot.img && chmod -R 777 $filesDir")
-        val hasKernelDtb = File(filesDir, "kernel_dtb").exists()
-        val hasDtb = File(filesDir, "dtb").exists()
-        dtbType = when { hasKernelDtb && hasDtb -> DtbType.BOTH; hasKernelDtb -> DtbType.KERNEL_DTB; hasDtb -> DtbType.DTB; else -> throw IOException("No DTB found") }
-    }
-    
-    private fun dtbSplit(): Int {
-        val dtbFile = if (dtbType == DtbType.DTB || dtbType == DtbType.BOTH) File(filesDir, "dtb") else File(filesDir, "kernel_dtb")
-        if (dtbType == DtbType.BOTH) File(filesDir, "kernel_dtb").delete()
-        val data = Files.readAllBytes(dtbFile.toPath())
-        val offsets = mutableListOf<Int>()
-        var i = 0
-        while (i + DTB_HEADER_SIZE < data.size) {
-            if (data[i] == DTB_MAGIC[0] && data[i+1] == DTB_MAGIC[1] && data[i+2] == DTB_MAGIC[2] && data[i+3] == DTB_MAGIC[3]) {
-                offsets.add(i)
-                val size = ((data[i+4].toInt() and BYTE_MASK) shl 24) or ((data[i+5].toInt() and BYTE_MASK) shl 16) or ((data[i+6].toInt() and BYTE_MASK) shl 8) or (data[i+7].toInt() and BYTE_MASK)
-                i += Math.max(size, 1)
-            } else i++
-        }
-        for (idx in offsets.indices) {
-            val start = offsets[idx]
-            val end = if (idx + 1 < offsets.size) offsets[idx + 1] else data.size
-            Files.write(Paths.get(filesDir, "$idx.dtb"), Arrays.copyOfRange(data, start, end))
-        }
-        dtbFile.delete()
-        return offsets.size
+        dtbType = bootImageProcessor.unpackBootImage(filesDir)
+        dtbNum = bootImageProcessor.splitAndConvertDtbs(filesDir, dtbType!!)
     }
     
     suspend fun dts2bootImage() = withContext(Dispatchers.IO) {
-        val count = getDtbCount()
-        for (i in 0 until count) shellRepository.exec("cd $filesDir && ./dtc -I dts -O dtb $i.dts -o $i.dtb")
-        val out = if (dtbType == DtbType.KERNEL_DTB) "kernel_dtb" else "dtb"
-        val cmd = StringBuilder("cd $filesDir && cat")
-        for (i in 0 until count) cmd.append(" $i.dtb")
-        cmd.append(" > $out")
-        if (dtbType == DtbType.BOTH) cmd.append(" && cp dtb kernel_dtb")
-        cmd.append(" && ./magiskboot repack boot.img boot_new.img")
-        shellRepository.exec(cmd.toString())
+        bootImageProcessor.repackBootImage(filesDir, dtbNum, dtbType)
     }
 
     private fun saveLastChipset(dtbId: Int, chipType: String) {

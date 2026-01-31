@@ -136,7 +136,7 @@ class GpuCurveEditorFragment : Fragment() {
             if (parentFragmentManager.backStackEntryCount > 0) {
                 parentFragmentManager.popBackStack()
             } else {
-                requireActivity().onBackPressed()
+                requireActivity().onBackPressedDispatcher.onBackPressed()
             }
         }
 
@@ -525,7 +525,7 @@ class GpuCurveEditorFragment : Fragment() {
         val levelStrings = ChipInfo.rpmh_levels.level_str()
         val levelValues = ChipInfo.rpmh_levels.levels()
 
-        if (levelStrings == null || levelStrings.isEmpty()) {
+        if (levelStrings.isEmpty()) {
             Toast.makeText(context, "Voltage levels not available", Toast.LENGTH_SHORT).show()
             return
         }

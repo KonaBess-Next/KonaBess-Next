@@ -52,7 +52,7 @@ class ExportHistoryManager(context: Context) {
 
                 // Only check existence if it's a physical local file path
                 val path = item.filePath
-                val isLocalFile = path != null && path.startsWith("/") && !path.startsWith("/content:") && !path.startsWith("content:")
+                val isLocalFile = path.startsWith("/") && !path.startsWith("/content:") && !path.startsWith("content:")
                 
                 if (isLocalFile) {
                     val file = File(path)

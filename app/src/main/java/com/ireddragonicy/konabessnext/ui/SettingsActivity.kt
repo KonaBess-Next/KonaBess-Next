@@ -50,23 +50,6 @@ class SettingsActivity : AppCompatActivity() {
         const val LANGUAGE_INDONESIAN = "in"
 
         @JvmStatic
-        fun formatFrequency(frequencyHz: Long, unit: Int, context: Context): String {
-            return when (unit) {
-                FREQ_UNIT_HZ -> context.getString(R.string.format_hz, frequencyHz)
-                FREQ_UNIT_MHZ -> context.getString(R.string.format_mhz, frequencyHz / 1000000L)
-                FREQ_UNIT_GHZ -> context.getString(R.string.format_ghz, frequencyHz / 1000000000.0)
-                else -> context.getString(R.string.format_mhz, frequencyHz / 1000000L)
-            }
-        }
-
-        @JvmStatic
-        fun formatFrequency(frequencyHz: Long, context: Context): String {
-            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            val unit = prefs.getInt(KEY_FREQ_UNIT, FREQ_UNIT_MHZ)
-            return formatFrequency(frequencyHz, unit, context)
-        }
-
-        @JvmStatic
         fun isAutoSaveEnabled(context: Context): Boolean {
             val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             return prefs.getBoolean(KEY_AUTO_SAVE_GPU_TABLE, false)

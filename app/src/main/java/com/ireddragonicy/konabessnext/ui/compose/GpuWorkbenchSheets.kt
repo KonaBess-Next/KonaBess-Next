@@ -64,7 +64,6 @@ fun GpuWorkbenchSheets(
                     onConfigure = onConfigureManual,
                     onAdd = onAddNewDtb
                 )
-                else -> {}
             }
         }
     }

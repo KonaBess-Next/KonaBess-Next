@@ -43,10 +43,10 @@ object LocaleUtil {
         val parts = normalized.split("-")
         
         return when (parts.size) {
-            1 -> Locale(parts[0])
-            2 -> Locale(parts[0], parts[1])
-            3 -> Locale(parts[0], parts[1], parts[2])
-            else -> Locale(localeStr)
+            1 -> Locale.Builder().setLanguage(parts[0]).build()
+            2 -> Locale.Builder().setLanguage(parts[0]).setRegion(parts[1]).build()
+            3 -> Locale.Builder().setLanguage(parts[0]).setRegion(parts[1]).setVariant(parts[2]).build()
+            else -> Locale.Builder().setLanguage(localeStr).build()
         }
     }
 }
