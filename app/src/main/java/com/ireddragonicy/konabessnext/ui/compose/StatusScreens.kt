@@ -1,5 +1,6 @@
 package com.ireddragonicy.konabessnext.ui.compose
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -91,7 +92,8 @@ fun ErrorScreen(
     message: String,
     onRetryClick: () -> Unit,
     onSubmitDtsClick: () -> Unit,
-    onDeepScanClick: () -> Unit
+    onManualSetupClick: () -> Unit,
+    onSmartScanClick: () -> Unit // New callback for the icon button
 ) {
     Column(
         modifier = Modifier
@@ -134,37 +136,81 @@ fun ErrorScreen(
                     modifier = Modifier.padding(bottom = 24.dp)
                 )
 
+                // Primary Action: Retry (Solid Color)
                 Button(
                     onClick = onRetryClick,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError
+                    )
                 ) {
                     Text(stringResource(R.string.gpu_prep_retry))
                 }
                 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                OutlinedButton(
-                    onClick = onDeepScanClick,
-                    modifier = Modifier.fillMaxWidth()
+                // Split Buttons: Manual Setup [Text] + [Smart Icon]
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_search),
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Deep Scan DTS Structure")
+                    // Button 1: Manual Setup Text (Takes up available space)
+                    OutlinedButton(
+                        onClick = onManualSetupClick,
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = MaterialTheme.colorScheme.onErrorContainer
+                        ),
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp, 
+                            MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.5f)
+                        )
+                    ) {
+                        Text(
+                            text = "Manual Setup",
+                            style = MaterialTheme.typography.labelLarge
+                        )
+                    }
+
+                    // Button 2: Smart Icon Only (Triggers Auto Scan)
+                    OutlinedButton(
+                        onClick = onSmartScanClick, // Triggers auto-scan logic
+                        modifier = Modifier.width(52.dp),
+                        contentPadding = PaddingValues(0.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = MaterialTheme.colorScheme.onErrorContainer
+                        ),
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp, 
+                            MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.5f)
+                        )
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_search),
+                            contentDescription = "Smart Scan",
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
 
+                // Secondary Action: Submit DTS
                 OutlinedButton(
                     onClick = onSubmitDtsClick,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer
+                    ),
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp, 
+                        MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.3f)
+                    )
                 ) {
                     Icon(
                         painter = painterResource(R.drawable.ic_share),
-                        contentDescription = null, // Using standard share icon roughly
+                        contentDescription = null,
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))

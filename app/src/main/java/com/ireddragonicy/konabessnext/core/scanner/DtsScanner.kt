@@ -4,6 +4,7 @@ import com.ireddragonicy.konabessnext.model.ChipDefinition
 import java.io.BufferedReader
 import java.io.File
 import java.io.FileReader
+import java.util.regex.Pattern
 
 data class DtsScanResult(
     val isValid: Boolean,
@@ -11,88 +12,83 @@ data class DtsScanResult(
     val recommendedStrategy: String, // "MULTI_BIN" or "SINGLE_BIN"
     val voltageTablePattern: String?,
     val maxLevels: Int,
-    val levelCount: Int = 0, // Estimated
-    val confidence: String = "Low" // Low, Medium, High
+    val levelCount: Int = 0,
+    val confidence: String = "Low", // Low, Medium, High
+    val detectedModel: String? = null
 )
 
 object DtsScanner {
 
+    // Regex for robust matching
+    private val REGEX_OPP_TABLE = Pattern.compile("(\\w+[-_]opp[-_]table)\\s*\\{")
+    private val REGEX_GPU_FREQ_TABLE = Pattern.compile("qcom,gpu-freq-table")
+    private val REGEX_PWR_LEVEL = Pattern.compile("qcom,gpu-pwrlevel@(\\d+)")
+    private val REGEX_PWR_LEVELS_MULTI = Pattern.compile("qcom,gpu-pwrlevels-\\d+")
+    private val REGEX_PWR_LEVELS_SINGLE = Pattern.compile("qcom,gpu-pwrlevels\\s*\\{")
+
     fun scan(file: File, index: Int): DtsScanResult {
-        if (!file.exists()) return DtsScanResult(false, index, "", null, 0)
+        if (!file.exists()) return DtsScanResult(false, index, "UNKNOWN", null, 0)
 
         var hasMultiBin = false
         var hasSingleBin = false
         val voltagePatterns = mutableSetOf<String>()
-        var levelCount = 0
-        var maxLevels = 0
+        var maxObservedLevel = 0
+        var detectedModel: String? = null
 
-        // Regex patterns
-        val pwrLevelsMultiInfo = "qcom,gpu-pwrlevels-0"
-        val pwrLevelsSingleInfo = "qcom,gpu-pwrlevels" // without suffix
-        
-        // Use a simple counter for levels which usually appear as "level-X {" 
-        // or just count lines inside power levels?
-        // Actually the prompt suggests counting '@' subnodes under frequency table.
-        // But usually levels are like "id-0 { ... }" inside qcom,gpu-pwrlevels.
-        // Let's look for "qcom,gpu-freq" and count entries there? 
-        // Or look for "freq-table-0" ?
-        
-        // Let's follow the heuristic analysis from requirements:
-        // - Keyword Search: Scan for qcom,gpu-pwrlevels, gpu-opp-table, and qcom,gpu-freq.
-        // - Strategy Detection: 
-        //     - If it finds qcom,gpu-pwrlevels-0 { -> MULTI_BIN.
-        //     - If it finds qcom,gpu-pwrlevels { (without index) -> SINGLE_BIN.
-        // - Voltage Table Detection: Look for nodes containing opp-hz and opp-microvolt. Extract the parent node name.
-        // - Level Counting: Count how many @ subnodes exist under the frequency table to suggest the maxTableLevels.
-        
-        var currentScope = ""
+        // Heuristics state
         var insideOppTable = false
         var currentOppTableName = ""
-        var oppTableLevels = 0
+        var currentOppCount = 0
 
         try {
             BufferedReader(FileReader(file)).use { reader ->
                 var line = reader.readLine()
                 while (line != null) {
                     val trimmed = line.trim()
-                    
-                    // Strategy Detection
-                    if (trimmed.contains("$pwrLevelsMultiInfo {")) {
+
+                    // 1. Strategy Detection
+                    if (REGEX_PWR_LEVELS_MULTI.matcher(trimmed).find()) {
                         hasMultiBin = true
-                    } else if (trimmed.contains("$pwrLevelsSingleInfo {")) {
+                    } else if (REGEX_PWR_LEVELS_SINGLE.matcher(trimmed).find()) {
                         hasSingleBin = true
                     }
-                    
-                    // Voltage Table Detection logic
-                    // Detect start of a node
-                    if (trimmed.endsWith("{")) {
-                        val nodeName = trimmed.substringBefore("{").trim()
-                        if (nodeName.contains("opp-table")) { // Heuristic: usually contains "opp-table"
+
+                    // 2. Level Counting (looking for qcom,gpu-pwrlevel@X)
+                    val lvlMatcher = REGEX_PWR_LEVEL.matcher(trimmed)
+                    if (lvlMatcher.find()) {
+                        try {
+                            val lvl = lvlMatcher.group(1)?.toInt() ?: 0
+                            if (lvl > maxObservedLevel) maxObservedLevel = lvl
+                        } catch (e: Exception) { }
+                    }
+
+                    // 3. Voltage Table Pattern Detection
+                    // Detect "xyz-opp-table {"
+                    val oppMatcher = REGEX_OPP_TABLE.matcher(trimmed)
+                    if (oppMatcher.find()) {
+                        currentOppTableName = oppMatcher.group(1) ?: ""
+                        // Filter out common non-GPU tables if possible, but keep generic for now
+                        if (currentOppTableName.contains("gpu") || currentOppTableName.contains("cluster")) {
                             insideOppTable = true
-                            currentOppTableName = nodeName
-                            oppTableLevels = 0
+                            currentOppCount = 0
                         }
-                    } else if (trimmed == "};") {
-                        if (insideOppTable) {
+                    }
+
+                    if (insideOppTable) {
+                        if (trimmed.contains("opp-hz") || trimmed.startsWith("opp-")) {
+                            currentOppCount++
+                        }
+                        if (trimmed == "};") {
                             insideOppTable = false
-                            if (oppTableLevels > 0) {
+                            if (currentOppCount > 0) {
                                 voltagePatterns.add(currentOppTableName)
-                                if (oppTableLevels > maxLevels) {
-                                    maxLevels = oppTableLevels
-                                }
                             }
                         }
                     }
                     
-                    // Count levels inside an opp-table
-                    if (insideOppTable) {
-                        // Check for opp items. Usually "opp-123456 {" or "opp-hz = <...>"
-                        // Requirement: "Count how many @ subnodes exist" - this is for DTS style like "opp@1234"
-                        // But also check for "opp-hz" lines?
-                        // Let's look for "opp-hz" presence if we aren't sure about node names.
-                        if (trimmed.contains("opp-hz")) {
-                            oppTableLevels++
-                        }
+                    // 4. Model Detection hint
+                    if (trimmed.startsWith("model =")) {
+                        detectedModel = trimmed.substringAfter("=").replace(";", "").replace("\"", "").trim()
                     }
 
                     line = reader.readLine()
@@ -100,44 +96,66 @@ object DtsScanner {
             }
         } catch (e: Exception) {
             e.printStackTrace()
-            return DtsScanResult(false, index, "Error", null, 0)
+            return DtsScanResult(false, index, "UNKNOWN", null, 0)
         }
 
-        val strategy = if (hasMultiBin) "MULTI_BIN" else if (hasSingleBin) "SINGLE_BIN" else "UNKNOWN"
-        val voltPattern = voltagePatterns.firstOrNull() // Pick the first one found for now.
+        // Determine Strategy
+        // Priority: Multi Bin > Single Bin > Unknown
+        val strategy = when {
+            hasMultiBin -> "MULTI_BIN"
+            hasSingleBin -> "SINGLE_BIN"
+            else -> "UNKNOWN"
+        }
+
+        // Pick the most likely voltage pattern (heuristic: usually contains "gpu" or is longest)
+        val bestVoltPattern = voltagePatterns
+            .filter { it.contains("gpu") }
+            .maxByOrNull { it.length } 
+            ?: voltagePatterns.firstOrNull()
+
+        // If we found power levels, detect count (0-based index means count is max + 1)
+        val levelCount = if (maxObservedLevel > 0) maxObservedLevel + 1 else 0
         
-        // If we found a strategy, it's a valid candidate
-        val isValid = strategy != "UNKNOWN"
+        // Confidence calculation
+        var confidenceScore = 0
+        if (strategy != "UNKNOWN") confidenceScore += 2
+        if (bestVoltPattern != null) confidenceScore += 1
+        if (levelCount > 0) confidenceScore += 1
         
-        // Refine maxLevels based on observed count. 
-        // If 0, default to something standard like 11 or 16? 
-        // Requirements say "suggest maxTableLevels".
-        val finalMaxLevels = if (maxLevels > 0) maxLevels else 15 // Fallback
-        
+        val confidence = when {
+            confidenceScore >= 3 -> "High"
+            confidenceScore == 2 -> "Medium"
+            else -> "Low"
+        }
+
+        // If we found nothing relevant, isValid is false
+        val isValid = confidenceScore > 0
+
         return DtsScanResult(
             isValid = isValid,
             dtbIndex = index,
-            recommendedStrategy = strategy,
-            voltageTablePattern = voltPattern,
-            maxLevels = finalMaxLevels,
-            levelCount = maxLevels,
-            confidence = if (isValid && voltPattern != null) "High" else if (isValid) "Medium" else "Low"
+            recommendedStrategy = if (strategy == "UNKNOWN") "MULTI_BIN" else strategy,
+            voltageTablePattern = bestVoltPattern,
+            maxLevels = if (levelCount > 0) levelCount else 15, // Default recommendation
+            levelCount = levelCount,
+            confidence = confidence,
+            detectedModel = detectedModel
         )
     }
 
     fun toChipDefinition(result: DtsScanResult): ChipDefinition {
         return ChipDefinition(
-            id = "custom_detected_${result.dtbIndex}",
-            name = "Discovered Device (DTB ${result.dtbIndex})",
+            id = "custom_detected_${result.dtbIndex}_${System.currentTimeMillis()}",
+            name = result.detectedModel ?: "Custom Device (DTB ${result.dtbIndex})",
             maxTableLevels = result.maxLevels,
             ignoreVoltTable = result.voltageTablePattern == null,
-            minLevelOffset = 1, // Default safe value
+            minLevelOffset = 1,
             voltTablePattern = result.voltageTablePattern,
             strategyType = result.recommendedStrategy,
-            levelCount = if (result.maxLevels > 0) result.maxLevels else 416, 
-            levels = mapOf(), // Empty map, will need to be populated or handled
-            binDescriptions = if (result.recommendedStrategy == "MULTI_BIN") mapOf(0 to "Bin 0", 1 to "Bin 1") else null,
-            models = listOf("Auto-Detected")
+            levelCount = 480, // Safe default for modern chips (Snapdragon 8 Gen 1+)
+            levels = mapOf(), 
+            binDescriptions = if (result.recommendedStrategy == "MULTI_BIN") mapOf(0 to "Default", 1 to "High Perf") else null,
+            models = listOf(result.detectedModel ?: "Custom")
         )
     }
 }

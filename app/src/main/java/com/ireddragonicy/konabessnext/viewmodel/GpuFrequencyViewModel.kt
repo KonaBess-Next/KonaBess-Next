@@ -41,6 +41,8 @@ class GpuFrequencyViewModel @Inject constructor(
     val canUndo: StateFlow<Boolean> = repository.canUndo
     val canRedo: StateFlow<Boolean> = repository.canRedo
     val history: StateFlow<List<String>> = repository.history
+    
+    // Now resolved reference as we updated GpuRepository
     val stateVersion: StateFlow<Long> = repository.stateVersion
 
     private val _toastEvent = MutableSharedFlow<String>()
@@ -65,28 +67,14 @@ class GpuFrequencyViewModel @Inject constructor(
         }
     }
 
-    private var loadJob: kotlinx.coroutines.Job? = null
-
     fun resetSelection() {
-        // Reset selection on reload to prevent stuck UI
         selectedBinIndex.value = -1
         selectedLevelIndex.value = -1
     }
-    
-    // Delegate operations to repository or handle logic here if repository is pure data
-    // Pure data repository approach:
-    
+
     fun updateParameter(binIndex: Int, levelIndex: Int, paramKey: String, newValue: String) {
-        // Logic to update bin
         val currentBins = repository.bins.value
         if (binIndex !in currentBins.indices) return
-        
-        // Deep copy needed to modify? GpuRepository handles modification?
-        // Ideally GpuRepository should expose methods to modify state.
-        // But the previous ViewModel had logic.
-        // For refactor speed, I'll implement logic here and push to repository.
-        // But repository needs to track history.
-        // So I should modify a copy and call repository.modifyBins()
         
         val newBins = EditorState.deepCopyBins(currentBins)
         val bin = newBins[binIndex]
@@ -101,7 +89,6 @@ class GpuFrequencyViewModel @Inject constructor(
                 break
             }
         }
-        
         repository.modifyBins(newBins)
     }
 
@@ -117,16 +104,7 @@ class GpuFrequencyViewModel @Inject constructor(
         if (lineIndex !in level.lines.indices) return
 
         level.lines[lineIndex] = newLine
-
-        // Save state for history if message provided
-        // But modifyBins usually handles history? No, modifyBins just updates state.
-        // We usually capture state BEFORE modification?
-        // GpuRepository.modifyBins takes care of pushing to undo stack if we managed it there?
-        // Actually GpuRepository.modifyBins just validates. 
-        // We need to verify if distinct history entry is needed.
-        // For now, let's just update.
-        
-        repository.modifyBins(newBins)
+        repository.modifyBins(newBins, historyMsg)
     }
 
     fun addFrequency(binIndex: Int, atTop: Boolean) {
@@ -138,21 +116,15 @@ class GpuFrequencyViewModel @Inject constructor(
         if (bin.levels.isEmpty()) return
         
         val source = if (atTop) bin.levels.first() else bin.levels.last()
-        // source.copyLevel() returns Deep Copy? Level.kt data class with ArrayList needs manual deep copy wrapper?
-        // I implemented copyLevel in Level.kt
         val newLevel = source.copyLevel()
         
         if (atTop) bin.levels.add(0, newLevel) else bin.levels.add(newLevel)
         
-        // Apply offsets
-        val offset = 1 // Logic from GpuTableEditor says 1 for Add, -1 for remove?
-        // Wait, GpuTableEditor: offset_initial_level(id, 1).
         offsetInitialLevel(bin, 1)
         if (isLitoOrLagoon()) {
             offsetCaTargetLevel(bin, 1)
         }
-        
-        repository.modifyBins(newBins)
+        repository.modifyBins(newBins, "Add Frequency")
     }
 
     fun duplicateFrequency(binIndex: Int, levelIndex: Int) {
@@ -166,16 +138,13 @@ class GpuFrequencyViewModel @Inject constructor(
         val source = bin.levels[levelIndex]
         val newLevel = source.copyLevel()
         
-        // Insert after the original
         bin.levels.add(levelIndex + 1, newLevel)
         
-        // Apply offsets
         offsetInitialLevel(bin, 1)
         if (isLitoOrLagoon()) {
             offsetCaTargetLevel(bin, 1)
         }
-        
-        repository.modifyBins(newBins)
+        repository.modifyBins(newBins, "Duplicate Frequency")
     }
 
     fun removeFrequency(binIndex: Int, levelIndex: Int) {
@@ -188,13 +157,11 @@ class GpuFrequencyViewModel @Inject constructor(
         
         bin.levels.removeAt(levelIndex)
         
-        // Apply offsets
         offsetInitialLevel(bin, -1)
         if (isLitoOrLagoon()) {
             offsetCaTargetLevel(bin, -1)
         }
-        
-        repository.modifyBins(newBins)
+        repository.modifyBins(newBins, "Remove Frequency")
     }
 
     fun reorderFrequency(binIndex: Int, fromPos: Int, toPos: Int) {
@@ -207,8 +174,7 @@ class GpuFrequencyViewModel @Inject constructor(
          
          val level = bin.levels.removeAt(fromPos)
          bin.levels.add(toPos, level)
-         
-         repository.modifyBins(newBins)
+         repository.modifyBins(newBins, "Reorder Frequencies")
     }
 
     fun undo() = repository.undo()
@@ -221,7 +187,7 @@ class GpuFrequencyViewModel @Inject constructor(
         val newBins = EditorState.deepCopyBins(currentBins)
         try {
             action(newBins)
-            repository.modifyBins(newBins)
+            repository.modifyBins(newBins, "Batch Edit")
         } catch (e: Exception) {
             viewModelScope.launch {
                 _errorEvent.emit("Batch edit failed: ${e.message}")
@@ -249,9 +215,7 @@ class GpuFrequencyViewModel @Inject constructor(
                      val newValue = decoded.value + offset
                      bin.header[i] = com.ireddragonicy.konabessnext.utils.DtsHelper.encodeIntOrHexLine(decoded.name ?: "", newValue.toString())
                      break
-                } catch (e: Exception) {
-                    // ignore
-                }
+                } catch (e: Exception) { }
             }
         }
     }
@@ -265,9 +229,7 @@ class GpuFrequencyViewModel @Inject constructor(
                      val newValue = decoded.value + offset
                      bin.header[i] = com.ireddragonicy.konabessnext.utils.DtsHelper.encodeIntOrHexLine(decoded.name ?: "", newValue.toString())
                      break
-                } catch (e: Exception) {
-                    // ignore
-                }
+                } catch (e: Exception) { }
             }
         }
     }
@@ -278,9 +240,7 @@ class GpuFrequencyViewModel @Inject constructor(
         try {
             val current = com.ireddragonicy.konabessnext.core.ChipInfo.current
             val id = current?.id ?: return false
-            return id == "lito_v1" ||
-                   id == "lito_v2" ||
-                   id == "lagoon"
+            return id == "lito_v1" || id == "lito_v2" || id == "lagoon"
         } catch (e: Exception) {
             return false
         }

@@ -15,75 +15,38 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.regex.Pattern
 
 object KonaBessCore {
-    // Constants
     private val REQUIRED_BINARIES = arrayOf("dtc", "magiskboot")
     private val DTB_MAGIC = byteArrayOf(0xD0.toByte(), 0x0D.toByte(), 0xFE.toByte(), 0xED.toByte())
     private const val DTB_HEADER_SIZE = 8
     private const val BYTE_MASK = 0xFF
-
-    // Regex patterns
     private val MODEL_PROPERTY = Pattern.compile("model\\s*=\\s*\"([^\"]+)\"")
-
     private val PROPERTY_CACHE = ConcurrentHashMap<String, String>()
 
-    // Global State (exposed as vars)
-    @JvmField
-    var dts_path: String? = null
-    @JvmField
-    var boot_name: String? = null
-    @JvmField
-    var dtbs: MutableList<Dtb>? = null
-    @JvmStatic
-    var currentDtb: Dtb? = null
-
-    @JvmStatic
-    fun getDtbIndex(): Int {
-        return if (dtbs != null && currentDtb != null) {
-            dtbs!!.indexOf(currentDtb!!)
-        } else -1
-    }
+    @JvmField var dts_path: String? = null
+    @JvmField var boot_name: String? = null
+    @JvmField var dtbs: MutableList<Dtb>? = null
+    @JvmStatic var currentDtb: Dtb? = null
 
     private var dtb_num = 0
-    private var prepared = false
     private var dtb_type: DtbType? = null
     private var filesDir: String? = null
-
-    private const val PREFS_NAME = "KonaBessChipset"
-    private const val KEY_LAST_DTB_ID = "last_dtb_id"
-    private const val KEY_LAST_CHIP_TYPE = "last_chip_type"
 
     @JvmStatic
     @Throws(IOException::class)
     fun cleanEnv(context: Context) {
-        resetState()
         filesDir = context.filesDir.absolutePath
         RootHelper.execShForOutput("rm -rf $filesDir/*")
     }
 
     @JvmStatic
-    fun resetState() {
-        prepared = false
-        dts_path = null
-        dtbs = null
-        boot_name = null
-        PROPERTY_CACHE.clear()
-    }
-
-    @JvmStatic
     @Throws(IOException::class)
     fun setupEnv(context: Context) {
-        // Ensure definitions are loaded
-        if (ChipInfo.definitions.isEmpty()) {
-            ChipInfo.loadDefinitions(context)
-        }
-
+        if (ChipInfo.definitions.isEmpty()) ChipInfo.loadDefinitions(context)
         filesDir = context.filesDir.absolutePath
         for (binary in REQUIRED_BINARIES) {
             val file = File(filesDir, binary)
             AssetsUtil.exportFiles(context, binary, file.absolutePath)
-            if (!file.setExecutable(true) || !file.canExecute()) {
-                throw IOException("Failed to set executable: $binary")
-            }
+            file.setExecutable(true)
         }
     }
 
@@ -92,344 +55,117 @@ object KonaBessCore {
     fun checkDevice(context: Context) {
         setupEnv(context)
         dtbs = ArrayList()
-        // Grant read perms
         filesDir?.let { dir ->
-            RootHelper.execShForOutput("chmod 644 $dir/*.dts")
-            
-            // If dtb_num is 0, try to find existing dts files
-            if (dtb_num == 0) {
-                val dtsFiles = File(dir).listFiles { _, name -> name.endsWith(".dts") }
-                if (dtsFiles != null) {
-                    dtb_num = dtsFiles.size
-                }
-            }
-
+            val dtsFiles = File(dir).listFiles { _, name -> name.endsWith(".dts") }
+            dtb_num = dtsFiles?.size ?: 0
             for (i in 0 until dtb_num) {
                 val dtsFile = File(dir, "$i.dts")
                 if (!dtsFile.exists()) continue
-                
                 val content = dtsFile.readText()
-                val chipId = detectChipType(content, i)
+                val chipId = detectChipType(content)
+                val def = if (chipId != null) ChipInfo.getById(chipId) else null
                 
-                if (chipId != null) {
-                    val def = ChipInfo.getById(chipId)
-                    if (def != null) {
-                        dtbs?.add(Dtb(i, def))
-                    }
-                }
+                // Even if definition is null, we create a fallback so the UI list isn't empty
+                val finalDef = def ?: ChipDefinition(
+                    id = "unsupported_$i",
+                    name = "Unsupported Structure (DTB $i)",
+                    maxTableLevels = 0,
+                    ignoreVoltTable = true,
+                    minLevelOffset = 1,
+                    strategyType = "",
+                    levelCount = 416,
+                    levels = mapOf(),
+                    models = listOf("Unknown")
+                )
+                dtbs?.add(Dtb(i, finalDef))
             }
         }
     }
 
-    private fun detectChipType(content: String, index: Int): String? {
+    private fun detectChipType(content: String): String? {
         val m = MODEL_PROPERTY.matcher(content)
-        var modelContent = ""
-        if (m.find()) {
-            modelContent = m.group(1) ?: ""
-        }
-
-        if ("OP4A79" == getCurrent("device") && modelContent.contains("kona v2")) {
-            return if (isSingleBin(content)) "kona_singleBin" else "kona"
-        }
-
-        // Iterate through loaded definitions dynamically
+        val modelContent = if (m.find()) m.group(1) ?: "" else ""
         for (def: ChipDefinition in ChipInfo.definitions) {
             for (model in def.models) {
                 if (modelContent.contains(model, ignoreCase = true)) {
-                    // Check if this chip needs variant handling (Single vs Multi bin)
-                    // We check if a "_singleBin" variant exists for this ID.
-                    
-                    if (isSingleBin(content)) {
-                        // Check if current matched definition is already single bin
-                        if (def.strategyType == "SINGLE_BIN") {
-                            return def.id
-                        }
-                        
-                        // Try to find a single bin variant by ID suffix
+                    if (content.contains("qcom,gpu-pwrlevels {")) {
+                        if (def.strategyType == "SINGLE_BIN") return def.id
                         val singleBinId = def.id + "_singleBin"
-                        if (ChipInfo.getById(singleBinId) != null) {
-                            return singleBinId
-                        }
+                        if (ChipInfo.getById(singleBinId) != null) return singleBinId
                     }
-                    
                     return def.id
                 }
             }
         }
-        
         return null
-    }
-
-    private fun isSingleBin(content: String): Boolean {
-        return content.contains("qcom,gpu-pwrlevels {")
     }
 
     @JvmStatic
     @Throws(IOException::class)
     fun bootImage2dts(context: Context) {
-        unpackBootImage(context)
-        dtb_num = dtbSplit(context)
-
-        val batchCmd = StringBuilder()
-        batchCmd.append("cd ").append(filesDir)
-
-        for (i in 0 until dtb_num) {
-            batchCmd.append(" && ./dtc -I dtb -O dts ")
-                    .append(i).append(".dtb -o ").append(i).append(".dts")
-                    .append(" && rm -f ").append(i).append(".dtb")
-        }
-        
-        val output = RootHelper.execShForOutput(batchCmd.toString())
-        if (dtb_num > 0 && !File(filesDir, "${dtb_num - 1}.dts").exists()) {
-            throw IOException("DTB to DTS batch conversion failed: " + output.joinToString("\n"))
-        }
-    }
-
-    @Throws(IOException::class)
-    private fun unpackBootImage(context: Context) {
-        RootHelper.execShForOutput("cd $filesDir && ./magiskboot unpack boot.img")
-        determineDtbType()
-    }
-
-    @Throws(IOException::class)
-    private fun determineDtbType() {
-        val hasKernelDtb = File(filesDir, "kernel_dtb").exists()
-        val hasDtb = File(filesDir, "dtb").exists()
-
+        RootHelper.execShForOutput("cd ${context.filesDir} && ./magiskboot unpack boot.img")
+        val hasKernelDtb = File(context.filesDir, "kernel_dtb").exists()
+        val hasDtb = File(context.filesDir, "dtb").exists()
         dtb_type = when {
             hasKernelDtb && hasDtb -> DtbType.BOTH
             hasKernelDtb -> DtbType.KERNEL_DTB
             hasDtb -> DtbType.DTB
-            else -> throw IOException("No DTB found in boot image")
+            else -> throw IOException("No DTB found")
         }
-    }
-
-    @Throws(IOException::class)
-    private fun dtbSplit(context: Context): Int {
-        val dtbFile = getDtbFile()
-        if (dtb_type == DtbType.BOTH) {
-            File(filesDir, "kernel_dtb").delete()
-        }
-        val dtbBytes = Files.readAllBytes(dtbFile.toPath())
-        val offsets = findDtbOffsets(dtbBytes)
-        writeDtbChunks(dtbBytes, offsets)
-        dtbFile.delete()
-        return offsets.size
-    }
-
-    @Throws(IOException::class)
-    private fun getDtbFile(): File {
-        val filename = if (dtb_type == DtbType.DTB || dtb_type == DtbType.BOTH) "dtb" else "kernel_dtb"
-        return File(filesDir, filename)
-    }
-
-    private fun findDtbOffsets(data: ByteArray): List<Int> {
-        val offsets = ArrayList<Int>()
+        val dtbFile = File(context.filesDir, if (dtb_type == DtbType.DTB || dtb_type == DtbType.BOTH) "dtb" else "kernel_dtb")
+        val data = Files.readAllBytes(dtbFile.toPath())
+        val offsets = mutableListOf<Int>()
         var i = 0
-        while (i + DTB_HEADER_SIZE < data.size) {
-            if (isDtbMagic(data, i)) {
+        while (i + 8 < data.size) {
+            if (data[i] == DTB_MAGIC[0] && data[i+1] == DTB_MAGIC[1] && data[i+2] == DTB_MAGIC[2] && data[i+3] == DTB_MAGIC[3]) {
                 offsets.add(i)
-                val size = readDtbSize(data, i + 4)
+                val size = ((data[i+4].toInt() and 0xFF) shl 24) or ((data[i+5].toInt() and 0xFF) shl 16) or ((data[i+6].toInt() and 0xFF) shl 8) or (data[i+7].toInt() and 0xFF)
                 i += size.coerceAtLeast(1)
-            } else {
-                i++
-            }
+            } else i++
         }
-        return offsets
-    }
-
-    private fun isDtbMagic(data: ByteArray, offset: Int): Boolean {
-        for (j in 0 until 4) {
-            if (data[offset + j] != DTB_MAGIC[j]) return false
+        dtb_num = offsets.size
+        for (idx in offsets.indices) {
+            val start = offsets[idx]
+            val end = if (idx + 1 < offsets.size) offsets[idx + 1] else data.size
+            Files.write(Paths.get(context.filesDir.absolutePath, "$idx.dtb"), data.copyOfRange(start, end))
         }
-        return true
-    }
-
-    private fun readDtbSize(data: ByteArray, offset: Int): Int {
-        return ((data[offset].toInt() and BYTE_MASK) shl 24) or
-               ((data[offset + 1].toInt() and BYTE_MASK) shl 16) or
-               ((data[offset + 2].toInt() and BYTE_MASK) shl 8) or
-               (data[offset + 3].toInt() and BYTE_MASK)
-    }
-
-    @Throws(IOException::class)
-    private fun writeDtbChunks(data: ByteArray, offsets: List<Int>) {
-        for (i in offsets.indices) {
-            val start = offsets[i]
-            val end = if (i + 1 < offsets.size) offsets[i + 1] else data.size
-            Files.write(Paths.get(filesDir, "$i.dtb"), data.copyOfRange(start, end))
+        for (idx in 0 until dtb_num) {
+            RootHelper.execShForOutput("cd ${context.filesDir} && ./dtc -I dtb -O dts $idx.dtb -o $idx.dts && rm $idx.dtb")
         }
     }
 
     @JvmStatic
     @Throws(IOException::class)
     fun dts2bootImage(context: Context) {
-        val batchCmd = StringBuilder()
-        batchCmd.append("cd ").append(filesDir)
-        
-        for (i in 0 until dtb_num) {
-            batchCmd.append(" && ./dtc -I dts -O dtb ")
-                    .append(i).append(".dts -o ").append(i).append(".dtb")
-        }
-        val outputFilename = if (dtb_type == DtbType.KERNEL_DTB) "kernel_dtb" else "dtb"
-        batchCmd.append(" && cat")
-        for (i in 0 until dtb_num) {
-             batchCmd.append(" ").append(i).append(".dtb")
-        }
-        batchCmd.append(" > ").append(outputFilename)
-        
-        if (dtb_type == DtbType.BOTH) {
-            batchCmd.append(" && cp dtb kernel_dtb")
-        }
-        batchCmd.append(" && ./magiskboot repack boot.img boot_new.img")
-        
-        val output = RootHelper.execShForOutput(batchCmd.toString())
-        if (!File(filesDir, "boot_new.img").exists()) {
-             throw IOException("DTS to boot image conversion failed: " + output.joinToString("\n"))
-        }
+        val dir = context.filesDir.absolutePath
+        for (idx in 0 until dtb_num) RootHelper.execShForOutput("cd $dir && ./dtc -I dts -O dtb $idx.dts -o $idx.dtb")
+        val out = if (dtb_type == DtbType.KERNEL_DTB) "kernel_dtb" else "dtb"
+        val cmd = StringBuilder("cd $dir && cat")
+        for (idx in 0 until dtb_num) cmd.append(" $idx.dtb")
+        cmd.append(" > $out")
+        if (dtb_type == DtbType.BOTH) cmd.append(" && cp dtb kernel_dtb")
+        cmd.append(" && ./magiskboot repack boot.img boot_new.img")
+        RootHelper.execShForOutput(cmd.toString())
     }
 
     @JvmStatic
     fun chooseTarget(dtb: Dtb, activity: Activity) {
-        filesDir = activity.filesDir.absolutePath
-        dts_path = "$filesDir/${dtb.id}.dts"
+        dts_path = "${activity.filesDir}/$dtb.id.dts"
         ChipInfo.current = dtb.type
         currentDtb = dtb
-        prepared = true
-        saveLastChipset(activity, dtb.id, dtb.type.id)
     }
 
-    private fun saveLastChipset(activity: Activity, dtbId: Int, chipId: String) {
-        val prefs = activity.getSharedPreferences(PREFS_NAME, Activity.MODE_PRIVATE)
-        prefs.edit()
-            .putInt(KEY_LAST_DTB_ID, dtbId)
-            .putString(KEY_LAST_CHIP_TYPE, chipId)
-            .apply()
-    }
-
-    @JvmStatic
-    fun hasLastChipset(context: Context): Boolean {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        return prefs.contains(KEY_LAST_DTB_ID) && prefs.contains(KEY_LAST_CHIP_TYPE)
-    }
-
-    @JvmStatic
-    fun tryRestoreLastChipset(activity: Activity): Boolean {
-        if (!hasLastChipset(activity)) return false
-        
-        // Ensure definitions are loaded
-        if (ChipInfo.definitions.isEmpty()) {
-            ChipInfo.loadDefinitions(activity)
-        }
-
-        val prefs = activity.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val dtbId = prefs.getInt(KEY_LAST_DTB_ID, -1)
-        val chipId = prefs.getString(KEY_LAST_CHIP_TYPE, null)
-
-        if (dtbId < 0 || chipId == null) return false
-
-        return try {
-            val def = ChipInfo.getById(chipId) ?: return false
-
-            filesDir = activity.filesDir.absolutePath
-            val dtsFile = File(filesDir, "$dtbId.dts")
-            
-            if (dtsFile.exists()) {
-                dts_path = dtsFile.absolutePath
-                ChipInfo.current = def
-                currentDtb = Dtb(dtbId, def)
-                prepared = true
-                true
-            } else {
-                false
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-            false
-        }
-    }
-
-    @JvmStatic
-    fun isPrepared(): Boolean {
-        return prepared && dts_path != null && File(dts_path).exists() && ChipInfo.current != null
-    }
-    
-    // System props
     @JvmStatic
     fun getCurrent(name: String): String {
         return PROPERTY_CACHE.computeIfAbsent(name.lowercase()) { key ->
-            val propertyName = when(key) {
+            val prop = when(key) {
                 "brand" -> "ro.product.brand"
-                "name" -> "ro.product.name"
                 "model" -> "ro.product.model"
-                "board" -> "ro.product.board"
-                "id" -> "ro.product.build.id"
-                "version" -> "ro.product.build.version.release"
-                "fingerprint" -> "ro.product.build.fingerprint"
-                "manufacturer" -> "ro.product.manufacturer"
                 "device" -> "ro.product.device"
                 "slot" -> "ro.boot.slot_suffix"
-                else -> null
+                else -> ""
             }
-            propertyName?.let { getSystemProperty(it, "") } ?: ""
-        }
-    }
-    
-    private fun getSystemProperty(key: String, defaultValue: String): String {
-        return try {
-            val clazz = Class.forName("android.os.SystemProperties")
-            val method = clazz.getDeclaredMethod("get", String::class.java, String::class.java)
-            method.invoke(null, key, defaultValue) as String
-        } catch (e: Exception) {
-            e.printStackTrace()
-            defaultValue
-        }
-    }
-    
-    @JvmStatic
-    @Throws(IOException::class)
-    fun getBootImage(context: Context) {
-        try {
-            getBootImageByType(context, "vendor_boot")
-            boot_name = "vendor_boot"
-        } catch (e: Exception) {
-             getBootImageByType(context, "boot")
-             boot_name = "boot"
-        }
-    }
-    
-    @Throws(IOException::class)
-    private fun getBootImageByType(context: Context, type: String) {
-        if (!RootHelper.isRootAvailable()) {
-            throw IOException("Root access not available.")
-        }
-        
-        val bootImgPath = "${filesDir}/boot.img"
-        val partition = "/dev/block/bootdevice/by-name/$type${getCurrent("slot")}"
-        
-        if (!RootHelper.execAndCheck("dd if=$partition of=$bootImgPath && chmod 644 $bootImgPath")) {
-             throw IOException("Failed to get $type image.")
-        }
-        if (!File(bootImgPath).canRead()) {
-            throw IOException("Boot image not readable")
-        }
-    }
-    
-    @JvmStatic
-    @Throws(IOException::class)
-    fun writeBootImage(context: Context) {
-        val newBootPath = "${filesDir}/boot_new.img"
-        val partition = "/dev/block/bootdevice/by-name/${boot_name}${getCurrent("slot")}"
-        if (!RootHelper.execAndCheck("dd if=$newBootPath of=$partition")) {
-            throw IOException("Failed to write boot image")
-        }
-    }
-    
-    @JvmStatic
-    @Throws(IOException::class)
-    fun reboot() {
-        if (!RootHelper.execAndCheck("svc power reboot")) {
-             throw IOException("Failed to reboot")
+            if (prop.isEmpty()) "" else RootHelper.execShForOutput("getprop $prop").firstOrNull() ?: ""
         }
     }
 }

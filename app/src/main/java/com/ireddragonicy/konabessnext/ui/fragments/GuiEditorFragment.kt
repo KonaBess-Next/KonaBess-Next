@@ -4,28 +4,28 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Text
-import androidx.compose.runtime.collectAsState
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.unit.dp
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
-import com.ireddragonicy.konabessnext.R
 import com.ireddragonicy.konabessnext.ui.MainActivity
+import com.ireddragonicy.konabessnext.ui.compose.ManualChipsetSetupScreen
+import com.ireddragonicy.konabessnext.viewmodel.DeviceViewModel
 import com.ireddragonicy.konabessnext.viewmodel.SharedGpuViewModel
+import com.ireddragonicy.konabessnext.viewmodel.UiState
 import dagger.hilt.android.AndroidEntryPoint
 
-/**
- * Wrapper Fragment for the GUI Editor.
- */
 @AndroidEntryPoint
 class GuiEditorFragment : Fragment() {
 
     private val sharedViewModel: SharedGpuViewModel by activityViewModels()
+    private val deviceViewModel: DeviceViewModel by activityViewModels()
     private val gpuFrequencyViewModel: com.ireddragonicy.konabessnext.viewmodel.GpuFrequencyViewModel by activityViewModels()
 
     override fun onCreateView(
@@ -33,164 +33,89 @@ class GuiEditorFragment : Fragment() {
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
-        return androidx.compose.ui.platform.ComposeView(requireContext()).apply {
+        return ComposeView(requireContext()).apply {
             setContent {
                 com.ireddragonicy.konabessnext.ui.theme.KonaBessTheme {
+                    val isPrepared by deviceViewModel.isPrepared.collectAsState()
+                    val detectionState by deviceViewModel.detectionState.collectAsState()
                     val bins by sharedViewModel.bins.collectAsState()
-                    // KEY: Consume pre-calculated UI Models
                     val binUiModels by sharedViewModel.binUiModels.collectAsState()
-                    
                     val selectedBinIndex by gpuFrequencyViewModel.selectedBinIndex.collectAsState()
                     val selectedLevelIndex by gpuFrequencyViewModel.selectedLevelIndex.collectAsState()
                     val workbenchState by sharedViewModel.workbenchState.collectAsState()
-                    
-                    if (selectedBinIndex == -1) {
-                        // Bin List (already fast)
-                        when (workbenchState) {
-                            is com.ireddragonicy.konabessnext.viewmodel.SharedGpuViewModel.WorkbenchState.Loading -> {
-                                 Box(
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    CircularProgressIndicator()
-                                }
-                            }
-                            is com.ireddragonicy.konabessnext.viewmodel.SharedGpuViewModel.WorkbenchState.Error -> {
-                                Box(
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text("Error loading table")
-                                }
-                            }
-                            else -> {
-                                com.ireddragonicy.konabessnext.ui.compose.GpuBinList(
-                                    bins = bins,
-                                    onBinClick = { index ->
-                                        gpuFrequencyViewModel.selectedBinIndex.value = index
+
+                    var showManualSetup by remember { mutableStateOf(false) }
+                    var launchWithAutoScan by remember { mutableStateOf(false) }
+
+                    if (showManualSetup) {
+                        androidx.compose.ui.window.Dialog(onDismissRequest = { showManualSetup = false }) {
+                            Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surface) {
+                                ManualChipsetSetupScreen(
+                                    dtbIndex = 0,
+                                    autoStartScan = launchWithAutoScan,
+                                    onDeepScan = { deviceViewModel.performManualScan(0) },
+                                    onSave = { def ->
+                                        deviceViewModel.saveManualDefinition(def, 0)
+                                        sharedViewModel.loadData() 
+                                        showManualSetup = false
                                     },
-                                    onReload = {
-                                        gpuFrequencyViewModel.resetSelection()
-                                        sharedViewModel.loadData()
-                                    }
+                                    onCancel = { showManualSetup = false }
                                 )
                             }
                         }
-                    } else if (selectedLevelIndex == -1) {
-                        // Level List (Optimized)
-                        // Fetch the pre-calc list immediately. No map{} operations here.
-                        val uiModels = binUiModels[selectedBinIndex]
-                        
-                        if (uiModels != null) { // If list exists (even if empty), show editor
-                                    // Memoize callbacks to prevent unstable lambda recreation on parent recomposition
-                                    val onLevelClick = androidx.compose.runtime.remember {
-                                        { lvlIdx: Int -> gpuFrequencyViewModel.selectedLevelIndex.value = lvlIdx }
-                                    }
-                                    
-                                    val onAddLevelTop = androidx.compose.runtime.remember(selectedBinIndex) {
-                                        { sharedViewModel.addFrequencyWrapper(selectedBinIndex, true) }
-                                    }
+                    }
 
-                                    val onAddLevelBottom = androidx.compose.runtime.remember(selectedBinIndex) {
-                                        { sharedViewModel.addFrequencyWrapper(selectedBinIndex, false) }
-                                    }
-
-                                    val onDuplicateLevel = androidx.compose.runtime.remember(selectedBinIndex) {
-                                        { lvlIdx: Int -> sharedViewModel.duplicateFrequency(selectedBinIndex, lvlIdx) }
-                                    }
-
-                                    val onDeleteLevel = androidx.compose.runtime.remember(selectedBinIndex) {
-                                        { lvlIdx: Int ->
-                                            com.ireddragonicy.konabessnext.utils.DialogUtil.showConfirmation(
-                                                requireActivity(),
-                                                getString(R.string.remove),
-                                                getString(R.string.remove_frequency_message, "this"),
-                                                { _, _ ->
-                                                    sharedViewModel.removeFrequency(selectedBinIndex, lvlIdx)
-                                                }
-                                            )
-                                        }
-                                    }
-
-                                    val onReorder = androidx.compose.runtime.remember(selectedBinIndex) {
-                                        { from: Int, to: Int -> sharedViewModel.reorderFrequency(selectedBinIndex, from, to) }
-                                    }
-                                    
-                                    val onBack = androidx.compose.runtime.remember {
-                                        { gpuFrequencyViewModel.selectedBinIndex.value = -1 }
-                                    }
-                                    
-                                    val onOpenCurveEditor = androidx.compose.runtime.remember(selectedBinIndex) {
-                                        { (requireActivity() as MainActivity).openCurveEditor(selectedBinIndex) }
-                                    }
-
-                             com.ireddragonicy.konabessnext.ui.compose.GpuLevelList(
-                                 uiModels = uiModels,
-                                 onLevelClick = onLevelClick,
-                                 onAddLevelTop = onAddLevelTop,
-                                 onAddLevelBottom = onAddLevelBottom,
-                                 onDuplicateLevel = onDuplicateLevel,
-                                 onDeleteLevel = onDeleteLevel,
-                                 onReorder = onReorder,
-                                 onBack = onBack,
-                                 onOpenCurveEditor = onOpenCurveEditor
-                             )
+                    if (!isPrepared) {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(32.dp)) {
+                                val msg = (detectionState as? UiState.Error)?.message?.asString() ?: "Unsupported Chipset"
+                                com.ireddragonicy.konabessnext.ui.compose.ErrorScreen(
+                                    message = msg,
+                                    onRetryClick = { deviceViewModel.detectChipset() },
+                                    onManualSetupClick = { launchWithAutoScan = false; showManualSetup = true },
+                                    onSmartScanClick = { launchWithAutoScan = true; showManualSetup = true },
+                                    onSubmitDtsClick = { }
+                                )
+                            }
+                        }
+                    } else if (selectedBinIndex == null || selectedBinIndex == -1) {
+                        com.ireddragonicy.konabessnext.ui.compose.GpuBinList(
+                            bins = bins,
+                            isLoading = workbenchState is SharedGpuViewModel.WorkbenchState.Loading,
+                            onBinClick = { gpuFrequencyViewModel.selectedBinIndex.value = it },
+                            onReload = { sharedViewModel.loadData() }
+                        )
+                    } else if (selectedLevelIndex == null || selectedLevelIndex == -1) {
+                        val uiModels = binUiModels[selectedBinIndex!!]
+                        if (uiModels != null) {
+                            com.ireddragonicy.konabessnext.ui.compose.GpuLevelList(
+                                uiModels = uiModels,
+                                onLevelClick = { gpuFrequencyViewModel.selectedLevelIndex.value = it },
+                                onAddLevelTop = { sharedViewModel.addFrequencyWrapper(selectedBinIndex!!, true) },
+                                onAddLevelBottom = { sharedViewModel.addFrequencyWrapper(selectedBinIndex!!, false) },
+                                onDuplicateLevel = { sharedViewModel.duplicateFrequency(selectedBinIndex!!, it) },
+                                onDeleteLevel = { sharedViewModel.removeFrequency(selectedBinIndex!!, it) },
+                                onReorder = { from, to -> sharedViewModel.reorderFrequency(selectedBinIndex!!, from, to) },
+                                onBack = { gpuFrequencyViewModel.selectedBinIndex.value = -1 },
+                                onOpenCurveEditor = { (requireActivity() as MainActivity).openCurveEditor(selectedBinIndex!!) }
+                            )
                         } else {
-                             // This handles the tiny gap where bins are ready but precalculation isn't finished
-                             Box(
-                                 modifier = Modifier.fillMaxSize(),
-                                 contentAlignment = Alignment.Center
-                             ) {
-                                 CircularProgressIndicator() // Show spinner while background thread finishes
-                             }
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
                         }
                     } else {
-                        // Param Editor (already fast)
-                        val bin = bins.getOrNull(selectedBinIndex)
-                        val level = bin?.levels?.getOrNull(selectedLevelIndex)
-                        
+                        val level = bins.getOrNull(selectedBinIndex!!)?.levels?.getOrNull(selectedLevelIndex!!)
                         if (level != null) {
                             com.ireddragonicy.konabessnext.ui.compose.GpuParamEditor(
                                 level = level,
-                                onBack = androidx.compose.runtime.remember {
-                                    { gpuFrequencyViewModel.selectedLevelIndex.value = -1 }
+                                onBack = { gpuFrequencyViewModel.selectedLevelIndex.value = -1 },
+                                onDeleteLevel = {
+                                    sharedViewModel.removeFrequency(selectedBinIndex!!, selectedLevelIndex!!)
+                                    gpuFrequencyViewModel.selectedLevelIndex.value = -1 
                                 },
-                                onDeleteLevel = androidx.compose.runtime.remember(selectedBinIndex, selectedLevelIndex) {
-                                    {
-                                        com.ireddragonicy.konabessnext.utils.DialogUtil.showConfirmation(
-                                             requireActivity(),
-                                             getString(R.string.remove),
-                                             getString(R.string.remove_frequency_message, "this"),
-                                             { _, _ ->
-                                                 sharedViewModel.removeFrequency(selectedBinIndex, selectedLevelIndex)
-                                                 gpuFrequencyViewModel.selectedLevelIndex.value = -1 
-                                             }
-                                         )
-                                    }
-                                },
-                                onUpdateParam = androidx.compose.runtime.remember(selectedBinIndex, selectedLevelIndex) {
-                                    { lineIndex, encodedLine, historyMsg ->
-                                        try {
-                                            sharedViewModel.updateParameter(
-                                                selectedBinIndex,
-                                                selectedLevelIndex,
-                                                lineIndex,
-                                                encodedLine,
-                                                historyMsg
-                                            )
-                                        } catch (e: Exception) {
-                                            e.printStackTrace()
-                                        }
-                                    }
+                                onUpdateParam = { lineIdx, encoded, history ->
+                                    sharedViewModel.updateParameter(selectedBinIndex!!, selectedLevelIndex!!, lineIdx, encoded, history)
                                 }
                             )
-                        } else {
-                            Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text("Level not found")
-                            }
                         }
                     }
                 }

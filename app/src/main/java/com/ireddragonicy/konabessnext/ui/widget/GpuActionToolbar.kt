@@ -122,10 +122,6 @@ class GpuActionToolbar @JvmOverloads constructor(
 
         // Observe ViewModel state
         viewModel.isDirtyLiveData.observe(lifecycleOwner) { isDirty ->
-             // Update Save button color/state if needed
-             // btnSave?.isEnabled = isDirty // Or keep enabled to force save?
-             // Legacy behavior: button changes color. 
-             // We can implement color change logic here if needed.
              updateSaveButtonColor(btnSave, isDirty)
         }
 
@@ -193,11 +189,17 @@ class GpuActionToolbar @JvmOverloads constructor(
                          // We just ignore the text updates since the button is icon-only.
                          val dummyTextView = android.widget.TextView(activity)
                          
+                         var activeId = -1
+                         if (activity is MainActivity) {
+                             activeId = activity.deviceViewModel.activeDtbId.value
+                         }
+                         
                          chipsetListener?.let { listener ->
                              ChipsetManager.showChipsetSelectorDialog(
                                  activity, 
                                  parentViewForVolt as LinearLayout, 
                                  dummyTextView, 
+                                 activeId,
                                  listener
                              )
                          }
@@ -291,12 +293,6 @@ class GpuActionToolbar @JvmOverloads constructor(
         super.onDetachedFromWindow()
         // GpuTableEditor.removeHistoryListener(this)
     }
-
-    /*
-    override fun onHistoryStateChanged(canUndo: Boolean, canRedo: Boolean) {
-       // Removed
-    }
-    */
 
     private fun updateButtonState(btn: MaterialButton?, enabled: Boolean) {
         if (btn != null) {

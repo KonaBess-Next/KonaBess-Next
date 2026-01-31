@@ -19,6 +19,7 @@ import com.ireddragonicy.konabessnext.model.Bin
 @Composable
 fun GpuBinList(
     bins: List<Bin>,
+    isLoading: Boolean, // Added to track actual state
     onBinClick: (Int) -> Unit,
     onReload: () -> Unit = {}
 ) {
@@ -28,62 +29,57 @@ fun GpuBinList(
         Scaffold(
             containerColor = MaterialTheme.colorScheme.background
         ) { paddingValues ->
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues)
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                itemsIndexed(bins) { index, bin ->
-                    val binName = remember(bin.id, context) {
-                        try {
-                            if (context is android.app.Activity) {
-                                ChipStringHelper.convertBins(bin.id, context)
-                            } else {
-                                context.getString(R.string.bin_id_format, bin.id)
+            Box(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
+                if (isLoading) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator()
+                    }
+                } else if (bins.isEmpty()) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(32.dp)) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_search),
+                                contentDescription = null,
+                                modifier = Modifier.size(48.dp).padding(bottom = 16.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = stringResource(R.string.no_gpu_tables_found),
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Button(onClick = onReload) {
+                                Text(stringResource(R.string.reload_data))
                             }
-                        } catch (e: Exception) {
-                            context.getString(R.string.unknown_table) + bin.id
                         }
                     }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize().padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        itemsIndexed(bins) { index, bin ->
+                            val binName = remember(bin.id, context) {
+                                try {
+                                    if (context is android.app.Activity) {
+                                        ChipStringHelper.convertBins(bin.id, context)
+                                    } else {
+                                        context.getString(R.string.bin_id_format, bin.id)
+                                    }
+                                } catch (e: Exception) {
+                                    context.getString(R.string.unknown_table) + bin.id
+                                }
+                            }
 
-                    BinItemCard(
-                        name = binName,
-                        onClick = { onBinClick(index) }
-                    )
-                }
-
-                if (bins.isEmpty()) {
-                    item {
-                         Box(
-                            modifier = Modifier.fillMaxWidth().height(300.dp),
-                            contentAlignment = Alignment.Center
-                         ) {
-                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                 Icon(
-                                     painter = painterResource(R.drawable.ic_search),
-                                     contentDescription = null,
-                                     modifier = Modifier.size(48.dp).padding(bottom = 16.dp),
-                                     tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                 )
-                                 Text(
-                                     text = stringResource(R.string.no_gpu_tables_found),
-                                     style = MaterialTheme.typography.titleMedium,
-                                     color = MaterialTheme.colorScheme.onSurfaceVariant
-                                 )
-                                 Spacer(modifier = Modifier.height(8.dp))
-                                 Text(
-                                      text = stringResource(R.string.try_redetecting),
-                                      style = MaterialTheme.typography.bodySmall,
-                                      color = MaterialTheme.colorScheme.onSurfaceVariant
-                                 )
-                                 Spacer(modifier = Modifier.height(16.dp))
-                                 Button(onClick = onReload) {
-                                     Text(stringResource(R.string.reload_data))
-                                 }
-                             }
-                         }
+                            BinItemCard(
+                                name = binName,
+                                onClick = { onBinClick(index) }
+                            )
+                        }
                     }
                 }
             }

@@ -22,7 +22,6 @@ import androidx.core.view.WindowCompat
 import android.graphics.Color
 import androidx.viewpager2.widget.ViewPager2
 import androidx.viewpager2.widget.ViewPager2.OnPageChangeCallback
-// AppBarLayout and MaterialToolbar removed - using edge-to-edge without titles
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.runtime.mutableIntStateOf
 import com.ireddragonicy.konabessnext.ui.compose.MainNavigationBar
@@ -45,21 +44,17 @@ import java.util.Arrays
 @AndroidEntryPoint
 class MainActivity : AppCompatActivity() {
 
-
     var gpuTableEditorBackCallback: OnBackPressedCallback? = null
 
     private lateinit var viewPager: ViewPager2
     private lateinit var bottomNav: ComposeView
     private var currentTab = mutableIntStateOf(0)
-    // appBarLayout and toolbar removed - using edge-to-edge without titles
     private var isPageChangeFromUser = true
     private var gpuFrequencyFragment: GpuFrequencyFragment? = null
 
-    // MVVM ViewModel
     val deviceViewModel: DeviceViewModel by viewModels()
     val gpuFrequencyViewModel: GpuFrequencyViewModel by viewModels()
 
-    // Permission and File Result Launchers
     private var pendingPermissionAction: (() -> Unit)? = null
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -85,18 +80,10 @@ class MainActivity : AppCompatActivity() {
     override fun attachBaseContext(newBase: Context) {
         super.attachBaseContext(LocaleUtil.wrap(newBase))
     }
+
     override fun onCreate(savedInstanceState: Bundle?) {
-        // Apply color palette theme BEFORE super.onCreate()
-        // Compose handles theme, but we might need Night Mode
-        SettingsActivity.isAutoSaveEnabled(this) // Dummy call or just remove.
-        // We do need to apply night mode?
-        // Actually SettingsActivity.applyThemeMode is private now? 
-        // We should make applyThemeMode public in Companion again or move it to a helper. 
-        // For now, let's just remove the XML theme linkage.
-        
         WindowCompat.setDecorFitsSystemWindows(window, false)
         window.statusBarColor = Color.TRANSPARENT
-        // window.navigationBarColor = Color.TRANSPARENT // Optional: if we want nav bar transparent too
         
         super.onCreate(savedInstanceState)
 
@@ -106,22 +93,15 @@ class MainActivity : AppCompatActivity() {
         } catch (ignored: PackageManager.NameNotFoundException) {
         }
 
-        // Tidak perlu restore title
-
-        // Check if device is prepared
-        // We observe logic in UI, but initial check trigger is fine here
-        if (!deviceViewModel.isPrepared.value) { // Accessing StateFlow value directly for initial check
+        if (!deviceViewModel.isFilesExtracted.value) {
             deviceViewModel.detectChipset()
         }
 
         showMainView()
-
-        // Observe repack state
         observeRepackState()
     }
 
     private fun observeRepackState() {
-        // Collect StateFlow in lifecycle scope
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 deviceViewModel.repackState.collect { state ->
@@ -133,7 +113,7 @@ class MainActivity : AppCompatActivity() {
                             hideRepackLoading()
                             MaterialAlertDialogBuilder(this@MainActivity)
                                 .setTitle(R.string.success)
-                                .setMessage(state.data.asString(this@MainActivity)) // "Repack and Flash successful..."
+                                .setMessage(state.data.asString(this@MainActivity))
                                 .setPositiveButton(R.string.reboot) { _, _ -> deviceViewModel.reboot() }
                                 .setNegativeButton(R.string.ok, null)
                                 .show()
@@ -146,7 +126,7 @@ class MainActivity : AppCompatActivity() {
                                 .setPositiveButton(R.string.ok, null)
                                 .show()
                         }
-                        null -> {} // Idle
+                        null -> {}
                     }
                 }
             }
@@ -195,7 +175,6 @@ class MainActivity : AppCompatActivity() {
         pendingPermissionAction = action
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            // Android 11+
             action()
             pendingPermissionAction = null
         } else {
@@ -229,20 +208,14 @@ class MainActivity : AppCompatActivity() {
     private fun showMainView() {
         setContentView(R.layout.activity_main)
 
-        // AppBarLayout and toolbar removed - pure edge-to-edge UI
-
         viewPager = findViewById(R.id.view_pager)
         bottomNav = findViewById(R.id.compose_bottom_nav)
 
-        // Initialize OnBackPressedCallback for GpuTableEditor navigation
         if (gpuTableEditorBackCallback == null) {
             gpuTableEditorBackCallback = object : OnBackPressedCallback(false) {
                 override fun handleOnBackPressed() {
-                    
                     val binIdx = gpuFrequencyViewModel.selectedBinIndex.value
-                    
                     if (binIdx != -1) {
-                        // Navigate Internal: Unselect Bin/Level
                         val lvlIdx = gpuFrequencyViewModel.selectedLevelIndex.value
                         if (lvlIdx != -1) {
                             gpuFrequencyViewModel.selectedLevelIndex.value = -1
@@ -252,7 +225,6 @@ class MainActivity : AppCompatActivity() {
                     } else {
                         isEnabled = false
                         onBackPressedDispatcher.onBackPressed()
-                        // Only re-enable if we are still on the first tab
                         if (viewPager.currentItem == 0) {
                             isEnabled = true
                         }
@@ -260,11 +232,8 @@ class MainActivity : AppCompatActivity() {
                 }
             }
             onBackPressedDispatcher.addCallback(this, gpuTableEditorBackCallback!!)
-            
-            // Set initial enabled state based on current tab
             gpuTableEditorBackCallback?.isEnabled = (viewPager.currentItem == 0)
         } else {
-            // Update existing callback state
             gpuTableEditorBackCallback?.isEnabled = (viewPager.currentItem == 0)
         }
 
@@ -274,33 +243,25 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupViewPager() {
         gpuFrequencyFragment = GpuFrequencyFragment()
-
         val fragments = ArrayList<Fragment>(
             Arrays.asList(
-                gpuFrequencyFragment,
+                gpuFrequencyFragment!!,
                 ImportExportFragment(),
                 SettingsFragment()
             )
         )
-
         val adapter = ViewPagerAdapter(this, fragments)
         viewPager.adapter = adapter
 
-        // Sync ViewPager with BottomNavigation
         viewPager.registerOnPageChangeCallback(object : OnPageChangeCallback() {
             override fun onPageSelected(position: Int) {
                 super.onPageSelected(position)
-                // Manage Back Callback based on page
                 gpuTableEditorBackCallback?.isEnabled = (position == 0)
-
                 if (isPageChangeFromUser) {
                     currentTab.intValue = position
                 }
             }
         })
-
-        // Start with GPU Frequency section
-        restoreGpuToolbarTitle()
     }
 
     private fun setupBottomNavigation() {
@@ -319,38 +280,11 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    override fun onSaveInstanceState(outState: Bundle) {
-        super.onSaveInstanceState(outState)
-        // Tidak perlu simpan title
-    }
-
-    fun updateToolbarTitle(title: String?) {
-        // Deleted
-    }
-
-    fun updateGpuToolbarTitle(title: String) {
-        // Deleted
-    }
-
-    fun restoreGpuToolbarTitle() {
-        // Deleted
-    }
-
     fun notifyGpuTableChanged() {
-        runOnUiThread {
-            gpuFrequencyFragment?.markDataDirty()
-        }
+        // Reactive UI logic handles this via sharedViewModel loadData
     }
 
     fun notifyPreparationSuccess() {
         notifyGpuTableChanged()
     }
-
-
-    /**
-     * Returns the callback used by GpuTableEditor to handle back navigation.
-     */
-
-
-
 }
