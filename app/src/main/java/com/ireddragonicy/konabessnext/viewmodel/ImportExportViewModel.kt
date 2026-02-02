@@ -3,7 +3,7 @@ package com.ireddragonicy.konabessnext.viewmodel
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.ireddragonicy.konabessnext.core.ChipInfo
+// ChipInfo import removed
 import com.ireddragonicy.konabessnext.repository.DeviceRepository
 import com.ireddragonicy.konabessnext.repository.GpuRepository
 import com.ireddragonicy.konabessnext.utils.GzipUtils
@@ -34,6 +34,7 @@ import com.ireddragonicy.konabessnext.utils.UriPathHelper
 class ImportExportViewModel @Inject constructor(
     private val deviceRepository: DeviceRepository,
     private val gpuRepository: GpuRepository,
+    private val chipRepository: com.ireddragonicy.konabessnext.repository.ChipRepository,
     private val exportHistoryManager: com.ireddragonicy.konabessnext.utils.ExportHistoryManager
 ) : ViewModel() {
 
@@ -67,7 +68,8 @@ class ImportExportViewModel @Inject constructor(
     fun exportConfig(desc: String): String? {
        return try {
            val json = JSONObject()
-           json.put("chip", ChipInfo.current?.id ?: "Unknown")
+           val current = chipRepository.currentChip.value
+           json.put("chip", current?.id ?: "Unknown")
            json.put("desc", desc)
            
            val freqData = StringBuilder()
@@ -75,7 +77,7 @@ class ImportExportViewModel @Inject constructor(
            // Safe call in case bins are empty or not ready
            if (bins.isEmpty()) throw IllegalStateException("No GPU table data to export")
            
-           val tableLines = ChipInfo.getArchitecture(ChipInfo.current).generateTable(java.util.ArrayList(bins))
+           val tableLines = chipRepository.getArchitecture(current).generateTable(java.util.ArrayList(bins))
            
            for (line in tableLines) {
                freqData.append(line).append("\n")
@@ -97,7 +99,8 @@ class ImportExportViewModel @Inject constructor(
        }
     }
     
-    fun addToHistory(filename: String, desc: String, filePath: String, chipType: String) {
+    fun addToHistory(filename: String, desc: String, filePath: String) {
+        val chipType = chipRepository.currentChip.value?.id ?: "Unknown"
         exportHistoryManager.addExport(filename, desc, filePath, chipType)
         loadHistory()
     }
@@ -107,7 +110,7 @@ class ImportExportViewModel @Inject constructor(
             try {
                 val json = JSONObject(jsonString)
                 val chip = json.getString("chip")
-                if (chip != ChipInfo.current?.id) {
+                if (chip != chipRepository.currentChip.value?.id) {
                     _errorEvent.emit("Incompatible chip: $chip")
                     return@launch
                 }
@@ -199,7 +202,7 @@ class ImportExportViewModel @Inject constructor(
 
                     // Add to history with URI as path
                     val filename = "config_${System.currentTimeMillis()}.txt"
-                    addToHistory(filename, desc, uri.toString(), ChipInfo.current?.id ?: "Unknown")
+                    addToHistory(filename, desc, uri.toString())
                     _messageEvent.emit("Successfully exported config")
                 } catch (e: Exception) {
                     _errorEvent.emit("Export failed: ${e.message}")
@@ -223,7 +226,7 @@ class ImportExportViewModel @Inject constructor(
                 
                 // Add to history
                 val filename = "dts_dump_${System.currentTimeMillis()}.txt"
-                addToHistory(filename, "Raw DTS Export", uri.toString(), ChipInfo.current?.id ?: "Unknown")
+                addToHistory(filename, "Raw DTS Export", uri.toString())
                 
                 _messageEvent.emit("Successfully exported Raw DTS")
             } catch (e: Exception) {
@@ -247,7 +250,7 @@ class ImportExportViewModel @Inject constructor(
                 
                 // Add to history
                 val filename = "boot_backup_${System.currentTimeMillis()}.img"
-                addToHistory(filename, "System Boot Backup", uri.toString(), "N/A")
+                addToHistory(filename, "System Boot Backup", uri.toString())
                 
                 _messageEvent.emit("Successfully backed up boot image")
             } catch (e: Exception) {

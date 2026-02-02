@@ -12,7 +12,6 @@ import com.google.android.material.button.MaterialButton
 import com.google.android.material.color.MaterialColors
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.ireddragonicy.konabessnext.R
-import com.ireddragonicy.konabessnext.core.ChipInfo
 import com.ireddragonicy.konabessnext.viewmodel.SharedGpuViewModel
 import com.ireddragonicy.konabessnext.viewmodel.GpuFrequencyViewModel
 import androidx.lifecycle.LifecycleOwner
@@ -56,11 +55,14 @@ class GpuActionToolbar @JvmOverloads constructor(
         this.onModeSelectedListener = listener
     }
 
+    fun setShowVolt(show: Boolean) {
+        this.showVolt = show
+    }
+
     private fun init(context: Context) {
         orientation = VERTICAL
         if (context is MainActivity) {
             showRepack = true
-            showVolt = ChipInfo.current != null && !ChipInfo.current!!.ignoreVoltTable
         }
     }
 

@@ -13,7 +13,7 @@ import com.ireddragonicy.konabessnext.model.Opp
 import com.ireddragonicy.konabessnext.repository.GpuRepository
 import com.ireddragonicy.konabessnext.model.UiText
 import com.ireddragonicy.konabessnext.ui.SettingsActivity
-import com.ireddragonicy.konabessnext.core.ChipInfo
+// ChipInfo import removed
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -79,7 +79,7 @@ class SharedGpuViewModel @Inject constructor(
     }
 
     private fun precalculateUiModels(bins: List<Bin>) {
-        if (ChipInfo.current == null || bins.isEmpty()) {
+        if (chipRepository.currentChip.value == null || bins.isEmpty()) {
             _binUiModels.value = emptyMap()
             return
         }
@@ -115,7 +115,11 @@ class SharedGpuViewModel @Inject constructor(
             else if (trimmed.contains("qcom,bus-freq")) { val v = fastExtractLong(trimmed); if (v != -1L) busFreq = v.toString() }
             else if (trimmed.contains("qcom,level") || trimmed.contains("qcom,cx-level")) {
                 val v = try { fastExtractLong(trimmed) } catch(e: Exception) { 0L }
-                val rawLabel = com.ireddragonicy.konabessnext.core.editor.LevelOperations.levelint2str(v)
+                val rawLabel = com.ireddragonicy.konabessnext.core.editor.LevelOperations.levelint2str(
+                    v, 
+                    chipRepository.getLevelsForCurrentChip(),
+                    chipRepository.getLevelStringsForCurrentChip()
+                )
                 if (rawLabel.isNotEmpty()) voltLabel = UiText.StringResource(R.string.level_format, listOf(rawLabel))
             }
         }
@@ -225,7 +229,12 @@ class SharedGpuViewModel @Inject constructor(
         val bin = newBins[binIndex]
         val sourceLevel = if (toTop) bin.levels.firstOrNull() else bin.levels.lastOrNull()
         if (sourceLevel != null) {
-            bin.levels.add(if (toTop) 0 else bin.levels.size, Level(ArrayList(sourceLevel.lines)))
+            val chipDef = chipRepository.currentChip.value
+            if (toTop) {
+                com.ireddragonicy.konabessnext.core.editor.LevelOperations.addLevelAtTop(newBins, binIndex, chipDef)
+            } else {
+                com.ireddragonicy.konabessnext.core.editor.LevelOperations.addLevelAtBottom(newBins, binIndex, chipDef)
+            }
             repository.updateBins(newBins, "Add Frequency")
         }
     }
@@ -234,22 +243,18 @@ class SharedGpuViewModel @Inject constructor(
         val currentBins = bins.value
         if (binIndex !in currentBins.indices) return
         val newBins = EditorState.deepCopyBins(currentBins)
-        val bin = newBins[binIndex]
-        if (index in bin.levels.indices) {
-            bin.levels.add(index + 1, Level(ArrayList(bin.levels[index].lines)))
-            repository.updateBins(newBins, "Duplicate Frequency")
-        }
+        // Delegate to LevelOperations completely for correctness
+        com.ireddragonicy.konabessnext.core.editor.LevelOperations.duplicateLevel(newBins, binIndex, index, chipRepository.currentChip.value)
+        repository.updateBins(newBins, "Duplicate Frequency")
     }
 
     fun removeFrequency(binIndex: Int, index: Int) {
         val currentBins = bins.value
         if (binIndex !in currentBins.indices) return
         val newBins = EditorState.deepCopyBins(currentBins)
-        val bin = newBins[binIndex]
-        if (index in bin.levels.indices) {
-            bin.levels.removeAt(index)
-            repository.updateBins(newBins, "Remove Frequency")
-        }
+        // Delegate to LevelOperations completely
+        com.ireddragonicy.konabessnext.core.editor.LevelOperations.removeLevel(newBins, binIndex, index, chipRepository.currentChip.value)
+        repository.updateBins(newBins, "Remove Frequency")
     }
 
     fun reorderFrequency(binIndex: Int, from: Int, to: Int) {

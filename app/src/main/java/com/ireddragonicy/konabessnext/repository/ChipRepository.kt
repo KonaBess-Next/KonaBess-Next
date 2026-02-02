@@ -20,21 +20,43 @@ class ChipRepository @Inject constructor(
     private val _currentChip = MutableStateFlow<ChipDefinition?>(null)
     val currentChip: StateFlow<ChipDefinition?> = _currentChip.asStateFlow()
 
+    // Strategy instances
+    private val multiBinStrategy = com.ireddragonicy.konabessnext.core.strategy.MultiBinStrategy()
+    private val singleBinStrategy = com.ireddragonicy.konabessnext.core.strategy.SingleBinStrategy()
+
     init {
         loadDefinitions()
     }
 
     fun loadDefinitions() {
-        _definitions.value = ChipLoader.loadDefinitions(context)
+        val defs = ChipLoader.loadDefinitions(context)
+        _definitions.value = defs
     }
 
     fun setCurrentChip(chip: ChipDefinition?) {
         _currentChip.value = chip
-        // Update legacy ChipInfo for backward compatibility during transition
-        com.ireddragonicy.konabessnext.core.ChipInfo.current = chip
     }
 
     fun getChipById(id: String): ChipDefinition? {
         return _definitions.value.find { it.id == id }
+    }
+
+    fun getArchitecture(def: ChipDefinition?): com.ireddragonicy.konabessnext.core.strategy.ChipArchitecture {
+        return if (def?.strategyType == "SINGLE_BIN") singleBinStrategy else multiBinStrategy
+    }
+
+    fun getLevelsForCurrentChip(): IntArray {
+        val c = _currentChip.value ?: return IntArray(0)
+        val size = c.levelCount
+        return IntArray(size) { it + 1 }
+    }
+
+    fun getLevelStringsForCurrentChip(): Array<String> {
+        val c = _currentChip.value ?: return emptyArray()
+        val size = c.levelCount
+        return Array(size) { i ->
+            // Map keys in JSON are indices (0-based)
+            c.levels[i] ?: (i + 1).toString()
+        }
     }
 }

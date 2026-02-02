@@ -137,7 +137,7 @@ class ImportExportFragment : Fragment() {
                 clipboard.setPrimaryClip(clip)
                 
                 // Track in history
-                importExportViewModel.addToHistory("Clipboard", desc, "clipboard://text", com.ireddragonicy.konabessnext.core.ChipInfo.current?.id ?: "Unknown")
+                importExportViewModel.addToHistory("Clipboard", desc, "clipboard://text")
                 
                 // Notify UI to show result
                 importExportViewModel.notifyExportResult(content)

@@ -2,7 +2,6 @@ package com.ireddragonicy.konabessnext.utils
 
 import android.content.Context
 import com.ireddragonicy.konabessnext.R
-import com.ireddragonicy.konabessnext.core.ChipInfo
 
 object ChipStringHelper {
 
@@ -12,8 +11,8 @@ object ChipStringHelper {
     private const val BUS = "bus"
     private const val ACD = "acd"
 
-    fun convertBins(which: Int, context: Context): String {
-        val current = ChipInfo.current ?: return context.getString(R.string.unknown_table) + which
+    fun convertBins(which: Int, context: Context, chipDef: com.ireddragonicy.konabessnext.model.ChipDefinition?): String {
+        val current = chipDef ?: return context.getString(R.string.unknown_table) + which
         
         // Priority 1: Check dynamic mapping in ChipDefinition (from JSON)
         val description = current.binDescriptions?.get(which)
@@ -38,10 +37,9 @@ object ChipStringHelper {
         return processed
     }
 
-    fun help(what: String, context: Context): String {
-        val current = ChipInfo.current
+    fun help(what: String, context: Context, ignoreVoltTable: Boolean = false): String {
         if (what == QCOM_PREFIX + GPU_FREQ) {
-            val ignore = current?.ignoreVoltTable == true
+            val ignore = ignoreVoltTable
             return context.getString(
                 if (ignore) R.string.help_gpufreq_aio else R.string.help_gpufreq
             )
@@ -55,9 +53,8 @@ object ChipStringHelper {
         return ""
     }
 
-    fun genericHelp(context: Context): String {
-        val current = ChipInfo.current
-        val ignore = current?.ignoreVoltTable == true
+    fun genericHelp(context: Context, ignoreVoltTable: Boolean = false): String {
+        val ignore = ignoreVoltTable
         return context.getString(
             if (ignore) R.string.help_msg_aio else R.string.help_msg
         )

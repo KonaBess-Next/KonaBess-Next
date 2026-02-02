@@ -20,7 +20,8 @@ import androidx.lifecycle.asLiveData
 
 @HiltViewModel
 class GpuFrequencyViewModel @Inject constructor(
-    private val repository: GpuRepository
+    private val repository: GpuRepository,
+    private val chipRepository: com.ireddragonicy.konabessnext.repository.ChipRepository
 ) : ViewModel() {
 
     val binsState: StateFlow<UiState<List<Bin>>> 
@@ -238,7 +239,7 @@ class GpuFrequencyViewModel @Inject constructor(
 
     private fun isLitoOrLagoon(): Boolean {
         try {
-            val current = com.ireddragonicy.konabessnext.core.ChipInfo.current
+            val current = chipRepository.currentChip.value
             val id = current?.id ?: return false
             return id == "lito_v1" || id == "lito_v2" || id == "lagoon"
         } catch (e: Exception) {

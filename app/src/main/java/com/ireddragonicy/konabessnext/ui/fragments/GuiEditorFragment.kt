@@ -23,6 +23,8 @@ import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
 class GuiEditorFragment : Fragment() {
+    @javax.inject.Inject
+    lateinit var chipRepository: com.ireddragonicy.konabessnext.repository.ChipRepository
 
     private val sharedViewModel: SharedGpuViewModel by activityViewModels()
     private val deviceViewModel: DeviceViewModel by activityViewModels()
@@ -43,6 +45,7 @@ class GuiEditorFragment : Fragment() {
                     val selectedBinIndex by gpuFrequencyViewModel.selectedBinIndex.collectAsState()
                     val selectedLevelIndex by gpuFrequencyViewModel.selectedLevelIndex.collectAsState()
                     val workbenchState by sharedViewModel.workbenchState.collectAsState()
+                    val currentChip by chipRepository.currentChip.collectAsState()
 
                     var showManualSetup by remember { mutableStateOf(false) }
                     var launchWithAutoScan by remember { mutableStateOf(false) }
@@ -81,6 +84,7 @@ class GuiEditorFragment : Fragment() {
                     } else if (selectedBinIndex == -1) {
                         com.ireddragonicy.konabessnext.ui.compose.GpuBinList(
                             bins = bins,
+                            chipDef = currentChip,
                             isLoading = workbenchState is SharedGpuViewModel.WorkbenchState.Loading,
                             onBinClick = { gpuFrequencyViewModel.selectedBinIndex.value = it },
                             onReload = { sharedViewModel.loadData() }
@@ -107,6 +111,9 @@ class GuiEditorFragment : Fragment() {
                         if (level != null) {
                             com.ireddragonicy.konabessnext.ui.compose.GpuParamEditor(
                                 level = level,
+                                levelStrings = chipRepository.getLevelStringsForCurrentChip(),
+                                levelValues = chipRepository.getLevelsForCurrentChip(),
+                                ignoreVoltTable = currentChip?.ignoreVoltTable == true,
                                 onBack = { gpuFrequencyViewModel.selectedLevelIndex.value = -1 },
                                 onDeleteLevel = {
                                     sharedViewModel.removeFrequency(selectedBinIndex, selectedLevelIndex)

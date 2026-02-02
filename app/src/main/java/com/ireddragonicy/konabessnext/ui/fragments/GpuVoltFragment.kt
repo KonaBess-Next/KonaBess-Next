@@ -18,7 +18,8 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.card.MaterialCardView
 import com.ireddragonicy.konabessnext.R
-import com.ireddragonicy.konabessnext.core.ChipInfo
+import com.ireddragonicy.konabessnext.repository.ChipRepository
+// ChipInfo import removed
 import com.ireddragonicy.konabessnext.model.Opp
 import com.ireddragonicy.konabessnext.utils.DialogUtil
 import com.ireddragonicy.konabessnext.viewmodel.GpuVoltViewModel
@@ -30,6 +31,9 @@ import kotlinx.coroutines.launch
 class GpuVoltFragment : Fragment() {
 
     private val viewModel: GpuVoltViewModel by viewModels()
+    
+    @javax.inject.Inject
+    lateinit var chipRepository: ChipRepository
     private lateinit var contentContainer: LinearLayout
 
     override fun onCreateView(
@@ -202,8 +206,8 @@ class GpuVoltFragment : Fragment() {
     }
     
     private fun showVoltDialog(index: Int, newFreq: Long, currentVolt: Long) {
-        val levels = ChipInfo.rpmh_levels.levels()
-        val levelStrs = ChipInfo.rpmh_levels.level_str()
+        val levels = chipRepository.getLevelsForCurrentChip()
+        val levelStrs = chipRepository.getLevelStringsForCurrentChip()
         
         var selectedIdx = 0
         for(i in levels.indices) {
@@ -239,8 +243,8 @@ class GpuVoltFragment : Fragment() {
     }
     
     private fun showVoltAddDialog(freq: Long) {
-        val levels = ChipInfo.rpmh_levels.levels()
-        val levelStrs = ChipInfo.rpmh_levels.level_str()
+        val levels = chipRepository.getLevelsForCurrentChip()
+        val levelStrs = chipRepository.getLevelStringsForCurrentChip()
         
         DialogUtil.showSingleChoiceDialog(requireActivity(),
             "Select Voltage",
@@ -255,9 +259,9 @@ class GpuVoltFragment : Fragment() {
 
     private fun getLevelStr(level: Long): String {
         try {
-            val levels = ChipInfo.rpmh_levels.levels()
+            val levels = chipRepository.getLevelsForCurrentChip()
             for (i in levels.indices) {
-                if (levels[i].toLong() == level) return ChipInfo.rpmh_levels.level_str()[i] + " ($level)"
+                if (levels[i].toLong() == level) return chipRepository.getLevelStringsForCurrentChip()[i] + " ($level)"
             }
         } catch (e: Exception) {}
         return "Level $level"

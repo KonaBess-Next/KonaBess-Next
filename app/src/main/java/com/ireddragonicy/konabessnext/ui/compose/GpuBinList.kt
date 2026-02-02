@@ -19,6 +19,7 @@ import com.ireddragonicy.konabessnext.model.Bin
 @Composable
 fun GpuBinList(
     bins: List<Bin>,
+    chipDef: com.ireddragonicy.konabessnext.model.ChipDefinition?,
     isLoading: Boolean, // Added to track actual state
     onBinClick: (Int) -> Unit,
     onReload: () -> Unit = {}
@@ -66,7 +67,7 @@ fun GpuBinList(
                             val binName = remember(bin.id, context) {
                                 try {
                                     if (context is android.app.Activity) {
-                                        ChipStringHelper.convertBins(bin.id, context)
+                                        ChipStringHelper.convertBins(bin.id, context, chipDef)
                                     } else {
                                         context.getString(R.string.bin_id_format, bin.id)
                                     }

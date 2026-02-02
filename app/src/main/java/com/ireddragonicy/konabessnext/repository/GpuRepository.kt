@@ -1,6 +1,5 @@
 package com.ireddragonicy.konabessnext.repository
 
-import com.ireddragonicy.konabessnext.core.ChipInfo
 import com.ireddragonicy.konabessnext.model.Bin
 import com.ireddragonicy.konabessnext.model.Opp
 import com.ireddragonicy.konabessnext.model.EditorState
@@ -337,7 +336,7 @@ class GpuRepository @Inject constructor(
             val thisLine = linesMutable[i].trim()
             try {
                 val currentChip = chipRepository.currentChip.value ?: break
-                val arch = ChipInfo.getArchitecture(currentChip)
+                val arch = chipRepository.getArchitecture(currentChip)
                 if (arch.isStartLine(thisLine)) {
                     if (binPosition < 0) binPosition = i
                     arch.decode(linesMutable, newBins, i)
@@ -409,7 +408,7 @@ class GpuRepository @Inject constructor(
 
     private fun genTableBins(): List<String> {
         val currentChip = chipRepository.currentChip.value ?: return emptyList()
-        return ChipInfo.getArchitecture(currentChip).generateTable(_bins.value as ArrayList<Bin>)
+        return chipRepository.getArchitecture(currentChip).generateTable(_bins.value as ArrayList<Bin>)
     }
     
     fun importFrequencyTable(lines: List<String>, description: String = "Import Frequency Table") {

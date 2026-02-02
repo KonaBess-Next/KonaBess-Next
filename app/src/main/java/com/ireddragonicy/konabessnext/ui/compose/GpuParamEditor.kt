@@ -29,6 +29,9 @@ import com.ireddragonicy.konabessnext.utils.DtsHelper
 @Composable
 fun GpuParamEditor(
     level: Level,
+    levelStrings: Array<String>,
+    levelValues: IntArray,
+    ignoreVoltTable: Boolean,
     onBack: () -> Unit,
     onUpdateParam: (lineIndex: Int, encodedLine: String, historyMsg: String) -> Unit,
     onDeleteLevel: () -> Unit
@@ -51,8 +54,8 @@ fun GpuParamEditor(
                         com.ireddragonicy.konabessnext.utils.FrequencyFormatter.format(context, hz)
                     } else if (name == "qcom,level" || name == "qcom,cx-level") {
                         val lvl = if (rawValue.startsWith("0x")) java.lang.Long.decode(rawValue) else rawValue.toLong()
-                        val idx = com.ireddragonicy.konabessnext.core.editor.LevelOperations.levelint2int(lvl)
-                        com.ireddragonicy.konabessnext.core.ChipInfo.rpmh_levels.level_str().getOrNull(idx) ?: rawValue
+                        val idx = com.ireddragonicy.konabessnext.core.editor.LevelOperations.levelint2int(lvl, levelValues)
+                        levelStrings.getOrNull(idx) ?: rawValue
                     } else if (rawValue.startsWith("0x")) {
                         // Try to convert generic hex to nice decimal if short
                         val longVal = java.lang.Long.decode(rawValue)
@@ -84,7 +87,10 @@ fun GpuParamEditor(
                         onUpdateParam(editingParam!!.index, encodedLine, historyMsg)
                         editingParam = null
                     },
-                    onCancel = { editingParam = null }
+                    onCancel = { editingParam = null },
+                    levelStrings = levelStrings,
+                    levelValues = levelValues,
+                    ignoreVoltTable = ignoreVoltTable
                 )
             }
         }
@@ -165,7 +171,10 @@ fun GpuParamEditor(
 fun EditParamSheetContent(
     param: ParamItem,
     onSave: (String, String) -> Unit,
-    onCancel: () -> Unit
+    onCancel: () -> Unit,
+    levelStrings: Array<String>,
+    levelValues: IntArray,
+    ignoreVoltTable: Boolean
 ) {
     val context = LocalContext.current
     val isVoltage = param.rawName == "qcom,level" || param.rawName == "qcom,cx-level"
@@ -187,7 +196,7 @@ fun EditParamSheetContent(
         Spacer(Modifier.height(8.dp))
         
         Text(
-            text = ChipStringHelper.help(param.rawName, context),
+            text = ChipStringHelper.help(param.rawName, context, ignoreVoltTable),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -195,7 +204,7 @@ fun EditParamSheetContent(
         Spacer(Modifier.height(24.dp))
 
         if (isVoltage) {
-            VoltageSelector(param, onSave)
+            VoltageSelector(param, onSave, levelStrings, levelValues)
         } else if (isFrequency) {
             FrequencyEditor(param, onSave)
         } else {
@@ -207,10 +216,8 @@ fun EditParamSheetContent(
 }
 
 @Composable
-fun VoltageSelector(param: ParamItem, onSave: (String, String) -> Unit) {
+fun VoltageSelector(param: ParamItem, onSave: (String, String) -> Unit, levels: Array<String>, values: IntArray) {
     // Voltage Logic
-    val levels = com.ireddragonicy.konabessnext.core.ChipInfo.rpmh_levels.level_str()
-    val values = com.ireddragonicy.konabessnext.core.ChipInfo.rpmh_levels.levels()
     
     val currentLong = try { 
         if (param.rawValue.startsWith("0x")) java.lang.Long.decode(param.rawValue) else param.rawValue.toLong() 

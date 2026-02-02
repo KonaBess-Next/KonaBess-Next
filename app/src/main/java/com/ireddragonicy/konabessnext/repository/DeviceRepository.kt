@@ -3,7 +3,6 @@ package com.ireddragonicy.konabessnext.repository
 import android.content.Context
 import android.content.SharedPreferences
 import android.util.Log
-import com.ireddragonicy.konabessnext.core.ChipInfo
 import com.ireddragonicy.konabessnext.core.processor.BootImageProcessor
 import com.ireddragonicy.konabessnext.model.ChipDefinition
 import com.ireddragonicy.konabessnext.model.Dtb
@@ -25,7 +24,8 @@ class DeviceRepository @Inject constructor(
     @ApplicationContext private val context: Context,
     private val shellRepository: ShellRepository,
     private val bootImageProcessor: BootImageProcessor,
-    private val prefs: SharedPreferences
+    private val prefs: SharedPreferences,
+    private val chipRepository: ChipRepository
 ) {
 
     companion object {
@@ -78,7 +78,7 @@ class DeviceRepository @Inject constructor(
         val dtsFile = File(filesDir, "$dtbIndex.dts")
         if (dtsFile.exists()) {
             dtsPath = dtsFile.absolutePath
-            ChipInfo.current = def
+            chipRepository.setCurrentChip(def)
             currentDtb = Dtb(dtbIndex, def)
             prepared = true
             saveLastChipset(dtbIndex, def.id)
@@ -136,7 +136,7 @@ class DeviceRepository @Inject constructor(
     }
 
     suspend fun setupEnv() = withContext(Dispatchers.IO) {
-        if (ChipInfo.definitions.isEmpty()) ChipInfo.loadDefinitions(context)
+        if (chipRepository.definitions.value.isEmpty()) chipRepository.loadDefinitions()
         for (binary in REQUIRED_BINARIES) {
             val file = File(filesDir, binary)
             AssetsUtil.exportFiles(context, binary, file.absolutePath)
@@ -174,7 +174,7 @@ class DeviceRepository @Inject constructor(
 
     fun chooseTarget(dtb: Dtb) {
         dtsPath = "$filesDir/${dtb.id}.dts"
-        ChipInfo.current = dtb.type
+        chipRepository.setCurrentChip(dtb.type)
         currentDtb = dtb
         prepared = (dtb.type.strategyType.isNotEmpty())
         saveLastChipset(dtb.id, dtb.type.id)
@@ -239,7 +239,7 @@ class DeviceRepository @Inject constructor(
                 }
                 
                 val chipId = detectChipType(content)
-                val def = ChipInfo.getById(chipId ?: "") ?: createGenericPlaceholder(i, content, dtsModel)
+                val def = chipRepository.getChipById(chipId ?: "") ?: createGenericPlaceholder(i, content, dtsModel)
                 dtbs.add(Dtb(i, def))
             } catch (e: Exception) { Log.e(TAG, "Error checking DTB $i: ${e.message}") }
         }
@@ -268,13 +268,13 @@ class DeviceRepository @Inject constructor(
     private fun detectChipType(content: String): String? {
         val m = MODEL_PROPERTY.matcher(content)
         val modelContent = if (m.find()) m.group(1) ?: "" else ""
-        for (def: ChipDefinition in ChipInfo.definitions) {
+        for (def: ChipDefinition in chipRepository.definitions.value) {
             for (model in def.models) {
                 if (modelContent.contains(model, ignoreCase = true)) {
                     if (content.contains("qcom,gpu-pwrlevels {")) {
                         if (def.strategyType == "SINGLE_BIN") return def.id
                         val sId = def.id + "_singleBin"
-                        if (ChipInfo.getById(sId) != null) return sId
+                        if (chipRepository.getChipById(sId) != null) return sId
                     }
                     return def.id
                 }
@@ -301,7 +301,7 @@ class DeviceRepository @Inject constructor(
     fun tryRestoreLastChipset(): Boolean {
         val dtbId = prefs.getInt(KEY_LAST_DTB_ID, -1)
         val chipId = prefs.getString(KEY_LAST_CHIP_TYPE, null) ?: return false
-        val def = ChipInfo.getById(chipId) ?: tryLoadCustomDefinition(chipId) ?: return false
+        val def = chipRepository.getChipById(chipId) ?: tryLoadCustomDefinition(chipId) ?: return false
         if (File(filesDir, "$dtbId.dts").exists()) {
             chooseTarget(Dtb(dtbId, def))
             return true

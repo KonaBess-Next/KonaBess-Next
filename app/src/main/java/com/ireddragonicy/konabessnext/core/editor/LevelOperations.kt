@@ -1,7 +1,6 @@
 package com.ireddragonicy.konabessnext.core.editor
 
 import android.app.Activity
-import com.ireddragonicy.konabessnext.core.ChipInfo
 import com.ireddragonicy.konabessnext.model.Bin
 import com.ireddragonicy.konabessnext.model.Level
 import com.ireddragonicy.konabessnext.ui.SettingsActivity
@@ -114,7 +113,7 @@ object LevelOperations {
     // ===== CRUD Operations =====
 
     @JvmStatic
-    fun addLevelAtTop(bins: ArrayList<Bin>?, binId: Int) {
+    fun addLevelAtTop(bins: ArrayList<Bin>?, binId: Int, chipDef: com.ireddragonicy.konabessnext.model.ChipDefinition?) {
         if (bins == null || binId !in bins.indices) return
         val bin = bins[binId]
         if (bin.levels.isEmpty()) return
@@ -123,11 +122,11 @@ object LevelOperations {
         bin.levels.add(0, cloneLevel(template))
 
         offsetInitialLevel(bins, binId, 1)
-        if (ChipInfo.current?.needsCaTargetOffset == true) offsetCaTargetLevel(bins, binId, 1)
+        if (chipDef?.needsCaTargetOffset == true) offsetCaTargetLevel(bins, binId, 1)
     }
 
     @JvmStatic
-    fun addLevelAtBottom(bins: ArrayList<Bin>?, binId: Int) {
+    fun addLevelAtBottom(bins: ArrayList<Bin>?, binId: Int, chipDef: com.ireddragonicy.konabessnext.model.ChipDefinition?) {
         if (bins == null || binId !in bins.indices) return
         val bin = bins[binId]
         if (bin.levels.isEmpty()) return
@@ -140,12 +139,12 @@ object LevelOperations {
 
         if (insertIndex == 0) {
             offsetInitialLevel(bins, binId, 1)
-            if (ChipInfo.current?.needsCaTargetOffset == true) offsetCaTargetLevel(bins, binId, 1)
+            if (chipDef?.needsCaTargetOffset == true) offsetCaTargetLevel(bins, binId, 1)
         }
     }
 
     @JvmStatic
-    fun duplicateLevel(bins: ArrayList<Bin>?, binId: Int, levelIndex: Int) {
+    fun duplicateLevel(bins: ArrayList<Bin>?, binId: Int, levelIndex: Int, chipDef: com.ireddragonicy.konabessnext.model.ChipDefinition?) {
         if (bins == null || binId !in bins.indices) return
         val bin = bins[binId]
         if (levelIndex !in bin.levels.indices) return
@@ -154,11 +153,11 @@ object LevelOperations {
         bin.levels.add(levelIndex + 1, cloneLevel(template))
 
         offsetInitialLevel(bins, binId, 1)
-        if (ChipInfo.current?.needsCaTargetOffset == true) offsetCaTargetLevel(bins, binId, 1)
+        if (chipDef?.needsCaTargetOffset == true) offsetCaTargetLevel(bins, binId, 1)
     }
 
     @JvmStatic
-    fun removeLevel(bins: ArrayList<Bin>?, binId: Int, levelIndex: Int) {
+    fun removeLevel(bins: ArrayList<Bin>?, binId: Int, levelIndex: Int, chipDef: com.ireddragonicy.konabessnext.model.ChipDefinition?) {
         if (bins == null || binId !in bins.indices) return
         val bin = bins[binId]
         if (bin.levels.size <= 1 || levelIndex !in bin.levels.indices) return
@@ -166,7 +165,7 @@ object LevelOperations {
         bin.levels.removeAt(levelIndex)
 
         offsetInitialLevel(bins, binId, -1)
-        if (ChipInfo.current?.needsCaTargetOffset == true) offsetCaTargetLevel(bins, binId, -1)
+        if (chipDef?.needsCaTargetOffset == true) offsetCaTargetLevel(bins, binId, -1)
     }
 
     @JvmStatic
@@ -180,8 +179,7 @@ object LevelOperations {
     }
 
     @JvmStatic
-    fun levelint2int(value: Long): Int {
-        val levels = ChipInfo.rpmh_levels.levels()
+    fun levelint2int(value: Long, levels: IntArray): Int {
         for (i in levels.indices) {
             if (levels[i].toLong() == value) return i
         }
@@ -189,9 +187,7 @@ object LevelOperations {
     }
 
     @JvmStatic
-    fun levelint2str(value: Long): String {
-        val levels = ChipInfo.rpmh_levels.levels()
-        val strings = ChipInfo.rpmh_levels.level_str()
+    fun levelint2str(value: Long, levels: IntArray, strings: Array<String>): String {
         for (i in levels.indices) {
             if (levels[i].toLong() == value) {
                 return if (i < strings.size) strings[i] else value.toString()

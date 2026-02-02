@@ -33,7 +33,8 @@ import com.google.android.material.color.MaterialColors
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.slider.Slider
 import com.ireddragonicy.konabessnext.R
-import com.ireddragonicy.konabessnext.core.ChipInfo
+import com.ireddragonicy.konabessnext.repository.ChipRepository
+// ChipInfo import removed
 import com.ireddragonicy.konabessnext.model.Bin
 import com.ireddragonicy.konabessnext.model.Level
 import com.ireddragonicy.konabessnext.ui.widget.GpuActionToolbar
@@ -55,6 +56,9 @@ class GpuCurveEditorFragment : Fragment() {
     private var localBins: List<Bin> = ArrayList()
 
     private var chart: LineChart? = null
+    
+    @javax.inject.Inject
+    lateinit var chipRepository: ChipRepository
     private var globalOffsetSlider: Slider? = null
     private var offsetValueText: TextView? = null
     private var btnPlus: MaterialButton? = null
@@ -144,6 +148,10 @@ class GpuCurveEditorFragment : Fragment() {
         if (activity != null) {
             val actionToolbar = GpuActionToolbar(requireContext())
             actionToolbar.setParentViewForVolt(toolbarContainer!!)
+            
+            val currentChip = chipRepository.currentChip.value
+            actionToolbar.setShowVolt(currentChip != null && !currentChip.ignoreVoltTable)
+            
             actionToolbar.build(requireActivity(), gpuFrequencyViewModel, viewLifecycleOwner)
             toolbarContainer!!.addView(actionToolbar)
         }
@@ -521,9 +529,9 @@ class GpuCurveEditorFragment : Fragment() {
     private fun showVoltageEditDialog(entryIndex: Int) {
         if (context == null || voltageLevels == null) return
 
-        // Get available voltage levels from ChipInfo
-        val levelStrings = ChipInfo.rpmh_levels.level_str()
-        val levelValues = ChipInfo.rpmh_levels.levels()
+        // Get available voltage levels from ChipRepository
+        val levelStrings = chipRepository.getLevelStringsForCurrentChip()
+        val levelValues = chipRepository.getLevelsForCurrentChip()
 
         if (levelStrings.isEmpty()) {
             Toast.makeText(context, "Voltage levels not available", Toast.LENGTH_SHORT).show()
@@ -683,8 +691,8 @@ class GpuCurveEditorFragment : Fragment() {
 
     private fun getLevelStr(level: Long): String {
         try {
-            val levels = ChipInfo.rpmh_levels.levels()
-            val strs = ChipInfo.rpmh_levels.level_str()
+            val levels = chipRepository.getLevelsForCurrentChip()
+            val strs = chipRepository.getLevelStringsForCurrentChip()
             for (i in levels.indices) {
                 if (levels[i].toLong() == level) {
                     return strs[i]
