@@ -5,6 +5,8 @@ import java.io.BufferedReader
 import java.io.File
 import java.io.FileReader
 import java.util.regex.Pattern
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 data class DtsScanResult(
     val isValid: Boolean,
@@ -26,8 +28,8 @@ object DtsScanner {
     private val REGEX_PWR_LEVELS_MULTI = Pattern.compile("qcom,gpu-pwrlevels-\\d+")
     private val REGEX_PWR_LEVELS_SINGLE = Pattern.compile("qcom,gpu-pwrlevels\\s*\\{")
 
-    fun scan(file: File, index: Int): DtsScanResult {
-        if (!file.exists()) return DtsScanResult(false, index, "UNKNOWN", null, 0)
+    suspend fun scan(file: File, index: Int): DtsScanResult = withContext(Dispatchers.Default) {
+        if (!file.exists()) return@withContext DtsScanResult(false, index, "UNKNOWN", null, 0)
 
         var hasMultiBin = false
         var hasSingleBin = false
@@ -96,7 +98,7 @@ object DtsScanner {
             }
         } catch (e: Exception) {
             e.printStackTrace()
-            return DtsScanResult(false, index, "UNKNOWN", null, 0)
+            return@withContext DtsScanResult(false, index, "UNKNOWN", null, 0)
         }
 
         // Determine Strategy
@@ -131,7 +133,7 @@ object DtsScanner {
         // If we found nothing relevant, isValid is false
         val isValid = confidenceScore > 0
 
-        return DtsScanResult(
+        DtsScanResult(
             isValid = isValid,
             dtbIndex = index,
             recommendedStrategy = if (strategy == "UNKNOWN") "MULTI_BIN" else strategy,

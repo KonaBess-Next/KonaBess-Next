@@ -81,7 +81,7 @@ class GpuRepository @Inject constructor(
         _stateVersion.value += 1
     }
 
-    suspend fun parseContentPartial(content: String) {
+    suspend fun parseContentPartial(content: String) = withContext(Dispatchers.Default) {
         try {
             val lines = content.split("\n")
             val linesMutable = ArrayList(lines)
@@ -129,7 +129,13 @@ class GpuRepository @Inject constructor(
     suspend fun loadTable() = withContext(Dispatchers.IO) {
         _parsedResult.value = ParseResult.Loading
         try {
-            val path = deviceRepository.dtsPath ?: throw IOException("DTS Path not set")
+            var path = deviceRepository.dtsPath
+            if (path == null) {
+                if (deviceRepository.tryRestoreLastChipset()) {
+                    path = deviceRepository.dtsPath
+                }
+            }
+            if (path == null) throw IOException("DTS Path not set")
             val lines = FileUtil.readLines(path)
             
             ignoreNextContentUpdate = true
@@ -143,11 +149,12 @@ class GpuRepository @Inject constructor(
             
             val currentChip = chipRepository.currentChip.value
             if (currentChip != null) {
-                val newBins = decodeBins(linesMutable)
+                // Determine bins/opps on Default dispatcher as it is CPU intensive
+                val newBins = withContext(Dispatchers.Default) { decodeBins(linesMutable) }
                 _bins.value = newBins
                 initialBins = EditorState.deepCopyBins(newBins)
                 
-                val newOpps = decodeOpps(linesMutable)
+                val newOpps = withContext(Dispatchers.Default) { decodeOpps(linesMutable) }
                 _opps.value = newOpps
                 initialOpps = EditorState.deepCopyOpps(newOpps)
                 

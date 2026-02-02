@@ -105,38 +105,54 @@ fun UnifiedDtsEditorScreen(viewModel: SharedGpuViewModel) {
             }
         }
 
-        if (showSearchBar) {
+        androidx.compose.animation.AnimatedVisibility(
+            visible = showSearchBar,
+            enter = androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn(),
+            exit = androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut()
+        ) {
             Surface(
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                modifier = Modifier.fillMaxWidth()
+                tonalElevation = 4.dp,
+                shape = MaterialTheme.shapes.extraLarge,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
             ) {
                 Row(
-                    modifier = Modifier.padding(8.dp),
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    Icon(
+                        androidx.compose.ui.res.painterResource(android.R.drawable.ic_menu_search), 
+                        contentDescription = "Search",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    
                     TextField(
                         value = searchQuery,
                         onValueChange = { 
                             searchQuery = it 
                             viewModel.search(it)
                         },
-                        placeholder = { Text("Search") },
+                        placeholder = { Text("Search...", style = MaterialTheme.typography.bodyMedium) },
                         modifier = Modifier.weight(1f),
                         singleLine = true,
+                        textStyle = MaterialTheme.typography.bodyMedium,
                         colors = TextFieldDefaults.colors(
                             focusedContainerColor = Color.Transparent,
                             unfocusedContainerColor = Color.Transparent,
-                            disabledContainerColor = Color.Transparent
+                            disabledContainerColor = Color.Transparent,
+                            focusedIndicatorColor = Color.Transparent,
+                            unfocusedIndicatorColor = Color.Transparent
                         )
                     )
                     
-                    Text(
-                        text = if (searchState.results.isNotEmpty()) 
-                                "${searchState.currentIndex + 1}/${searchState.results.size}" 
-                               else "0/0",
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.padding(horizontal = 8.dp)
-                    )
+                    if (searchState.results.isNotEmpty()) {
+                        Text(
+                            text = "${searchState.currentIndex + 1}/${searchState.results.size}",
+                            style = MaterialTheme.typography.labelSmall,
+                            modifier = Modifier.padding(horizontal = 8.dp)
+                        )
+                    }
 
                     IconButton(onClick = { viewModel.previousSearchResult() }) {
                         Icon(androidx.compose.ui.res.painterResource(android.R.drawable.arrow_up_float), contentDescription = "Prev")
@@ -167,6 +183,7 @@ fun UnifiedDtsEditorScreen(viewModel: SharedGpuViewModel) {
             },
             searchQuery = searchQuery,
             searchResultIndex = searchState.currentIndex,
+            searchResults = searchState.results.map { com.ireddragonicy.konabessnext.ui.compose.LineSearchResult(it.lineIndex) },
             modifier = Modifier.weight(1f)
         )
         

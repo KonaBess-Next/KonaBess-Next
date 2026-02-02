@@ -42,6 +42,13 @@ class SharedGpuViewModel @Inject constructor(
     val dtsContent: StateFlow<String> = repository.dtsContent
     val bins: StateFlow<List<Bin>> = repository.bins
     val opps: StateFlow<List<Opp>> = repository.opps
+    
+    // EXPOSED: Chip Definition for UI Logic
+    val currentChip = chipRepository.currentChip
+
+    // HELPERS: Bridge to ChipRepository
+    fun getLevelStrings(): Array<String> = chipRepository.getLevelStringsForCurrentChip()
+    fun getLevelValues(): IntArray = chipRepository.getLevelsForCurrentChip()
 
     private val _binUiModels = MutableStateFlow<Map<Int, List<LevelUiModel>>>(emptyMap())
     val binUiModels: StateFlow<Map<Int, List<LevelUiModel>>> = _binUiModels.asStateFlow()
@@ -156,7 +163,7 @@ class SharedGpuViewModel @Inject constructor(
     val errorEvent: SharedFlow<UiText> = _errorEvent.asSharedFlow()
 
     data class SearchState(val query: String = "", val results: List<SearchResult> = emptyList(), val currentIndex: Int = -1)
-    data class SearchResult(val startIndex: Int, val length: Int)
+    data class SearchResult(val startIndex: Int, val length: Int, val lineIndex: Int)
     private val _searchState = MutableStateFlow(SearchState())
     val searchState: StateFlow<SearchState> = _searchState.asStateFlow()
 
@@ -195,16 +202,51 @@ class SharedGpuViewModel @Inject constructor(
         }
     }
 
+    private var searchJob: kotlinx.coroutines.Job? = null
+
     fun search(query: String) {
-        if (query.isEmpty()) { _searchState.value = SearchState(); return }
-        val content = dtsContent.value
-        val results = mutableListOf<SearchResult>()
-        var index = 0
-        while (content.indexOf(query, index).also { index = it } != -1) {
-            results.add(SearchResult(index, query.length))
-            index += query.length
+        searchJob?.cancel()
+        if (query.isEmpty()) { 
+            _searchState.value = SearchState()
+            return 
         }
-        _searchState.value = SearchState(query, results, if (results.isNotEmpty()) 0 else -1)
+
+        searchJob = viewModelScope.launch(Dispatchers.Default) {
+             // Debounce - wait for typing to stop
+             kotlinx.coroutines.delay(300)
+             
+             if (!isActive) return@launch
+
+             val content = dtsContent.value
+             val results = mutableListOf<SearchResult>()
+             var index = 0
+             
+             // Optimization: Pre-calculate all line offsets once if content is large?
+             // For now, let's keep it simple but run in background. 
+             // To speed up line counting, we can track the last line index and count forward.
+             
+             var currentLine = 0
+             var lastIndex = 0
+             
+             while (isActive) {
+                 val nextIndex = content.indexOf(query, index)
+                 if (nextIndex == -1) break
+                 
+                 // Count newlines between last match and this match
+                 for (i in lastIndex until nextIndex) {
+                     if (content[i] == '\n') currentLine++
+                 }
+                 
+                 results.add(SearchResult(nextIndex, query.length, currentLine))
+                 
+                 index = nextIndex + query.length
+                 lastIndex = index
+             }
+             
+             if (isActive) {
+                 _searchState.value = SearchState(query, results, if (results.isNotEmpty()) 0 else -1)
+             }
+        }
     }
 
     fun nextSearchResult() {

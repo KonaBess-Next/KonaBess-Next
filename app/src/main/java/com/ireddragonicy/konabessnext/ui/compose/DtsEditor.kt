@@ -1,79 +1,104 @@
 package com.ireddragonicy.konabessnext.ui.compose
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.runtime.*
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.viewinterop.AndroidView
-import com.ireddragonicy.konabessnext.editor.core.CodeEditor
-import com.ireddragonicy.konabessnext.viewmodel.RawDtsEditorViewModel.LineSearchResult
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.ireddragonicy.konabessnext.editor.highlight.ComposeHighlighter
+
+data class LineSearchResult(val lineIndex: Int)
 
 @Composable
 fun DtsEditor(
     content: String,
-    onContentChanged: (String) -> Unit,
+    onContentChanged: (String) -> Unit, // Not fully supported in read-only LazyColumn logic yet, but kept signature
     searchQuery: String = "",
     searchResultIndex: Int = -1,
     searchResults: List<LineSearchResult> = emptyList(),
     modifier: Modifier = Modifier
 ) {
-    // We use a side-effect to avoid resetting text cursor when 'content' changes due to our own typing
-    // Actually CodeEditor handles this check internally usually, or we do it here.
+    val listState = rememberLazyListState()
+    val lines = remember(content) { content.split("\n") }
+
+    // Auto-scroll to search result
+    LaunchedEffect(searchResultIndex) {
+        if (searchResultIndex >= 0 && searchResultIndex < searchResults.size) {
+            val result = searchResults[searchResultIndex]
+            // Scroll to the line index
+            listState.animateScrollToItem(result.lineIndex)
+        }
+    }
     
-    // Create the view
-    AndroidView(
-        modifier = modifier.fillMaxSize(),
-        factory = { context ->
-            CodeEditor(context).apply {
-                // Setup listener
-                setOnTextChangedListener {
-                    // Signal change
-                    onContentChanged(this.text.toString())
+    // Also scroll if searchResults is empty but we have a query? 
+    // The previous logic used specific index.
+    
+    SelectionContainer(modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize()
+        ) {
+            itemsIndexed(lines) { index, line ->
+                // Highlight line if it matches current search result
+                val isCurrentResultLine = if (searchResultIndex >= 0 && searchResultIndex < searchResults.size) {
+                    searchResults[searchResultIndex].lineIndex == index
+                } else false
+                
+                // Highlight text content
+                val highlightedText = remember(line, searchQuery) {
+                    ComposeHighlighter.highlight(line, searchQuery)
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(if (isCurrentResultLine) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f) else Color.Transparent)
+                ) {
+                    // Line Number
+                    Text(
+                        text = (index + 1).toString(),
+                        modifier = Modifier
+                            .width(40.dp)
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                            .padding(end = 4.dp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.End,
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 12.sp,
+                        lineHeight = 16.sp
+                    )
+                    
+                    // Code
+                    Text(
+                        text = highlightedText,
+                        modifier = Modifier
+                            .padding(start = 8.dp)
+                            .fillMaxWidth(),
+                        color = Color(0xFFE0E2E7), // Enforce light color for base text
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 12.sp,
+                        lineHeight = 16.sp
+                    )
                 }
             }
-        },
-        update = { view ->
-            // Update content only if different to avoid cursor jump/loop
-            if (view.text.toString() != content) {
-                // Determine if difference is significant or just typing?
-                // For now, simple check.
-                view.setText(content)
-            }
-            
-            // Handle Search
-            if (searchQuery.isNotEmpty()) {
-                // This might spam search on every recomposition if query doesn't change?
-                // No, 'update' block runs on recomposition.
-                // We should check if query actually changed? 
-                // Or just let CodeEditor handle "search same query" gracefully.
-                // It does have logic to find next.
-                // Ideally we only search if different.
-                
-                // For basic "Highlight all" behavior:
-                // view.searchAndSelect(searchQuery) matches ONE.
-                // We might need a "setSearchQuery" on CodeEditor if we expanded it.
-                // But for now, let's map the ViewModel's "current index" navigation.
-                
-                // If the ViewModel manages navigation, we just highlight?
-                // Legacy logic pushed navigation via function calls.
-                // Compose 'update' is state-driven.
-                
-                 if (searchQuery != view.lastSearchQuery || searchResultIndex != view.lastSearchIndex) {
-                     // Trigger logic
-                     view.searchAndSelect(searchQuery)
-                 }
-            } else {
-                view.clearSearch()
-            }
         }
-    )
+    }
 }
-
-// Extension to store state in View for diffing during Compose updates
-private var CodeEditor.lastSearchQuery: String?
-    get() = this.tag as? String // Using tag as simple storage
-    set(value) { this.tag = value }
-
-private var CodeEditor.lastSearchIndex: Int
-    get() = 0 // Needs a better storage mechanism or field in CodeEditor
-    set(value) {}
-

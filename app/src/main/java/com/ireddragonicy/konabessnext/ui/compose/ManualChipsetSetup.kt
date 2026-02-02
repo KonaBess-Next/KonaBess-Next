@@ -25,7 +25,7 @@ import kotlinx.coroutines.delay
 fun ManualChipsetSetupScreen(
     dtbIndex: Int,
     autoStartScan: Boolean = false, // New Flag
-    onDeepScan: () -> DtsScanResult,
+    onDeepScan: suspend () -> DtsScanResult,
     onSave: (ChipDefinition) -> Unit,
     onCancel: () -> Unit
 ) {

@@ -99,7 +99,7 @@ class DeviceViewModel @Inject constructor(
         _isFilesExtracted.value = true
     }
 
-    fun performManualScan(dtbIndex: Int): DtsScanResult {
+    suspend fun performManualScan(dtbIndex: Int): DtsScanResult {
         val file = repository.getDtsFile(dtbIndex)
         return DtsScanner.scan(file, dtbIndex)
     }
