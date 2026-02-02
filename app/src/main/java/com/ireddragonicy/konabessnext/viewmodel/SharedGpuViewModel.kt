@@ -13,7 +13,6 @@ import com.ireddragonicy.konabessnext.model.Opp
 import com.ireddragonicy.konabessnext.repository.GpuRepository
 import com.ireddragonicy.konabessnext.model.UiText
 import com.ireddragonicy.konabessnext.ui.SettingsActivity
-// ChipInfo import removed
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -67,6 +66,27 @@ class SharedGpuViewModel @Inject constructor(
     private val _workbenchState = MutableStateFlow<WorkbenchState>(WorkbenchState.Loading)
     val workbenchState: StateFlow<WorkbenchState> = _workbenchState.asStateFlow()
 
+    // ============================================================================================
+    // PERSISTENT UI STATE (Scroll & Tree Expansion)
+    // Hoisted here to survive Composable destruction during tab switching
+    // ============================================================================================
+
+    // Text Editor Scroll State
+    val textScrollIndex = MutableStateFlow(0)
+    val textScrollOffset = MutableStateFlow(0)
+    
+    // Visual Tree Scroll State
+    val treeScrollIndex = MutableStateFlow(0)
+    val treeScrollOffset = MutableStateFlow(0)
+    
+    // Persistent Tree Expansion State (Set of Node Paths)
+    private val _expandedNodePaths = MutableStateFlow<Set<String>>(setOf("root")) // Default expand root
+    val expandedNodePaths: StateFlow<Set<String>> = _expandedNodePaths.asStateFlow()
+    
+    // Cached Parsed Tree (to avoid re-parsing on tab switch)
+    private val _parsedTree = MutableStateFlow<com.ireddragonicy.konabessnext.model.dts.DtsNode?>(null)
+    val parsedTree: StateFlow<com.ireddragonicy.konabessnext.model.dts.DtsNode?> = _parsedTree.asStateFlow()
+
     init {
         // Observe changes to Bins to update the UI models reactively
         viewModelScope.launch {
@@ -83,6 +103,51 @@ class SharedGpuViewModel @Inject constructor(
                 }
             }
         }
+
+        // Auto-parse DTS to Tree when content changes
+        // This runs on Default dispatcher to avoid blocking UI
+        viewModelScope.launch(Dispatchers.Default) {
+             dtsContent.collect { content ->
+                 if (content.isNotEmpty()) {
+                     try {
+                         val root = com.ireddragonicy.konabessnext.utils.DtsTreeHelper.parse(content)
+                         // Restore expansion state from persistent set
+                         restoreExpansion(root, _expandedNodePaths.value)
+                         _parsedTree.value = root
+                     } catch (e: Exception) {
+                         e.printStackTrace()
+                     }
+                 }
+             }
+        }
+    }
+
+    /**
+     * Recursively restores the expanded state of nodes based on the persisted path set.
+     */
+    private fun restoreExpansion(node: com.ireddragonicy.konabessnext.model.dts.DtsNode, expandedPaths: Set<String>) {
+        val path = node.getFullPath()
+        // Always expand dummy root or if path is in set
+        if (expandedPaths.contains(path) || (node.name == "root" && expandedPaths.contains("root"))) {
+            node.isExpanded = true
+        }
+        node.children.forEach { restoreExpansion(it, expandedPaths) }
+    }
+
+    /**
+     * Toggles node expansion and persists the state.
+     */
+    fun toggleNodeExpansion(nodePath: String, isExpanded: Boolean) {
+        val currentSet = _expandedNodePaths.value.toMutableSet()
+        if (isExpanded) {
+            currentSet.add(nodePath)
+        } else {
+            currentSet.remove(nodePath)
+        }
+        _expandedNodePaths.value = currentSet
+        
+        // Since _parsedTree holds mutable DtsNodes, the UI updates automatically via object reference,
+        // but we sync the set so if we re-parse later (text edit), we remember this toggle.
     }
 
     private fun precalculateUiModels(bins: List<Bin>) {
@@ -212,19 +277,12 @@ class SharedGpuViewModel @Inject constructor(
         }
 
         searchJob = viewModelScope.launch(Dispatchers.Default) {
-             // Debounce - wait for typing to stop
              kotlinx.coroutines.delay(300)
-             
              if (!isActive) return@launch
 
              val content = dtsContent.value
              val results = mutableListOf<SearchResult>()
              var index = 0
-             
-             // Optimization: Pre-calculate all line offsets once if content is large?
-             // For now, let's keep it simple but run in background. 
-             // To speed up line counting, we can track the last line index and count forward.
-             
              var currentLine = 0
              var lastIndex = 0
              
@@ -232,13 +290,11 @@ class SharedGpuViewModel @Inject constructor(
                  val nextIndex = content.indexOf(query, index)
                  if (nextIndex == -1) break
                  
-                 // Count newlines between last match and this match
                  for (i in lastIndex until nextIndex) {
                      if (content[i] == '\n') currentLine++
                  }
                  
                  results.add(SearchResult(nextIndex, query.length, currentLine))
-                 
                  index = nextIndex + query.length
                  lastIndex = index
              }
@@ -285,7 +341,6 @@ class SharedGpuViewModel @Inject constructor(
         val currentBins = bins.value
         if (binIndex !in currentBins.indices) return
         val newBins = EditorState.deepCopyBins(currentBins)
-        // Delegate to LevelOperations completely for correctness
         com.ireddragonicy.konabessnext.core.editor.LevelOperations.duplicateLevel(newBins, binIndex, index, chipRepository.currentChip.value)
         repository.updateBins(newBins, "Duplicate Frequency")
     }
@@ -294,7 +349,6 @@ class SharedGpuViewModel @Inject constructor(
         val currentBins = bins.value
         if (binIndex !in currentBins.indices) return
         val newBins = EditorState.deepCopyBins(currentBins)
-        // Delegate to LevelOperations completely
         com.ireddragonicy.konabessnext.core.editor.LevelOperations.removeLevel(newBins, binIndex, index, chipRepository.currentChip.value)
         repository.updateBins(newBins, "Remove Frequency")
     }

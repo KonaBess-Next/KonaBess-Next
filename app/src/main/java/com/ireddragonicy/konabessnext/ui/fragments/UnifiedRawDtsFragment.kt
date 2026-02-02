@@ -10,6 +10,7 @@ import android.view.ViewGroup
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -26,6 +27,7 @@ import com.ireddragonicy.konabessnext.ui.compose.DtsEditor
 import com.ireddragonicy.konabessnext.ui.theme.KonaBessTheme
 import com.ireddragonicy.konabessnext.viewmodel.SharedGpuViewModel
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.flow.collectLatest
 
 @AndroidEntryPoint
 class UnifiedRawDtsFragment : Fragment() {
@@ -58,9 +60,28 @@ fun UnifiedDtsEditorScreen(viewModel: SharedGpuViewModel) {
     val searchState by viewModel.searchState.collectAsState()
     val workbenchState by viewModel.workbenchState.collectAsState()
     
+    // Persistent Scroll State from VM
+    val scrollIndex by viewModel.textScrollIndex.collectAsState()
+    val scrollOffset by viewModel.textScrollOffset.collectAsState()
+    
     var showSearchBar by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
     var lineCount by remember { mutableStateOf(0) }
+    
+    // Initialize LazyListState with persistent values
+    val listState = rememberLazyListState(
+        initialFirstVisibleItemIndex = scrollIndex,
+        initialFirstVisibleItemScrollOffset = scrollOffset
+    )
+    
+    // Sync Scroll Changes Back to ViewModel
+    LaunchedEffect(listState) {
+        snapshotFlow { Pair(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset) }
+            .collectLatest { (index, offset) ->
+                viewModel.textScrollIndex.value = index
+                viewModel.textScrollOffset.value = offset
+            }
+    }
     
     LaunchedEffect(searchState.query) {
         if (searchState.query.isNotEmpty() && !showSearchBar) {
@@ -184,6 +205,7 @@ fun UnifiedDtsEditorScreen(viewModel: SharedGpuViewModel) {
             searchQuery = searchQuery,
             searchResultIndex = searchState.currentIndex,
             searchResults = searchState.results.map { com.ireddragonicy.konabessnext.ui.compose.LineSearchResult(it.lineIndex) },
+            listState = listState, // Pass the persistent state
             modifier = Modifier.weight(1f)
         )
         

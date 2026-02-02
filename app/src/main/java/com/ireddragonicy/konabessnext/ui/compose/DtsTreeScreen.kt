@@ -29,7 +29,9 @@ import androidx.compose.ui.draw.rotate
 @Composable
 fun DtsTreeScreen(
     rootNode: DtsNode?,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    listState: androidx.compose.foundation.lazy.LazyListState = rememberLazyListState(),
+    onNodeToggle: ((String, Boolean) -> Unit)? = null
 ) {
     if (rootNode == null) {
         Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -42,7 +44,11 @@ fun DtsTreeScreen(
     // We use a state that updates when expansion changes
     var flattenedList by remember(rootNode) { mutableStateOf(flattenTree(rootNode)) }
 
+    
+    // Flatten logic handles expansion check on nodes
+    
     LazyColumn(
+        state = listState,
         modifier = modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.surface)
@@ -53,6 +59,7 @@ fun DtsTreeScreen(
                 onToggleExpand = {
                     item.node?.let { node ->
                         node.isExpanded = !node.isExpanded
+                        onNodeToggle?.invoke(node.getFullPath(), node.isExpanded)
                         // Re-flatten efficiently? Ideally we only update this section
                         // For simplicity in non-huge trees, re-flattening is okay-ish
                         // But let's verify performance. DTS trees can be large.

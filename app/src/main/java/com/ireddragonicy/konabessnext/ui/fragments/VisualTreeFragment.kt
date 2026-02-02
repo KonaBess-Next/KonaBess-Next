@@ -16,6 +16,8 @@ import com.ireddragonicy.konabessnext.viewmodel.SharedGpuViewModel
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import androidx.compose.foundation.lazy.rememberLazyListState
+import kotlinx.coroutines.flow.collectLatest
 
 /**
  * Visual Tree Editor fragment - displays DTS as an interactive tree structure.
@@ -34,24 +36,33 @@ class VisualTreeFragment : Fragment() {
         return ComposeView(requireContext()).apply {
              setContent {
                  KonaBessTheme {
-                     val dtsContent by sharedViewModel.dtsContent.collectAsState()
-                     var rootNode by remember { mutableStateOf<DtsNode?>(null) }
+                     // Persistent State from VM
+                     val parsedTree by sharedViewModel.parsedTree.collectAsState()
+                     val treeScrollIdx by sharedViewModel.treeScrollIndex.collectAsState()
+                     val treeScrollOff by sharedViewModel.treeScrollOffset.collectAsState()
                      
-                     LaunchedEffect(dtsContent) {
-                         if (dtsContent.isNotEmpty()) {
-                             withContext(Dispatchers.Default) {
-                                 try {
-                                      // TODO: DtsTreeHelper.parse might need improvement for massive files
-                                      val root = DtsTreeHelper.parse(dtsContent)
-                                      withContext(Dispatchers.Main) { rootNode = root }
-                                 } catch(e: Exception) {
-                                     // Handle error state if needed
-                                 }
+                     // Hoisted Scroll State
+                     val listState = rememberLazyListState(
+                         initialFirstVisibleItemIndex = treeScrollIdx,
+                         initialFirstVisibleItemScrollOffset = treeScrollOff
+                     )
+                     
+                     // Sync Scroll to VM
+                     LaunchedEffect(listState) {
+                         snapshotFlow { Pair(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset) }
+                             .collectLatest { (index, offset) ->
+                                 sharedViewModel.treeScrollIndex.value = index
+                                 sharedViewModel.treeScrollOffset.value = offset
                              }
-                         }
                      }
                      
-                     DtsTreeScreen(rootNode = rootNode)
+                     DtsTreeScreen(
+                         rootNode = parsedTree,
+                         listState = listState,
+                         onNodeToggle = { path, expanded -> 
+                             sharedViewModel.toggleNodeExpansion(path, expanded)
+                         }
+                     )
                  }
              }
         }
