@@ -97,7 +97,7 @@ lint/tmp/
 *.hprof
 
 # KonaBess DTS files
-dts/
+# dts/
 
 # Localization Report
 localization_report.md
