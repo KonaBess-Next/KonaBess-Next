@@ -61,31 +61,7 @@ class GpuFrequencyFragment : Fragment() {
                 }
             }
 
-            launch {
-                deviceViewModel.repackState.collect { state ->
-                    when (state) {
-                        is UiState.Loading -> showLoadingDialog()
-                        is UiState.Success -> {
-                            hideLoadingDialog()
-                            com.google.android.material.dialog.MaterialAlertDialogBuilder(requireContext())
-                                .setTitle(R.string.success)
-                                .setMessage(state.data.asString(requireContext()))
-                                .setPositiveButton(R.string.reboot) { _, _ -> deviceViewModel.reboot() }
-                                .setNegativeButton(R.string.ok, null)
-                                .show()
-                        }
-                        is UiState.Error -> {
-                            hideLoadingDialog()
-                            com.google.android.material.dialog.MaterialAlertDialogBuilder(requireContext())
-                                .setTitle(R.string.error)
-                                .setMessage(state.message.asString(requireContext()))
-                                .setPositiveButton(R.string.ok, null)
-                                .show()
-                        }
-                        else -> {}
-                    }
-                }
-            }
+
         }
     }
 
@@ -135,15 +111,7 @@ class GpuFrequencyFragment : Fragment() {
         contentContainer?.addView(composeView, LinearLayout.LayoutParams(-1, -1))
     }
 
-    private var loadingDialog: androidx.appcompat.app.AlertDialog? = null
-    private fun showLoadingDialog() {
-        if (loadingDialog == null) {
-            loadingDialog = com.google.android.material.dialog.MaterialAlertDialogBuilder(requireContext())
-                .setMessage(R.string.processing).setCancelable(false).create()
-        }
-        loadingDialog?.show()
-    }
-    private fun hideLoadingDialog() { loadingDialog?.dismiss() }
+
 
     @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
     private fun showGpuEditor(activity: MainActivity) {
