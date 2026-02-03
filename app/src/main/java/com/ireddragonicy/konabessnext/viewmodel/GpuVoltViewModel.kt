@@ -38,7 +38,7 @@ class GpuVoltViewModel @Inject constructor(
         opp.frequency = newFreq
         opp.volt = newVolt
 
-        repository.modifyOpps(newOpps)
+        repository.updateOpps(newOpps)
     }
 
     fun addOpp(freq: Long, volt: Long) {
@@ -49,7 +49,7 @@ class GpuVoltViewModel @Inject constructor(
         // Typically OPP tables are sorted.
         newOpps.sortBy { it.frequency }
         
-        repository.modifyOpps(newOpps)
+        repository.updateOpps(newOpps)
     }
 
     fun removeOpp(index: Int) {
@@ -59,7 +59,7 @@ class GpuVoltViewModel @Inject constructor(
         val newOpps = EditorState.deepCopyOpps(currentOpps)
         newOpps.removeAt(index)
         
-        repository.modifyOpps(newOpps)
+        repository.updateOpps(newOpps)
     }
 
     fun undo() = repository.undo()

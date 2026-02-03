@@ -52,7 +52,7 @@ class ExportHistoryViewModel @javax.inject.Inject constructor(
 
     fun applyConfig(content: String) {
         viewModelScope.launch {
-            repository.parseContentPartial(content)
+            repository.applySnapshot(content)
         }
     }
 }

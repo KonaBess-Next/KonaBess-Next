@@ -135,19 +135,21 @@ class DtsParser(private val tokens: List<Token>) {
 
             // Parse body
             while (peek().type != TokenType.RBRACE && peek().type != TokenType.EOF) {
-                // Inside a node, we can have properties or child nodes.
-                // Child node: name { ... };
-                // Property: name = value; or name;
-                // Since name looks like identifier, we need lookahead or context.
-                // Both start with Identifier (or Label).
-                // Diff: Node has '{', Property has '=' or ';'
-                
-                // Be careful with Labels: label: node_name { ... }
-                
                 val current = peek()
-                if (current.type == TokenType.IDENTIFIER || current.type == TokenType.LABEL || current.type == TokenType.REF || (current.type == TokenType.PREPROCESSOR && current.value=="/")) {
-                    // Could be node or property.
-                    // Check ahead.
+                
+                // Check for directives first
+                val isDirective = current.type == TokenType.PREPROCESSOR && 
+                                  (current.value == "#include" || 
+                                   current.value.startsWith("/delete-node") || 
+                                   current.value.startsWith("/omit-if-no-ref") ||
+                                   current.value.startsWith("/memreserve"))
+
+                if (isDirective) {
+                    consumeStatement()
+                } else if (current.type == TokenType.IDENTIFIER || 
+                           current.type == TokenType.LABEL || 
+                           current.type == TokenType.REF || 
+                           current.type == TokenType.PREPROCESSOR) { // Allow PREPROCESSOR as property (e.g. #address-cells)
                     
                     if (isNextNodeStart()) {
                         val child = parseNodeOrRef()
@@ -156,9 +158,6 @@ class DtsParser(private val tokens: List<Token>) {
                         val prop = parseProperty()
                         if (prop != null) node.addProperty(prop)
                     }
-                } else if (current.type == TokenType.PREPROCESSOR) {
-                     // /delete-node/ or #include inside node
-                     consumeStatement() 
                 } else {
                      advance() // Consume unknown garbage to prevent infinite loop
                 }

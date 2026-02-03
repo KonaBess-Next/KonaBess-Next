@@ -1,32 +1,35 @@
 package com.ireddragonicy.konabessnext.repository
 
-import android.content.Context
-import android.content.SharedPreferences
-import android.util.Log
+import com.ireddragonicy.konabessnext.core.interfaces.AssetDataSource
+import com.ireddragonicy.konabessnext.core.interfaces.FileDataSource
+import com.ireddragonicy.konabessnext.core.interfaces.SystemPropertySource
 import com.ireddragonicy.konabessnext.core.processor.BootImageProcessor
 import com.ireddragonicy.konabessnext.model.ChipDefinition
 import com.ireddragonicy.konabessnext.model.Dtb
 import com.ireddragonicy.konabessnext.model.DtbType
-import com.ireddragonicy.konabessnext.utils.AssetsUtil
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.io.BufferedReader
 import java.io.File
-import java.io.FileReader
+import java.io.FileOutputStream
 import java.io.IOException
+import java.io.BufferedReader
+import java.io.FileReader
 import java.util.regex.Pattern
 import javax.inject.Inject
 import javax.inject.Singleton
+import android.content.SharedPreferences
+import android.util.Log
 
 @Singleton
-class DeviceRepository @Inject constructor(
-    @ApplicationContext private val context: Context,
+open class DeviceRepository @Inject constructor(
+    private val fileDataSource: FileDataSource,
+    private val systemPropertySource: SystemPropertySource,
+    private val assetDataSource: AssetDataSource,
     private val shellRepository: ShellRepository,
     private val bootImageProcessor: BootImageProcessor,
     private val prefs: SharedPreferences,
     private val chipRepository: ChipRepository
-) {
+) : DeviceRepositoryInterface {
 
     companion object {
         private const val TAG = "KonaBessDet"
@@ -37,22 +40,13 @@ class DeviceRepository @Inject constructor(
         
         private const val KEY_LAST_DTB_ID = "last_dtb_id"
         private const val KEY_LAST_CHIP_TYPE = "last_chip_type"
-
-        fun getSystemProperty(key: String, defaultValue: String): String {
-            try {
-                val clazz = Class.forName("android.os.SystemProperties")
-                val method = clazz.getDeclaredMethod("get", String::class.java, String::class.java)
-                return method.invoke(null, key, defaultValue) as String
-            } catch (e: Exception) {
-                return defaultValue
-            }
-        }
     }
 
-    private val filesDir: String = context.filesDir.absolutePath
+    private val filesDir: String = fileDataSource.getFilesDir().absolutePath
     
-    var dtsPath: String? = null
-        private set
+    private var _dtsPath: String? = null
+    override val dtsPath: String?
+        get() = _dtsPath
     var bootName: String? = null
         private set
     var dtbs: MutableList<Dtb> = ArrayList()
@@ -77,7 +71,7 @@ class DeviceRepository @Inject constructor(
     fun setCustomChip(def: ChipDefinition, dtbIndex: Int) {
         val dtsFile = File(filesDir, "$dtbIndex.dts")
         if (dtsFile.exists()) {
-            dtsPath = dtsFile.absolutePath
+            _dtsPath = dtsFile.absolutePath
             chipRepository.setCurrentChip(def)
             currentDtb = Dtb(dtbIndex, def)
             prepared = true
@@ -128,7 +122,7 @@ class DeviceRepository @Inject constructor(
 
     private fun resetState() {
         prepared = false
-        dtsPath = null
+        _dtsPath = null
         dtbs.clear()
         bootName = null
         currentDtb = null
@@ -139,8 +133,23 @@ class DeviceRepository @Inject constructor(
         if (chipRepository.definitions.value.isEmpty()) chipRepository.loadDefinitions()
         for (binary in REQUIRED_BINARIES) {
             val file = File(filesDir, binary)
-            AssetsUtil.exportFiles(context, binary, file.absolutePath)
+            exportResource(binary, file.absolutePath)
             file.setExecutable(true)
+        }
+    }
+
+    private fun exportResource(src: String, outPath: String) {
+        // Simple export since we know binaries are single files in root or specific paths
+        // If directory support is needed, we can implement strict recursive logic,
+        // but for now, we only use this for binaries which are files.
+        try {
+            assetDataSource.open(src).use { input ->
+                FileOutputStream(File(outPath)).use { output ->
+                    input.copyTo(output)
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 
@@ -150,10 +159,10 @@ class DeviceRepository @Inject constructor(
 
     fun getCurrent(name: String): String {
         return when (name.lowercase()) {
-            "brand" -> getSystemProperty("ro.product.brand", "")
-            "model" -> getSystemProperty("ro.product.model", "")
-            "device" -> getSystemProperty("ro.product.device", "")
-            "slot" -> getSystemProperty("ro.boot.slot_suffix", "")
+            "brand" -> systemPropertySource.get("ro.product.brand", "")
+            "model" -> systemPropertySource.get("ro.product.model", "")
+            "device" -> systemPropertySource.get("ro.product.device", "")
+            "slot" -> systemPropertySource.get("ro.boot.slot_suffix", "")
             else -> ""
         }
     }
@@ -173,7 +182,7 @@ class DeviceRepository @Inject constructor(
     }
 
     fun chooseTarget(dtb: Dtb) {
-        dtsPath = "$filesDir/${dtb.id}.dts"
+        _dtsPath = "$filesDir/${dtb.id}.dts"
         chipRepository.setCurrentChip(dtb.type)
         currentDtb = dtb
         prepared = (dtb.type.strategyType.isNotEmpty())
@@ -183,7 +192,7 @@ class DeviceRepository @Inject constructor(
     fun chooseFallbackTarget(index: Int) {
         val file = File(filesDir, "$index.dts")
         if (file.exists()) {
-            dtsPath = file.absolutePath
+            _dtsPath = file.absolutePath
         }
     }
 
@@ -298,7 +307,7 @@ class DeviceRepository @Inject constructor(
         prefs.edit().putInt(KEY_LAST_DTB_ID, dtbId).putString(KEY_LAST_CHIP_TYPE, chipType).apply()
     }
     
-    fun tryRestoreLastChipset(): Boolean {
+    override fun tryRestoreLastChipset(): Boolean {
         val dtbId = prefs.getInt(KEY_LAST_DTB_ID, -1)
         val chipId = prefs.getString(KEY_LAST_CHIP_TYPE, null) ?: return false
         val def = chipRepository.getChipById(chipId) ?: tryLoadCustomDefinition(chipId) ?: return false
@@ -309,5 +318,5 @@ class DeviceRepository @Inject constructor(
         return false
     }
 
-    fun getDtsFile(): File = File(dtsPath ?: "$filesDir/0.dts")
+    override fun getDtsFile(): File = File(dtsPath ?: "$filesDir/0.dts")
 }

@@ -239,7 +239,7 @@ fun SettingsScreen(
 
     // Error Snackbar/Toast Handling
     if (updateStatus is UpdateStatus.Error) {
-        val msg = (updateStatus as UpdateStatus.Error).message
+        val msg = updateStatus.message
         LaunchedEffect(msg) {
             android.widget.Toast.makeText(context, "Update check failed: $msg", android.widget.Toast.LENGTH_LONG).show()
             onClearUpdateStatus()

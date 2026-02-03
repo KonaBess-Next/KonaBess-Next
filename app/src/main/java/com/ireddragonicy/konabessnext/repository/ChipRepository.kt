@@ -1,9 +1,7 @@
 package com.ireddragonicy.konabessnext.repository
 
-import android.content.Context
-import com.ireddragonicy.konabessnext.core.ChipLoader
+import com.ireddragonicy.konabessnext.core.interfaces.ChipDefinitionLoader
 import com.ireddragonicy.konabessnext.model.ChipDefinition
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -11,14 +9,14 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class ChipRepository @Inject constructor(
-    @ApplicationContext private val context: Context
-) {
+open class ChipRepository @Inject constructor(
+    private val loader: ChipDefinitionLoader
+) : ChipRepositoryInterface {
     private val _definitions = MutableStateFlow<List<ChipDefinition>>(emptyList())
-    val definitions: StateFlow<List<ChipDefinition>> = _definitions.asStateFlow()
+    override val definitions: StateFlow<List<ChipDefinition>> = _definitions.asStateFlow()
 
     private val _currentChip = MutableStateFlow<ChipDefinition?>(null)
-    val currentChip: StateFlow<ChipDefinition?> = _currentChip.asStateFlow()
+    override val currentChip: StateFlow<ChipDefinition?> = _currentChip.asStateFlow()
 
     // Strategy instances
     private val multiBinStrategy = com.ireddragonicy.konabessnext.core.strategy.MultiBinStrategy()
@@ -28,30 +26,30 @@ class ChipRepository @Inject constructor(
         loadDefinitions()
     }
 
-    fun loadDefinitions() {
-        val defs = ChipLoader.loadDefinitions(context)
+    override fun loadDefinitions() {
+        val defs = loader.loadDefinitions()
         _definitions.value = defs
     }
 
-    fun setCurrentChip(chip: ChipDefinition?) {
+    override fun setCurrentChip(chip: ChipDefinition?) {
         _currentChip.value = chip
     }
 
-    fun getChipById(id: String): ChipDefinition? {
+    override fun getChipById(id: String): ChipDefinition? {
         return _definitions.value.find { it.id == id }
     }
 
-    fun getArchitecture(def: ChipDefinition?): com.ireddragonicy.konabessnext.core.strategy.ChipArchitecture {
+    override fun getArchitecture(def: ChipDefinition?): com.ireddragonicy.konabessnext.core.strategy.ChipArchitecture {
         return if (def?.strategyType == "SINGLE_BIN") singleBinStrategy else multiBinStrategy
     }
 
-    fun getLevelsForCurrentChip(): IntArray {
+    override fun getLevelsForCurrentChip(): IntArray {
         val c = _currentChip.value ?: return IntArray(0)
         val size = c.levelCount
         return IntArray(size) { it + 1 }
     }
 
-    fun getLevelStringsForCurrentChip(): Array<String> {
+    override fun getLevelStringsForCurrentChip(): Array<String> {
         val c = _currentChip.value ?: return emptyArray()
         val size = c.levelCount
         return Array(size) { i ->

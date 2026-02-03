@@ -120,13 +120,13 @@ class ImportExportViewModel @Inject constructor(
                 if (json.has("freq")) {
                     val freqData = json.getString("freq")
                     val lines = freqData.split("\n")
-                    gpuRepository.importFrequencyTable(lines, "Import: $desc")
+                    gpuRepository.importTable(lines)
                 }
                 
                 if (json.has("volt")) {
                     val voltData = json.getString("volt")
                     val lines = voltData.split("\n")
-                    gpuRepository.importVoltageTable(lines, "Import: $desc")
+                    gpuRepository.importVoltTable(lines)
                 }
                 
                 _messageEvent.emit("Successfully imported: $desc")

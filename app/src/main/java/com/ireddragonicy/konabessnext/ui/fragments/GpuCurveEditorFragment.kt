@@ -638,51 +638,38 @@ class GpuCurveEditorFragment : Fragment() {
         // Level objects contain the lines.
         // We can iterate originalLevels (from mutableBin) and find the matching voltage level.
 
-        gpuFrequencyViewModel.performBatchEdit { bins ->
-            // Find target bin in the mutable copy
-            if (binIndex >= bins.size) return@performBatchEdit
+        val updates = ArrayList<Triple<Int, Int, Long>>()
 
-            val mutableBin = bins[binIndex]
-            val size = mutableBin.levels.size
-
-            // We need to update ALL levels in this bin based on our chart entries.
-            // Iterate over all levels in the bin
-            for (lvl in mutableBin.levels) {
-                // Find current voltage of this level
-                var currentVolt = -1
-                for (line in lvl.lines) {
-                    if (line.contains("qcom,level") || line.contains("qcom,cx-level")) {
-                        try {
-                            currentVolt = DtsHelper.decode_int_line(line).value.toInt()
-                        } catch (e: Exception) {
-                        }
-                        break
-                    }
-                }
-
-                if (currentVolt != -1) {
-                    // Find matching entry in activeEntries
-                    for (entry in activeEntries) {
-                        if (entry.x.toInt() == currentVolt) {
-                            // Match found, update frequency
-                            val newFreq = (entry.y * 1_000_000).toLong()
-
-                            // Update lines
-                            for (j in lvl.lines.indices) {
-                                val line = lvl.lines[j]
-                                if (line.contains("qcom,gpu-freq")) {
-                                    val propName = line.substring(0, line.indexOf("=")).trim { it <= ' ' }
-                                    val newLine = "$propName = <0x${java.lang.Long.toHexString(newFreq)}>;"
-                                    lvl.lines[j] = newLine
-                                }
-                            }
-                            break // Level updated
-                        }
-                    }
+        // We need to iterate over original levels to ensure we match indices correctly
+        // The chart activeEntries are sorted by voltage (X), so we can't assume index match with levels list directly if levels aren't sorted by voltage.
+        // However, we populated activeEntries from levels.
+        
+        // Let's iterate the target bin's levels and find matching voltage in activeEntries
+        val targetBin = localBins.getOrNull(binIndex) ?: return
+        
+        targetBin.levels.forEachIndexed { lvlIdx, lvl ->
+            // Find voltage of this level
+            var currentVolt = -1
+            for (line in lvl.lines) {
+                if (line.contains("qcom,level") || line.contains("qcom,cx-level")) {
+                    try {
+                        currentVolt = DtsHelper.decode_int_line(line).value.toInt()
+                    } catch (e: Exception) {}
+                    break
                 }
             }
-            // return Unit implicit
+
+            if (currentVolt != -1) {
+                // Find matching entry
+                val entry = activeEntries.find { Math.abs(it.x - currentVolt) < 0.1f }
+                if (entry != null) {
+                    val newFreq = (entry.y * 1_000_000).toLong()
+                    updates.add(Triple(binIndex, lvlIdx, newFreq))
+                }
+            }
         }
+        
+        gpuFrequencyViewModel.batchUpdateFrequencies(updates)
 
         if (!silent) {
             Toast.makeText(context, "Changes saved to memory", Toast.LENGTH_SHORT).show()

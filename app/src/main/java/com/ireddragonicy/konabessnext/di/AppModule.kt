@@ -26,4 +26,28 @@ object AppModule {
     fun provideExportHistoryManager(@dagger.hilt.android.qualifiers.ApplicationContext context: Context): com.ireddragonicy.konabessnext.utils.ExportHistoryManager {
         return com.ireddragonicy.konabessnext.utils.ExportHistoryManager(context)
     }
+
+    @Provides
+    @Singleton
+    fun provideSystemPropertySource(): com.ireddragonicy.konabessnext.core.interfaces.SystemPropertySource {
+        return com.ireddragonicy.konabessnext.core.impl.AndroidSystemPropertySource()
+    }
+
+    @Provides
+    @Singleton
+    fun provideFileDataSource(@dagger.hilt.android.qualifiers.ApplicationContext context: Context): com.ireddragonicy.konabessnext.core.interfaces.FileDataSource {
+        return com.ireddragonicy.konabessnext.core.impl.AndroidFileDataSource(context)
+    }
+
+    @Provides
+    @Singleton
+    fun provideAssetDataSource(@dagger.hilt.android.qualifiers.ApplicationContext context: Context): com.ireddragonicy.konabessnext.core.interfaces.AssetDataSource {
+        return com.ireddragonicy.konabessnext.core.impl.AndroidAssetDataSource(context)
+    }
+
+    @Provides
+    @Singleton
+    fun provideChipDefinitionLoader(assetDataSource: com.ireddragonicy.konabessnext.core.interfaces.AssetDataSource): com.ireddragonicy.konabessnext.core.interfaces.ChipDefinitionLoader {
+        return com.ireddragonicy.konabessnext.core.impl.JsonChipDefinitionLoader(assetDataSource)
+    }
 }
