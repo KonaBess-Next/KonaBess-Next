@@ -16,6 +16,11 @@ import com.ireddragonicy.konabessnext.utils.ChipStringHelper
 import com.ireddragonicy.konabessnext.ui.compose.SettingsScreen
 import com.ireddragonicy.konabessnext.utils.LocaleUtil
 import dagger.hilt.android.AndroidEntryPoint
+import androidx.activity.viewModels
+import androidx.compose.runtime.livedata.observeAsState
+import com.ireddragonicy.konabessnext.viewmodel.SettingsViewModel
+import com.ireddragonicy.konabessnext.viewmodel.UpdateStatus
+import androidx.compose.runtime.getValue
 
 @AndroidEntryPoint
 class SettingsActivity : AppCompatActivity() {
@@ -56,7 +61,10 @@ class SettingsActivity : AppCompatActivity() {
         }
     }
 
+
+
     private lateinit var prefs: SharedPreferences
+    private val viewModel: SettingsViewModel by viewModels()
 
     override fun attachBaseContext(newBase: Context) {
         super.attachBaseContext(LocaleUtil.wrap(newBase))
@@ -85,7 +93,13 @@ class SettingsActivity : AppCompatActivity() {
                         onAutoSaveToggle = { toggleAutoSave() },
                         onHelpClick = { showHelpDialog() },
                         isAmoledMode = prefs.getBoolean(KEY_AMOLED_MODE, false),
-                        onAmoledModeToggle = { toggleAmoledMode() }
+                        onAmoledModeToggle = { toggleAmoledMode() },
+                        // Updater
+                        updateChannel = viewModel.updateChannel.observeAsState("stable").value,
+                        updateStatus = viewModel.updateStatus.observeAsState(UpdateStatus.Idle).value,
+                        onUpdateChannelChange = { viewModel.setUpdateChannel(this@SettingsActivity, it) },
+                        onCheckForUpdates = { viewModel.checkForUpdates() },
+                        onClearUpdateStatus = { viewModel.clearUpdateStatus() }
                     )
                 }
             }

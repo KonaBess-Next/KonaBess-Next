@@ -7,21 +7,36 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import com.ireddragonicy.konabessnext.BuildConfig
 import com.ireddragonicy.konabessnext.R
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.DarkMode
+import androidx.compose.material.icons.rounded.Palette
+import androidx.compose.material.icons.rounded.SystemUpdate
+import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.Translate
+import androidx.compose.material.icons.rounded.Speed
+import androidx.compose.material.icons.rounded.Save
+import androidx.compose.material.icons.rounded.Contrast
+import com.ireddragonicy.konabessnext.viewmodel.UpdateStatus
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.ui.platform.LocalContext
 
 sealed class SettingItem {
     data class Clickable(
-        val iconRes: Int,
+        val icon: Any, // Can be Int (Res ID) or ImageVector
         val title: String,
         val subtitle: String,
         val currentValue: String = ""
     ) : SettingItem()
     
     data class Toggle(
-        val iconRes: Int,
+        val icon: Any,
         val title: String,
         val subtitle: String,
         val isChecked: Boolean
@@ -48,8 +63,15 @@ fun SettingsScreen(
     onFreqUnitClick: () -> Unit,
     onAutoSaveToggle: () -> Unit,
     onHelpClick: () -> Unit,
+
     isAmoledMode: Boolean,
     onAmoledModeToggle: () -> Unit,
+    // Updater Params
+    updateChannel: String,
+    updateStatus: UpdateStatus,
+    onUpdateChannelChange: (String) -> Unit,
+    onCheckForUpdates: () -> Unit,
+    onClearUpdateStatus: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val themeTitle = androidx.compose.ui.res.stringResource(R.string.settings_theme)
@@ -68,29 +90,52 @@ fun SettingsScreen(
     val versionTitle = androidx.compose.ui.res.stringResource(R.string.settings_version_format, BuildConfig.VERSION_NAME)
     val amoledTitle = androidx.compose.ui.res.stringResource(R.string.palette_amoled)
 
-    val settingsItems = remember(currentTheme, isDynamicColor, currentColorPalette, currentLanguage, currentFreqUnit, isAutoSave, isAmoledMode, themeTitle) {
+    // Updater Strings
+    val updatesHeader = "Updates"
+    val channelTitle = "Update Channel"
+    val channelStable = "Stable"
+    val channelPrerelease = "Prerelease"
+    val channelDesc = if (updateChannel == "prerelease") "Get early access to new features" else "Stable releases only"
+    val checkUpdatesTitle = "Check for Updates"
+    val checkUpdatesDesc = if (updateStatus is UpdateStatus.Checking) "Checking..." else "Check for the latest version"
+
+    val context = LocalContext.current
+
+    val settingsItems = remember(currentTheme, isDynamicColor, currentColorPalette, currentLanguage, currentFreqUnit, isAutoSave, isAmoledMode, themeTitle, updateChannel, updateStatus) {
         buildList {
             // Appearance section
             add(SettingsListItem.Header("Appearance"))
-            add(SettingsListItem.Setting(SettingItem.Clickable(R.drawable.ic_dark_mode, themeTitle, themeDesc, currentTheme)))
-            add(SettingsListItem.Setting(SettingItem.Toggle(R.drawable.ic_dark_mode, amoledTitle, "Pure black background in Dark Mode", isAmoledMode)))
-            add(SettingsListItem.Setting(SettingItem.Toggle(R.drawable.ic_tune, dynamicColorTitle, dynamicColorDesc, isDynamicColor)))
+            add(SettingsListItem.Setting(SettingItem.Clickable(Icons.Rounded.DarkMode, themeTitle, themeDesc, currentTheme)))
+            add(SettingsListItem.Setting(SettingItem.Toggle(
+                Icons.Rounded.Contrast, // Pure Amoled - Contrast icon fits well
+                amoledTitle, 
+                "Pure black background in Dark Mode", 
+                isAmoledMode
+            )))
+            add(SettingsListItem.Setting(SettingItem.Toggle(
+                Icons.Rounded.Palette, // Dynamic Color - Palette icon
+                dynamicColorTitle, 
+                dynamicColorDesc, 
+                isDynamicColor
+            )))
             if (!isDynamicColor) {
-                add(SettingsListItem.Setting(SettingItem.Clickable(R.drawable.ic_tune, paletteTitle, paletteDesc, currentColorPalette)))
+                add(SettingsListItem.Setting(SettingItem.Clickable(Icons.Rounded.Palette, paletteTitle, paletteDesc, currentColorPalette)))
             }
 
             // Localization section
             add(SettingsListItem.Header("Localization"))
-            add(SettingsListItem.Setting(SettingItem.Clickable(R.drawable.ic_language, langTitle, langDesc, currentLanguage)))
-            add(SettingsListItem.Setting(SettingItem.Clickable(R.drawable.ic_frequency, freqTitle, freqDesc, currentFreqUnit)))
+            add(SettingsListItem.Setting(SettingItem.Clickable(Icons.Rounded.Translate, langTitle, langDesc, currentLanguage)))
+            add(SettingsListItem.Setting(SettingItem.Clickable(Icons.Rounded.Speed, freqTitle, freqDesc, currentFreqUnit)))
 
             // Behavior section
             add(SettingsListItem.Header("Behavior"))
-            add(SettingsListItem.Setting(SettingItem.Toggle(R.drawable.ic_save, autoSaveTitle, autoSaveDesc, isAutoSave)))
+            add(SettingsListItem.Setting(SettingItem.Toggle(Icons.Rounded.Save, autoSaveTitle, autoSaveDesc, isAutoSave)))
 
             // About section
             add(SettingsListItem.Header("About"))
-            add(SettingsListItem.Setting(SettingItem.Clickable(R.drawable.ic_help, helpTitle, versionTitle, "")))
+            add(SettingsListItem.Setting(SettingItem.Clickable(Icons.Rounded.SystemUpdate, channelTitle, channelDesc, if (updateChannel == "prerelease") channelPrerelease else channelStable)))
+            add(SettingsListItem.Setting(SettingItem.Clickable(Icons.Rounded.SystemUpdate, checkUpdatesTitle, checkUpdatesDesc, "")))
+            add(SettingsListItem.Setting(SettingItem.Clickable(Icons.Rounded.Info, helpTitle, versionTitle, "")))
         }
     }
 
@@ -113,8 +158,9 @@ fun SettingsScreen(
                         is SettingsListItem.Setting -> {
                             when (val item = listItem.item) {
                                 is SettingItem.Clickable -> {
+                                    val iconPainter = if (item.icon is Int) painterResource(item.icon) else rememberVectorPainter(item.icon as ImageVector)
                                     SettingsClickableItem(
-                                        icon = painterResource(item.iconRes),
+                                        icon = iconPainter,
                                         title = item.title,
                                         subtitle = item.subtitle,
                                         currentValue = item.currentValue,
@@ -125,13 +171,16 @@ fun SettingsScreen(
                                                 langTitle -> onLanguageClick()
                                                 freqTitle -> onFreqUnitClick()
                                                 helpTitle -> onHelpClick()
+                                                channelTitle -> onUpdateChannelChange(if (updateChannel == "stable") "prerelease" else "stable")
+                                                checkUpdatesTitle -> onCheckForUpdates()
                                             }
                                         }
                                     )
                                 }
-                                is SettingItem.Toggle -> {
+                                        is SettingItem.Toggle -> {
+                                    val iconPainter = if (item.icon is Int) painterResource(item.icon) else rememberVectorPainter(item.icon as ImageVector)
                                     SettingsToggleItem(
-                                        icon = painterResource(item.iconRes),
+                                        icon = iconPainter,
                                         title = item.title,
                                         subtitle = item.subtitle,
                                         isChecked = item.isChecked,
@@ -149,11 +198,58 @@ fun SettingsScreen(
                     }
                 }
                 
+
+                
                 // Bottom spacer for navigation bar
                 item {
                     Spacer(Modifier.height(88.dp))
                 }
             }
+        }
+    }
+
+
+    // Update Dialog Handling
+    if (updateStatus is UpdateStatus.Available) {
+        val release = updateStatus.release
+        AlertDialog(
+            onDismissRequest = { onClearUpdateStatus() },
+            title = { Text("Update Available (${release.tagName})") },
+            text = {
+                Column {
+                    Text(release.body.take(500) + if(release.body.length > 500) "..." else "")
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    onClearUpdateStatus()
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(release.htmlUrl))
+                    context.startActivity(intent)
+                }) {
+                    Text("Download")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { onClearUpdateStatus() }) {
+                    Text("Later")
+                }
+            }
+        )
+    }
+
+    // Error Snackbar/Toast Handling
+    if (updateStatus is UpdateStatus.Error) {
+        val msg = (updateStatus as UpdateStatus.Error).message
+        LaunchedEffect(msg) {
+            android.widget.Toast.makeText(context, "Update check failed: $msg", android.widget.Toast.LENGTH_LONG).show()
+            onClearUpdateStatus()
+        }
+    }
+
+    if (updateStatus is UpdateStatus.NoUpdate) {
+        LaunchedEffect(updateStatus) { // Key on UpdateStatus
+            android.widget.Toast.makeText(context, "No updates available", android.widget.Toast.LENGTH_SHORT).show()
+            onClearUpdateStatus()
         }
     }
 }

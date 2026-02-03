@@ -147,6 +147,9 @@ dependencies {
     // Material Design 3
     implementation 'com.google.android.material:material:1.12.0'
 
+    // OkHttp for networking
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+
     // AppCompat for theme switching
     implementation 'androidx.appcompat:appcompat:1.7.0'
 
@@ -190,4 +193,11 @@ dependencies {
 
     // JSON Serialization
     implementation 'org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3'
+
+    // ViewModel KTX for viewModelScope
+    implementation "androidx.lifecycle:lifecycle-viewmodel-ktx:2.10.0"
+    // LiveData for Compose (observeAsState)
+    implementation "androidx.compose.runtime:runtime-livedata:1.6.8"
+    // Extended Icons
+    implementation "androidx.compose.material:material-icons-extended"
 }

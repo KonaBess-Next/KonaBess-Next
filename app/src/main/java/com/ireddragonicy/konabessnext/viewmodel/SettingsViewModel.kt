@@ -4,7 +4,14 @@ import android.content.Context
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.ireddragonicy.konabessnext.ui.SettingsActivity
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import org.json.JSONArray
+import org.json.JSONObject
 
 /**
  * ViewModel for Settings management.
@@ -111,4 +118,104 @@ class SettingsViewModel : ViewModel() {
 
     val isAutoSaveEnabledValue: Boolean
         get() = _autoSaveEnabled.value == true
+
+
+    // ========================================================================
+    // Update Checker Logic
+    // ========================================================================
+
+    private val _updateChannel = MutableLiveData<String>()
+    val updateChannel: LiveData<String> get() = _updateChannel
+
+    private val _updateStatus = MutableLiveData<UpdateStatus>(UpdateStatus.Idle)
+    val updateStatus: LiveData<UpdateStatus> get() = _updateStatus
+
+    fun loadUpdateSettings(context: Context) {
+        val prefs = context.getSharedPreferences(SettingsActivity.PREFS_NAME, Context.MODE_PRIVATE)
+        _updateChannel.value = prefs.getString("update_channel", "stable")
+    }
+
+    fun setUpdateChannel(context: Context, channel: String) {
+        val prefs = context.getSharedPreferences(SettingsActivity.PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit().putString("update_channel", channel).apply()
+        _updateChannel.value = channel
+    }
+
+    fun checkForUpdates() {
+        if (_updateStatus.value is UpdateStatus.Checking) return
+
+        _updateStatus.value = UpdateStatus.Checking
+        val isPrerelease = _updateChannel.value == "prerelease"
+        val url = if (isPrerelease) {
+            "https://api.github.com/repos/IRedDragonICY/KonaBess-Next/releases"
+        } else {
+            "https://api.github.com/repos/IRedDragonICY/KonaBess-Next/releases/latest"
+        }
+
+        viewModelScope.launch(Dispatchers.IO) {
+            val client = OkHttpClient()
+            val request = Request.Builder()
+                .url(url)
+                .header("Accept", "application/vnd.github.v3+json")
+                .build()
+
+            try {
+                client.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) {
+                        _updateStatus.postValue(UpdateStatus.Error("Network error: ${response.code}"))
+                        return@launch
+                    }
+
+                    val responseBody = response.body?.string() ?: ""
+                    val releaseJson = if (isPrerelease) {
+                        val jsonArray = JSONArray(responseBody)
+                        if (jsonArray.length() > 0) jsonArray.getJSONObject(0) else null
+                    } else {
+                        JSONObject(responseBody)
+                    }
+
+                    if (releaseJson == null) {
+                        _updateStatus.postValue(UpdateStatus.NoUpdate)
+                        return@launch
+                    }
+
+                    val tagName = releaseJson.getString("tag_name").removePrefix("v")
+                    val currentVersion = com.ireddragonicy.konabessnext.BuildConfig.VERSION_NAME
+
+                    // Simple string comparison for date-based versions (yyyy.MM.dd...)
+                    if (tagName > currentVersion) {
+                        val release = GitHubRelease(
+                            tagName = tagName,
+                            htmlUrl = releaseJson.getString("html_url"),
+                            body = releaseJson.optString("body", "No release notes.")
+                        )
+                        _updateStatus.postValue(UpdateStatus.Available(release))
+                    } else {
+                        _updateStatus.postValue(UpdateStatus.NoUpdate)
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                _updateStatus.postValue(UpdateStatus.Error(e.message ?: "Unknown error"))
+            }
+        }
+    }
+
+    fun clearUpdateStatus() {
+        _updateStatus.value = UpdateStatus.Idle
+    }
+}
+
+data class GitHubRelease(
+    val tagName: String,
+    val htmlUrl: String,
+    val body: String
+)
+
+sealed class UpdateStatus {
+    object Idle : UpdateStatus()
+    object Checking : UpdateStatus()
+    data class Available(val release: GitHubRelease) : UpdateStatus()
+    object NoUpdate : UpdateStatus()
+    data class Error(val message: String) : UpdateStatus()
 }

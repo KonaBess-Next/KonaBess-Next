@@ -11,6 +11,8 @@ import android.view.ViewGroup
 import android.widget.Toast
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+
+import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.ComposeView
@@ -56,9 +58,16 @@ class SettingsFragment : Fragment() {
                     onLanguageClick = { showLanguageDialog() },
                     onFreqUnitClick = { showFreqUnitDialog() },
                     onAutoSaveToggle = { toggleAutoSave() },
+
                     onHelpClick = { showHelpDialog() },
                     isAmoledMode = prefs!!.getBoolean(SettingsActivity.KEY_AMOLED_MODE, false),
-                    onAmoledModeToggle = { toggleAmoledMode() }
+                    onAmoledModeToggle = { toggleAmoledMode() },
+                    // Updater Params from ViewModel
+                    updateChannel = settingsViewModel.updateChannel.observeAsState("stable").value,
+                    updateStatus = settingsViewModel.updateStatus.observeAsState(com.ireddragonicy.konabessnext.viewmodel.UpdateStatus.Idle).value,
+                    onUpdateChannelChange = { settingsViewModel.setUpdateChannel(requireContext(), it) },
+                    onCheckForUpdates = { settingsViewModel.checkForUpdates() },
+                    onClearUpdateStatus = { settingsViewModel.clearUpdateStatus() }
                 )
             }
         }
