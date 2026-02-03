@@ -121,7 +121,14 @@ fun GpuParamEditor(
         ) { paddingValues ->
             // Separate "header" params (bus-min, bus-max, bus-freq) from the rest
             val headerKeys = setOf("qcom,bus-min", "qcom,bus-max", "qcom,bus-freq")
-            val headerParams = params.filter { it.rawName in headerKeys }
+            val paramsMap = params.associateBy { it.rawName }
+            
+            // Explicit order: Min, Max, Freq
+            val headerParams = listOfNotNull(
+                paramsMap["qcom,bus-min"],
+                paramsMap["qcom,bus-max"],
+                paramsMap["qcom,bus-freq"]
+            )
             val otherParams = params.filterNot { it.rawName in headerKeys }
 
             Column(
@@ -135,7 +142,7 @@ fun GpuParamEditor(
                     Spacer(Modifier.height(8.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         headerParams.forEach { item ->
                             HeaderParamBox(
@@ -145,15 +152,19 @@ fun GpuParamEditor(
                             )
                         }
                     }
-                    Spacer(Modifier.height(16.dp))
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(24.dp))
+                    Text(
+                        text = "Properties",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
                 }
 
                 // Remaining params in scrollable list
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     itemsIndexed(otherParams) { _, item ->
                         ParamCard(
@@ -453,12 +464,24 @@ fun ParamCard(
     item: ParamItem,
     onClick: () -> Unit
 ) {
+    // Determined icon and color based on property type
+    val (iconPainter, iconTint) = when {
+        item.rawName.contains("gpu-freq") ->  
+            painterResource(R.drawable.ic_frequency) to androidx.compose.ui.graphics.Color(0xFF2196F3) // Blue
+        item.rawName.contains("level") -> // Voltage Level
+            painterResource(R.drawable.ic_voltage) to androidx.compose.ui.graphics.Color(0xFFE91E63) // Pink
+        else -> 
+            painterResource(R.drawable.ic_edit) to MaterialTheme.colorScheme.primary
+    }
+
     Card(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        )
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+            contentColor = MaterialTheme.colorScheme.onSurface
+        ),
+        shape = MaterialTheme.shapes.medium
     ) {
         Row(
             modifier = Modifier
@@ -467,28 +490,29 @@ fun ParamCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
-                Icons.Default.Edit, // Generic icon for now
+                painter = iconPainter,
                 contentDescription = null,
                 modifier = Modifier.size(24.dp),
-                tint = MaterialTheme.colorScheme.primary
+                tint = iconTint
             )
             Spacer(Modifier.width(16.dp))
             Column {
                 Text(
                     text = item.title,
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(
                     text = item.displayValue,
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 if (item.rawName.isNotEmpty()) {
                     Text(
                         text = item.rawName,
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.outline
+                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.8f)
                     )
                 }
             }
@@ -497,53 +521,61 @@ fun ParamCard(
 }
 
 @Composable
-
 fun HeaderParamBox(
     item: ParamItem,
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
     // Choose icon based on param type
-    val icon = when {
-        item.rawName.contains("bus-min") -> androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Default.KeyboardArrowDown)
-        item.rawName.contains("bus-max") -> androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Default.KeyboardArrowUp)
-        item.rawName.contains("bus-freq") || item.rawName.contains("gpu-freq") -> painterResource(com.ireddragonicy.konabessnext.R.drawable.ic_bus_freq)
-        else -> androidx.compose.ui.graphics.vector.rememberVectorPainter(Icons.Default.Edit)
+    val (icon, color) = when {
+        item.rawName.contains("bus-min") -> 
+            painterResource(R.drawable.ic_arrow_downward) to androidx.compose.ui.graphics.Color(0xFF009688) // Teal
+        item.rawName.contains("bus-max") -> 
+            painterResource(R.drawable.ic_arrow_upward) to androidx.compose.ui.graphics.Color(0xFF9C27B0) // Purple
+        item.rawName.contains("bus-freq") -> 
+            painterResource(R.drawable.ic_bus_freq) to androidx.compose.ui.graphics.Color(0xFF2196F3) // Blue
+        else -> 
+            painterResource(R.drawable.ic_edit) to MaterialTheme.colorScheme.primary
     }
     
     Card(
         onClick = onClick,
-        modifier = modifier.height(80.dp),
+        modifier = modifier.height(90.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.secondaryContainer
+            containerColor = MaterialTheme.colorScheme.surfaceContainer
         ),
-        shape = MaterialTheme.shapes.large
+        shape = MaterialTheme.shapes.extraLarge
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(8.dp),
+                .padding(12.dp),
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Icon(
                 painter = icon,
                 contentDescription = null,
-                modifier = Modifier.size(20.dp),
-                tint = MaterialTheme.colorScheme.onSecondaryContainer
+                modifier = Modifier.size(24.dp),
+                tint = color
             )
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(8.dp))
             Text(
                 text = item.displayValue,
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1
             )
             Text(
-                text = item.title.replace("qcom,", "").replace("-", " ").replaceFirstChar { it.uppercaseChar() },
+                text = when {
+                    item.rawName.contains("min") -> "Bus Min"
+                    item.rawName.contains("max") -> "Bus Max"
+                    item.rawName.contains("freq") -> "Bus Freq"
+                    else -> item.title
+                },
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1
             )
         }

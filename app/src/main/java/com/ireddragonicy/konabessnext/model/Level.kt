@@ -26,6 +26,10 @@ data class Level(
             val val2 = findValue("qcom,cx-level")
             return if (val2 != -1L) val2.toInt() else -1
         }
+    
+    val busMin: Long get() = findValue("qcom,bus-min")
+    val busMax: Long get() = findValue("qcom,bus-max")
+    val busFreq: Long get() = findValue("qcom,bus-freq")
 
     // Common private helper that uses the DRY DtsHelper
     private fun findValue(key: String): Long {

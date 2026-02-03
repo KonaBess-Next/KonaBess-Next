@@ -150,14 +150,27 @@ class SharedGpuViewModel @Inject constructor(
             .getInt(SettingsActivity.KEY_FREQ_UNIT, SettingsActivity.FREQ_UNIT_MHZ)
             
         val freqStr = com.ireddragonicy.konabessnext.utils.FrequencyFormatter.format(context, freq, unit)
+
+        val bMin = level.busMin
+        val bMax = level.busMax
+        val bFreq = level.busFreq
+        
+        val vLevel = level.voltageLevel
+        val chip = currentChip.value
+        val levelName = if (chip != null && chip.levels.containsKey(vLevel)) {
+            " - " + chip.levels[vLevel]
+        } else {
+            ""
+        }
         
         return LevelUiModel(
             originalIndex = index,
             frequencyLabel = UiText.DynamicString(freqStr),
-            busMin = "", // Simplification for conciseness
-            busMax = "",
-            busFreq = "",
-            voltageLabel = UiText.DynamicString("Volt: ${level.voltageLevel}"),
+            busMin = if (bMin > -1) "Min: $bMin" else "",
+            busMax = if (bMax > -1) "Max: $bMax" else "",
+            busFreq = if (bFreq > -1) "Freq: $bFreq" else "",
+            voltageLabel = UiText.DynamicString("Volt: $vLevel"),
+            voltageVal = "Volt: $vLevel$levelName",
             isVisible = true
         )
     }

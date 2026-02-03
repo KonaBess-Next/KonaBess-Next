@@ -15,5 +15,6 @@ data class LevelUiModel(
     val busMax: String,
     val busFreq: String,
     val voltageLabel: UiText,
+    val voltageVal: String = "",
     val isVisible: Boolean // Optimized filtering flag
 )

@@ -24,6 +24,8 @@ import androidx.compose.ui.zIndex
 import com.ireddragonicy.konabessnext.R
 import com.ireddragonicy.konabessnext.model.LevelUiModel
 
+import androidx.compose.ui.graphics.Color
+
 /**
  * ULTRA-PERFORMANCE GpuLevelList.
  * 
@@ -48,8 +50,10 @@ fun GpuLevelList(
     // 1. Pre-load ALL resources once at the top level
     val iconCopy = painterResource(R.drawable.ic_copy)
     val iconBusFreq = painterResource(R.drawable.ic_bus_freq)
-    val iconArrowDown = rememberVectorPainter(Icons.Default.KeyboardArrowDown)
-    val iconArrowUp = rememberVectorPainter(Icons.Default.KeyboardArrowUp)
+    val iconMin = painterResource(R.drawable.ic_arrow_downward)
+    val iconMax = painterResource(R.drawable.ic_arrow_upward)
+    val iconLevel = painterResource(R.drawable.ic_tune)
+    val iconVolt = painterResource(R.drawable.ic_voltage)
     val iconMenu = rememberVectorPainter(Icons.Default.Menu)
     val iconDelete = rememberVectorPainter(Icons.Default.Delete)
     val iconAdd = rememberVectorPainter(Icons.Default.Add)
@@ -217,7 +221,7 @@ fun GpuLevelList(
                         onDragCancel = onDragCancel,
                         // Pass resources
                         res = LevelCardResources(
-                            iconCopy, iconBusFreq, iconArrowDown, iconArrowUp, iconMenu, iconDelete
+                            iconCopy, iconBusFreq, iconMin, iconMax, iconLevel, iconVolt, iconMenu, iconDelete
                         )
                     )
                 }
@@ -242,8 +246,10 @@ fun GpuLevelList(
 data class LevelCardResources(
     val iconCopy: Painter,
     val iconBusFreq: Painter,
-    val iconArrowDown: Painter,
-    val iconArrowUp: Painter,
+    val iconMin: Painter,
+    val iconMax: Painter,
+    val iconLevel: Painter,
+    val iconVolt: Painter,
     val iconMenu: Painter,
     val iconDelete: Painter
 )
@@ -263,7 +269,13 @@ fun LevelCard(
     res: LevelCardResources
 ) {
     val frequencyText = uiModel.frequencyLabel.asString()
-    val voltageText = uiModel.voltageLabel.asString()
+    
+    // Colors
+    val ColorMin = Color(0xFF009688)
+    val ColorMax = Color(0xFF9C27B0)
+    val ColorFreq = Color(0xFF2196F3)
+    val ColorLevel = Color(0xFFFF5722)
+    val ColorVolt = Color(0xFFE91E63)
 
     Card(
         onClick = { onLevelClick(uiModel.originalIndex) },
@@ -312,26 +324,29 @@ fun LevelCard(
                     color = MaterialTheme.colorScheme.primary
                 )
                 
-                // Only render spec row if data exists
+                // Row 1: Bus Info (Min, Max, Freq)
                 if (uiModel.busMin.isNotEmpty() || uiModel.busMax.isNotEmpty() || uiModel.busFreq.isNotEmpty()) {
+                    Spacer(Modifier.height(8.dp))
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (uiModel.busMin.isNotEmpty()) ColorIconText(res.iconMin, uiModel.busMin, ColorMin)
+                        if (uiModel.busMax.isNotEmpty()) ColorIconText(res.iconMax, uiModel.busMax, ColorMax)
+                        if (uiModel.busFreq.isNotEmpty()) ColorIconText(res.iconBusFreq, uiModel.busFreq, ColorFreq)
+                    }
+                }
+
+                // Row 2: Level and Voltage
+                if (uiModel.voltageVal.isNotEmpty()) {
                     Spacer(Modifier.height(4.dp))
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        if (uiModel.busMin.isNotEmpty()) CompactIconText(res.iconArrowDown, uiModel.busMin)
-                        if (uiModel.busMax.isNotEmpty()) CompactIconText(res.iconArrowUp, uiModel.busMax)
-                        if (uiModel.busFreq.isNotEmpty()) CompactIconText(res.iconBusFreq, uiModel.busFreq)
+                        // Level value removed, integrated into voltageVal with label
+                        ColorIconText(res.iconVolt, uiModel.voltageVal, ColorVolt)
                     }
-                }
-
-                if (voltageText.isNotEmpty()) {
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        text = voltageText, // Already formatted string
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
                 }
             }
 
@@ -348,10 +363,10 @@ fun LevelCard(
 }
 
 @Composable
-fun CompactIconText(icon: Painter, text: String) {
+fun ColorIconText(icon: Painter, text: String, color: Color) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Icon(icon, null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(Modifier.width(2.dp))
-        Text(text, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+        Icon(icon, null, modifier = Modifier.size(16.dp), tint = color)
+        Spacer(Modifier.width(4.dp))
+        Text(text, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
     }
 }
