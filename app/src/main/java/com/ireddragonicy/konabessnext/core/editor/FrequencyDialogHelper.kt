@@ -162,14 +162,25 @@ object FrequencyDialogHelper {
             .setMessage(ChipStringHelper.help(rawName, activity))
             .setPositiveButton(R.string.save) { dialog, which ->
                 try {
+                    // Sanitize Input first
+                    val rawInput = editText.text.toString().replace(Regex("[^0-9.]"), "")
+                    
                     val hzValue = parseFrequencyToHz(
-                        editText.text.toString(),
+                        rawInput,
                         unitSpinner.selectedItemPosition
                     )
-                    if (hzValue <= 0) {
-                        DialogUtil.showError(activity, R.string.invalid_value)
+                    
+                    // Range Validation: 1 MHz to 2000 MHz
+                    // 1 MHz = 1,000,000 Hz
+                    // 2000 MHz = 2,000,000,000 Hz
+                    val MIN_FREQ_HZ = 1_000_000L
+                    val MAX_FREQ_HZ = 2_000_000_000L
+                    
+                    if (hzValue < MIN_FREQ_HZ || hzValue > MAX_FREQ_HZ) {
+                        Toast.makeText(activity, "Frequency must be between 1 MHz and 2000 MHz", Toast.LENGTH_LONG).show()
                         return@setPositiveButton
                     }
+                    
                     val newValue = hzValue.toString()
                     val encodedLine = DtsHelper.encodeIntOrHexLine(rawName, newValue)
                     val existingLine = bins[binIndex].levels[levelIndex].lines[lineIndex]
@@ -190,7 +201,9 @@ object FrequencyDialogHelper {
 
     private fun updateFrequencyPreview(activity: Activity, editText: EditText, unitSpinner: Spinner, previewText: TextView) {
         try {
-            val hz = parseFrequencyToHz(editText.text.toString(), unitSpinner.selectedItemPosition)
+            // Sanitize in preview too
+            val rawInput = editText.text.toString().replace(Regex("[^0-9.]"), "")
+            val hz = parseFrequencyToHz(rawInput, unitSpinner.selectedItemPosition)
             if (hz > 0) {
                 previewText.text = "= " + activity.getString(R.string.format_hz, hz)
             } else {
@@ -204,6 +217,7 @@ object FrequencyDialogHelper {
     @JvmStatic
     fun parseFrequencyToHz(value: String, unitIndex: Int): Long {
         return try {
+            if (value.isBlank()) return -1
             val inputValue = value.trim().toDouble()
             when (unitIndex) {
                 0 -> inputValue.toLong() // Hz

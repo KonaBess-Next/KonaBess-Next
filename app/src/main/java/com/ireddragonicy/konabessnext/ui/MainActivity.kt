@@ -78,71 +78,23 @@ class MainActivity : ComponentActivity() {
                 isAmoledMode = uiState.isAmoledMode
             ) {
                 val navController = rememberNavController()
-                val navBackStackEntry by navController.currentBackStackEntryAsState()
-                val currentRoute = navBackStackEntry?.destination?.route
-
-                val selectedItem = remember(currentRoute) {
-                    when (currentRoute) {
-                        AppDestinations.HOME -> 0
-                        AppDestinations.IMPORT_EXPORT -> 1
-                        AppDestinations.SETTINGS -> 2
-                        else -> 0
-                    }
-                }
-
-                // Show BottomBar only on main screens
-                val showBottomBar = currentRoute in listOf(
-                    AppDestinations.HOME,
-                    AppDestinations.IMPORT_EXPORT,
-                    AppDestinations.SETTINGS
-                ) || currentRoute?.startsWith("curve_editor") == true
-
                 val snackbarHostState = remember { SnackbarHostState() }
 
-                Scaffold(
-                    snackbarHost = { SnackbarHost(snackbarHostState) },
-                    bottomBar = {
-                        AnimatedVisibility(visible = showBottomBar) {
-                            MainNavigationBar(
-                                selectedItem = selectedItem,
-                                onItemSelected = { index ->
-                                    val route = when (index) {
-                                        0 -> AppDestinations.HOME
-                                        1 -> AppDestinations.IMPORT_EXPORT
-                                        2 -> AppDestinations.SETTINGS
-                                        else -> AppDestinations.HOME
-                                    }
-                                    if (currentRoute != route) {
-                                        navController.navigate(route) {
-                                            popUpTo(AppDestinations.HOME) {
-                                                // saveState = true
-                                            }
-                                            launchSingleTop = true
-                                            // restoreState = true
-                                        }
-                                    }
-                                }
-                            )
-                        }
+                val context = LocalContext.current
+                AppNavGraph(
+                    navController = navController,
+                    deviceViewModel = deviceViewModel,
+                    gpuFrequencyViewModel = gpuFrequencyViewModel,
+                    sharedViewModel = sharedViewModel,
+                    settingsViewModel = settingsViewModel,
+                    importExportViewModel = importExportViewModel,
+                    snackbarHostState = snackbarHostState,
+                    onStartRepack = { deviceViewModel.packAndFlash(this) },
+                    onLanguageChange = { lang ->
+                        settingsViewModel.setLanguage(lang)
+                        (context as? android.app.Activity)?.recreate()
                     }
-                ) { innerPadding ->
-                    val context = LocalContext.current
-                    AppNavGraph(
-                        navController = navController,
-                        deviceViewModel = deviceViewModel,
-                        gpuFrequencyViewModel = gpuFrequencyViewModel,
-                        sharedViewModel = sharedViewModel,
-                        settingsViewModel = settingsViewModel,
-                        importExportViewModel = importExportViewModel,
-                        snackbarHostState = snackbarHostState,
-                        onStartRepack = { deviceViewModel.packAndFlash(this) },
-                        onLanguageChange = { lang ->
-                            settingsViewModel.setLanguage(lang)
-                            (context as? android.app.Activity)?.recreate()
-                        },
-                        modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding())
-                    )
-                }
+                )
 
                 RepackStatusScreen(deviceViewModel)
             }

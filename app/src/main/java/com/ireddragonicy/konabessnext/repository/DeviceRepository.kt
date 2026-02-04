@@ -28,7 +28,8 @@ open class DeviceRepository @Inject constructor(
     private val shellRepository: ShellRepository,
     private val bootImageProcessor: BootImageProcessor,
     private val prefs: SharedPreferences,
-    private val chipRepository: ChipRepository
+    private val chipRepository: ChipRepository,
+    private val userMessageManager: com.ireddragonicy.konabessnext.utils.UserMessageManager
 ) : DeviceRepositoryInterface {
 
     companion object {
@@ -216,6 +217,10 @@ open class DeviceRepository @Inject constructor(
     fun getBootImageFile(): File = File("$filesDir/boot.img")
 
     suspend fun checkDevice() = withContext(Dispatchers.IO) {
+        if (!shellRepository.isRootAvailable()) {
+            userMessageManager.emitError("Root Access Required", "This application requires root access to function. Please grant root permissions.")
+            return@withContext
+        }
         setupEnv()
         dtbs.clear()
         shellRepository.exec("chmod -R 777 $filesDir")

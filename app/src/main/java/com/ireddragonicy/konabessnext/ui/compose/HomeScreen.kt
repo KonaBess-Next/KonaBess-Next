@@ -22,6 +22,7 @@ fun HomeScreen(
     deviceViewModel: DeviceViewModel,
     gpuFrequencyViewModel: GpuFrequencyViewModel,
     sharedViewModel: SharedGpuViewModel,
+    highlightCache: Map<Int, androidx.compose.ui.text.AnnotatedString> = emptyMap(),
     onOpenCurveEditor: (Int) -> Unit,
     onStartRepack: () -> Unit
 ) {

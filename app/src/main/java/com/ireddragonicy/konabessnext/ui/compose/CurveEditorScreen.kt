@@ -31,6 +31,10 @@ import com.github.mikephil.charting.highlight.Highlight
 import com.ireddragonicy.konabessnext.viewmodel.SharedGpuViewModel
 import kotlin.math.roundToInt
 
+enum class AxisLockMode {
+    FREE, VERTICAL, HORIZONTAL
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CurveEditorScreen(
@@ -49,9 +53,11 @@ fun CurveEditorScreen(
     val canUndo by sharedViewModel.canUndo.collectAsState()
     val canRedo by sharedViewModel.canRedo.collectAsState()
     val history by sharedViewModel.history.collectAsState()
+    val currentChip by sharedViewModel.currentChip.collectAsState()
 
     var showBinDialog by remember { mutableStateOf(false) }
     var activeSheet by remember { mutableStateOf(WorkbenchSheetType.NONE) }
+    var axisLockMode by remember { mutableStateOf(AxisLockMode.FREE) }
 
     // Global Offset State (now from ViewModel)
     val binOffsets by sharedViewModel.binOffsets.collectAsState()
@@ -126,7 +132,6 @@ fun CurveEditorScreen(
             }
         )
     }
-
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.background,
@@ -166,40 +171,67 @@ fun CurveEditorScreen(
                 shadowElevation = 3.dp,
                 modifier = Modifier.zIndex(1f)
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    // Back Button (Left)
-                    Button(
-                        onClick = onBack,
-                        modifier = Modifier.weight(1f),
-                        shape = MaterialTheme.shapes.medium,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                        )
+                Column {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Icon(Icons.Rounded.ArrowBack, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text("Back")
+                        // Back Button (Left)
+                        Button(
+                            onClick = onBack,
+                            modifier = Modifier.weight(1f),
+                            shape = MaterialTheme.shapes.medium,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                        ) {
+                            Icon(Icons.Rounded.ArrowBack, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Back")
+                        }
+    
+                        // Bin Selection Button (Right)
+                        Button(
+                            onClick = { showBinDialog = true },
+                            modifier = Modifier.weight(1f),
+                            shape = MaterialTheme.shapes.medium,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onTertiaryContainer
+                            )
+                        ) {
+                            Icon(Icons.Rounded.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Bin $currentBinId")
+                        }
                     }
-
-                    // Bin Selection Button (Right)
-                    Button(
-                        onClick = { showBinDialog = true },
-                        modifier = Modifier.weight(1f),
-                        shape = MaterialTheme.shapes.medium,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onTertiaryContainer
-                        )
+                    
+                    // Axis Lock Controls
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 0.dp)
+                            .padding(bottom = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(Icons.Rounded.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text("Bin $currentBinId")
+                        Text("Lock Axis:", style = MaterialTheme.typography.labelMedium)
+                        AxisLockMode.values().forEach { mode ->
+                            FilterChip(
+                                selected = axisLockMode == mode,
+                                onClick = { axisLockMode = mode },
+                                label = { Text(
+                                    when(mode) {
+                                        AxisLockMode.FREE -> "Free"
+                                        AxisLockMode.VERTICAL -> "Vert (Freq)"
+                                        AxisLockMode.HORIZONTAL -> "Horz (Volt)"
+                                    }
+                                ) }
+                            )
+                        }
                     }
                 }
             }
@@ -251,6 +283,22 @@ fun CurveEditorScreen(
                                     axisRight.isEnabled = false
                                     legend.isEnabled = false
                                     
+                                    xAxis.valueFormatter = object : ValueFormatter() {
+                                        override fun getFormattedValue(value: Float): String {
+                                            val volt = value.toInt()
+                                            val chip = sharedViewModel.currentChip.value
+                                            val rawName = chip?.levels?.get(volt - 1) ?: chip?.levels?.get(volt)
+                                            val name = if (rawName?.contains(" - ") == true) rawName.substringAfter(" - ") else rawName
+                                            return if (!name.isNullOrEmpty()) "$volt\n$name" else "$volt"
+                                        }
+                                    }
+                                    
+                                    axisLeft.valueFormatter = object : ValueFormatter() {
+                                        override fun getFormattedValue(value: Float): String {
+                                            return value.toInt().toString()
+                                        }
+                                    }
+                                    
                                     setNoDataText("No Data Available")
                                     setNoDataTextColor(onSurfaceColor)
                                 }
@@ -293,6 +341,7 @@ fun CurveEditorScreen(
                                     
                                     chart.setOnTouchListener(object : View.OnTouchListener {
                                         var draggedEntry: Entry? = null
+                                        var dragStartPos: Pair<Float, Float>? = null
 
                                         override fun onTouch(v: View, event: MotionEvent): Boolean {
                                             val viewChart = v as LineChart
@@ -309,6 +358,7 @@ fun CurveEditorScreen(
                                                         val e = set.getEntryForXValue(h.x, h.y)
                                                         
                                                         draggedEntry = e
+                                                        dragStartPos = Pair(e.x, e.y)
                                                         
                                                         // Disable chart panning/zooming while dragging a point
                                                         // But let the chart handle the DOWN event internally initially?
@@ -327,8 +377,17 @@ fun CurveEditorScreen(
                                                         
                                                         // Update visual entry temporarily
                                                         // X = Voltage, Y = Frequency
-                                                        entry.x = values.x.toFloat()
-                                                        entry.y = values.y.toFloat()
+                                                        var newX = values.x.toFloat()
+                                                        var newY = values.y.toFloat()
+                                                        
+                                                        when (axisLockMode) {
+                                                            AxisLockMode.VERTICAL -> newX = dragStartPos?.first ?: newX // Lock X, allow Y
+                                                            AxisLockMode.HORIZONTAL -> newY = dragStartPos?.second ?: newY // Lock Y, allow X
+                                                            AxisLockMode.FREE -> {}
+                                                        }
+
+                                                        entry.x = newX
+                                                        entry.y = newY
                                                         
                                                         viewChart.notifyDataSetChanged()
                                                         viewChart.invalidate()
@@ -354,6 +413,7 @@ fun CurveEditorScreen(
                                                         }
                                                         
                                                         draggedEntry = null
+                                                        dragStartPos = null
                                                         viewChart.isDragEnabled = true // Restore chart panning
                                                         return true
                                                     }

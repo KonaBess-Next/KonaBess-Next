@@ -16,4 +16,11 @@ data class ChipDefinition(
     val binDescriptions: Map<Int, String>? = null, // Bin index to Resource String mapping
     val needsCaTargetOffset: Boolean = false, // Whether to offset qcom,ca-target-pwrlevel
     val models: List<String> = emptyList() // Auto-generated mapping identifiers
-)
+) {
+    init {
+        require(id.isNotBlank()) { "Chip ID cannot be blank" }
+        require(name.isNotBlank()) { "Chip Name cannot be blank" }
+        require(maxTableLevels > 0) { "Max Table Levels must be > 0" }
+        require(levelCount > 0) { "Level Count must be > 0" }
+    }
+}

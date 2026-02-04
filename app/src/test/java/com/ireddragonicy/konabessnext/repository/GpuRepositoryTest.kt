@@ -28,6 +28,11 @@ class GpuRepositoryTest {
     private lateinit var fakeChipRepository: FakeChipRepository
     private lateinit var fakeFileDataSource: FakeFileDataSource
     
+    private lateinit var dtsFileRepository: DtsFileRepository
+    private lateinit var gpuDomainManager: GpuDomainManager
+    private lateinit var historyManager: HistoryManager
+    private lateinit var userMessageManager: com.ireddragonicy.konabessnext.utils.UserMessageManager
+    
     private val testDispatcher = UnconfinedTestDispatcher()
 
     @Before
@@ -37,7 +42,12 @@ class GpuRepositoryTest {
         fakeChipRepository = FakeChipRepository()
         fakeFileDataSource = FakeFileDataSource()
         
-        repository = GpuRepository(fakeDeviceRepository, fakeChipRepository, fakeFileDataSource)
+        dtsFileRepository = DtsFileRepository(fakeFileDataSource, fakeDeviceRepository)
+        gpuDomainManager = GpuDomainManager(fakeChipRepository)
+        historyManager = HistoryManager()
+        userMessageManager = com.ireddragonicy.konabessnext.utils.UserMessageManager() // Real instance logic is simple enough
+        
+        repository = GpuRepository(dtsFileRepository, gpuDomainManager, historyManager, fakeChipRepository, userMessageManager)
     }
 
     @After

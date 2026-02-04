@@ -62,14 +62,12 @@ fun DtsEditor(
         }
         list
     }
-    // Global Pre-calculated Highlight Cache
-    // Map index -> Cached Highlight data (AnnotatedString)
-    val highlightCache = remember { mutableStateMapOf<Int, AnnotatedString>() }
-    // Map index -> Signature of cached content to verify validity
-    val cacheContentSignature = remember { mutableStateMapOf<Int, String>() }
-
+    
+    // Global Pre-calculated Highlight Cache (Singleton)
+    val highlightCache = com.ireddragonicy.konabessnext.editor.EditorSession.highlightCache
+    
     var activeLineIndex by remember { mutableIntStateOf(-1) }
-
+    
     // Initial Load & Line Sync
     LaunchedEffect(content) {
         val current = lines.joinToString("\n")
@@ -83,41 +81,11 @@ fun DtsEditor(
         }
     }
     
-    // Background Global Highlighting Job
-    // This runs continuously to ensure all lines in 'lines' are highlighted in cache
-    LaunchedEffect(lines.size, lines.toList(), searchQuery) {
-        withContext(Dispatchers.Default) {
-            // Processing settings
-            val chunk = 50 // Process 50 lines per batch
-            var processed = 0
-            
-            // Loop through all currently known lines
-            for (i in lines.indices) {
-                if (!isActive) break 
-                
-                val lineContent = lines.getOrElse(i) { "" }
-                val signature = "$lineContent||$searchQuery"
-                
-                // If cache miss or outdated
-                if (cacheContentSignature[i] != signature) {
-                    val highlighted = ComposeHighlighter.highlight(lineContent, searchQuery)
-                    
-                    // Update State on Main Thread
-                    withContext(Dispatchers.Main) {
-                        highlightCache[i] = highlighted
-                        cacheContentSignature[i] = signature
-                    }
-                    
-                    processed++
-                    // Yield every chunk to prevent starving Main Thread (even though we are on Default, UI updates cost)
-                    if (processed >= chunk) {
-                        processed = 0
-                        delay(5) 
-                    }
-                }
-            }
-        }
-    }
+    // EditorSession handles highlighting externally. DtsEditor is just a viewer/editor.
+    // If lines change locally (edit), we should ideally notify session, but DtsEditor calls onContentChanged which updates Repo -> VM -> EditorSession.
+    // So loop is closed. But local edits might flicker briefly unhighlighted?
+    // User edits -> lines update -> requestSave -> onContentChanged -> Repo Update -> VM Flow -> EditorSession Update -> highlightCache update.
+    // This is fast enough for typing.
     
     fun requestSave() {
         val newContent = lines.joinToString("\n")
@@ -231,9 +199,22 @@ fun EditorLine(
             .padding(start = 8.dp)) {
             
             if (isActive) {
-                // HEAVY: TextField - Always synchronous
+                // HEAVY: TextField - Now Async Highlighted
                 val focusRequester = remember { FocusRequester() }
                 var tfValue by remember { mutableStateOf(TextFieldValue(content, selection = TextRange(content.length))) }
+
+                // State to hold the async result
+                var asyncHighlight by remember { mutableStateOf<AnnotatedString?>(null) }
+
+                // Trigger async calculation
+                LaunchedEffect(content, searchQuery) {
+                    withContext(Dispatchers.Default) {
+                        val result = ComposeHighlighter.highlight(content, searchQuery)
+                        withContext(Dispatchers.Main) {
+                            asyncHighlight = result
+                        }
+                    }
+                }
 
                 if (tfValue.text != content) {
                      tfValue = tfValue.copy(text = content)
@@ -243,10 +224,16 @@ fun EditorLine(
                     focusRequester.requestFocus()
                 }
 
-                val visualTransformation = remember(content, searchQuery) {
+                val visualTransformation = remember(asyncHighlight, content) {
                     VisualTransformation { text ->
-                        val annotatedString = ComposeHighlighter.highlight(text.text, searchQuery)
-                        TransformedText(annotatedString, OffsetMapping.Identity)
+                        // If we have a highlight AND it matches current text, use it.
+                        // Otherwise fallback to plain text to avoid blocking UI.
+                        val currentHighlight = asyncHighlight
+                        if (currentHighlight != null && currentHighlight.text == text.text) {
+                            TransformedText(currentHighlight, OffsetMapping.Identity)
+                        } else {
+                            TransformedText(AnnotatedString(text.text), OffsetMapping.Identity)
+                        }
                     }
                 }
 

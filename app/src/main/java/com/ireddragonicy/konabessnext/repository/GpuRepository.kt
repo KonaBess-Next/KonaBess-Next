@@ -4,22 +4,20 @@ import com.ireddragonicy.konabessnext.model.Bin
 import com.ireddragonicy.konabessnext.model.Opp
 import com.ireddragonicy.konabessnext.utils.DtsHelper
 import com.ireddragonicy.konabessnext.utils.DtsTreeHelper
-import com.ireddragonicy.konabessnext.utils.FileUtil
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.FlowPreview
-import java.io.File
 import java.io.IOException
-import java.util.ArrayDeque
-import java.util.Deque
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 open class GpuRepository @Inject constructor(
-    private val deviceRepository: DeviceRepositoryInterface,
+    private val dtsFileRepository: DtsFileRepository,
+    private val gpuDomainManager: GpuDomainManager,
+    private val historyManager: HistoryManager,
     private val chipRepository: ChipRepositoryInterface,
-    private val fileDataSource: com.ireddragonicy.konabessnext.core.interfaces.FileDataSource
+    private val userMessageManager: com.ireddragonicy.konabessnext.utils.UserMessageManager
 ) {
     // --- Single Source of Truth: The Text Lines ---
     private val _dtsLines = MutableStateFlow<List<String>>(emptyList())
@@ -31,7 +29,7 @@ open class GpuRepository @Inject constructor(
     
     // 1. Parsed Bins (GUI Model)
     val bins: StateFlow<List<Bin>> = _dtsLines
-        .map { lines -> parseBinsFromLines(lines) }
+        .map { lines -> gpuDomainManager.parseBins(lines) }
         .flowOn(Dispatchers.Default) // Compute on background
         .stateIn(CoroutineScope(Dispatchers.Main), SharingStarted.Lazily, emptyList())
 
@@ -47,64 +45,49 @@ open class GpuRepository @Inject constructor(
 
     // 3. Parsed Opps (Voltage Table)
     val opps: StateFlow<List<Opp>> = _dtsLines
-        .map { lines -> parseOppsFromLines(lines) }
+        .map { lines -> gpuDomainManager.parseOpps(lines) }
         .flowOn(Dispatchers.Default)
         .stateIn(CoroutineScope(Dispatchers.Main), SharingStarted.Lazily, emptyList())
 
     // --- History Management (Unified) ---
-    private data class HistoryItem(val lines: List<String>, val description: String)
-    
-    private val undoStack: Deque<HistoryItem> = ArrayDeque()
-    private val redoStack: Deque<HistoryItem> = ArrayDeque()
-    private val MAX_HISTORY = 50
-
-    private val _canUndo = MutableStateFlow(false)
-    val canUndo: StateFlow<Boolean> = _canUndo.asStateFlow()
-
-    private val _canRedo = MutableStateFlow(false)
-    val canRedo: StateFlow<Boolean> = _canRedo.asStateFlow()
+    // Delegate to HistoryManager
+    val canUndo = historyManager.canUndo
+    val canRedo = historyManager.canRedo
+    val history = historyManager.history
 
     private val _isDirty = MutableStateFlow(false)
     val isDirty: StateFlow<Boolean> = _isDirty.asStateFlow()
     
-    // Exposed History List (Reverse order for UI: Newest first)
-    private val _historyList = MutableStateFlow<List<String>>(emptyList())
-    val history: StateFlow<List<String>> = _historyList.asStateFlow()
-    
-    private fun refreshHistoryList() {
-        _historyList.value = undoStack.map { it.description }.reversed()
-    }
-
     private var initialContentHash: Int = 0
 
     // --- Core Operations ---
 
     suspend fun loadTable() = withContext(Dispatchers.IO) {
-        val path = deviceRepository.dtsPath ?: 
-                   (if (deviceRepository.tryRestoreLastChipset()) deviceRepository.dtsPath else null) ?: 
-                   throw IOException("DTS Path not set")
-        
-        val lines = fileDataSource.readLines(path)
-        
-        // Reset State
-        undoStack.clear()
-        redoStack.clear()
-        updateHistoryFlags()
-        refreshHistoryList()
-        
-        // Set Truth
-        _dtsLines.value = lines
-        initialContentHash = lines.hashCode()
-        _isDirty.value = false
+        try {
+            val lines = dtsFileRepository.loadDtsLines()
+            
+            // Reset State
+            historyManager.clear()
+            
+            // Set Truth
+            _dtsLines.value = lines
+            initialContentHash = lines.hashCode()
+            _isDirty.value = false
+        } catch (e: Exception) {
+            userMessageManager.emitError("Load Failed", e.localizedMessage ?: "Unknown error loading DTS")
+        }
     }
 
     suspend fun saveTable() = withContext(Dispatchers.IO) {
-        val path = deviceRepository.dtsPath ?: throw IOException("DTS Path not set")
-        val currentLines = _dtsLines.value
-        fileDataSource.writeLines(path, currentLines)
-        
-        initialContentHash = currentLines.hashCode()
-        _isDirty.value = false
+        try {
+            val currentLines = _dtsLines.value
+            dtsFileRepository.saveDtsLines(currentLines)
+            
+            initialContentHash = currentLines.hashCode()
+            _isDirty.value = false
+        } catch (e: Exception) {
+            userMessageManager.emitError("Save Failed", e.localizedMessage ?: "Unknown error saving DTS")
+        }
     }
 
     /**
@@ -115,7 +98,7 @@ open class GpuRepository @Inject constructor(
         if (newLines == _dtsLines.value) return
 
         if (addToHistory) {
-            snapshot(description)
+            historyManager.snapshot(_dtsLines.value, newLines, description)
         }
         
         _dtsLines.value = newLines
@@ -132,7 +115,7 @@ open class GpuRepository @Inject constructor(
      */
     fun updateParameterInBin(binIndex: Int, levelIndex: Int, paramKey: String, newValue: String, historyDesc: String? = null) {
         val currentLines = ArrayList(_dtsLines.value)
-        val range = findLevelLineRange(currentLines, binIndex, levelIndex) ?: return
+        val range = gpuDomainManager.findLevelLineRange(currentLines, binIndex, levelIndex) ?: return
         
         for (i in range.first..range.second) {
             val line = currentLines[i]
@@ -153,7 +136,7 @@ open class GpuRepository @Inject constructor(
         var dirty = false
         
         updates.forEach { update ->
-             val range = findLevelLineRange(currentLines, update.binIndex, update.levelIndex)
+             val range = gpuDomainManager.findLevelLineRange(currentLines, update.binIndex, update.levelIndex)
              if (range != null) {
                  for (i in range.first..range.second) {
                      val line = currentLines[i]
@@ -180,16 +163,7 @@ open class GpuRepository @Inject constructor(
 
     fun updateOpps(newOpps: List<Opp>) {
         val patterns = chipRepository.currentChip.value?.voltTablePattern ?: return
-        // Generate new block
-        val newBlock = StringBuilder()
-        newBlock.append("\t\t").append(patterns).append(" {\n")
-        newOpps.forEach { opp ->
-            newBlock.append("\t\t\topp-${opp.frequency} {\n")
-            newBlock.append("\t\t\t\topp-hz = /bits/ 64 <${opp.frequency}>;\n")
-            newBlock.append("\t\t\t\topp-microvolt = <${opp.volt}>;\n")
-            newBlock.append("\t\t\t};\n")
-        }
-        newBlock.append("\t\t};")
+        val newBlock = gpuDomainManager.generateOppTableBlock(newOpps)
         
         // Replace in text
         val currentLines = _dtsLines.value
@@ -215,7 +189,7 @@ open class GpuRepository @Inject constructor(
             for (k in 0 until removalCount) validLines.removeAt(startIdx)
             
             // Insert new block
-            val newLines = newBlock.toString().split("\n")
+            val newLines = newBlock.split("\n")
             validLines.addAll(startIdx, newLines)
             
             updateContent(validLines, "Updated OPP Table")
@@ -224,7 +198,7 @@ open class GpuRepository @Inject constructor(
 
     fun deleteLevel(binIndex: Int, levelIndex: Int) {
         val currentLines = ArrayList(_dtsLines.value)
-        val range = findLevelLineRange(currentLines, binIndex, levelIndex) ?: return
+        val range = gpuDomainManager.findLevelLineRange(currentLines, binIndex, levelIndex) ?: return
         
         // Remove range. second is inclusive, so count = second - first + 1
         val removalCount = range.second - range.first + 1
@@ -288,145 +262,21 @@ open class GpuRepository @Inject constructor(
         }
     }
 
-    // --- Helper Parsers ---
-
-    private fun parseBinsFromLines(lines: List<String>): List<Bin> {
-        val currentChip = chipRepository.currentChip.value ?: return emptyList()
-        val strategy = chipRepository.getArchitecture(currentChip)
-        val bins = ArrayList<Bin>()
-        val mutableLines = ArrayList(lines) // Strategy consumes lines copy
-        
-        // Using existing strategy logic but adapted to not destructively consume
-        // Since Architecture.decode consumes lines from the list to avoid reprocessing,
-        // we pass a copy. 
-        
-        var i = -1
-        while (++i < mutableLines.size) {
-            val line = mutableLines[i].trim()
-            if (strategy.isStartLine(line)) {
-                try {
-                    strategy.decode(mutableLines, bins, i)
-                    i-- // Adjust for removed lines in strategy logic
-                } catch (e: Exception) { e.printStackTrace() }
-            }
-        }
-        return bins
-    }
-
-    private fun parseOppsFromLines(lines: List<String>): List<Opp> {
-        val opps = ArrayList<Opp>()
-        val pattern = chipRepository.currentChip.value?.voltTablePattern ?: return emptyList()
-        
-        var insideTable = false
-        var insideNode = false
-        var currentFreq = 0L
-        var currentVolt = 0L
-        
-        for (line in lines) {
-            val trimmed = line.trim()
-            if (trimmed.contains(pattern) && trimmed.endsWith("{")) insideTable = true
-            if (!insideTable) continue
-            
-            if (trimmed.startsWith("opp-") && trimmed.endsWith("{")) {
-                insideNode = true
-                currentFreq = 0
-                currentVolt = 0
-            } else if (trimmed == "};" && insideNode) {
-                if (currentFreq > 0) opps.add(Opp(currentFreq, currentVolt))
-                insideNode = false
-            } else if (insideNode) {
-                if (trimmed.contains("opp-hz")) currentFreq = DtsHelper.extractLongValue(trimmed)
-                if (trimmed.contains("opp-microvolt")) currentVolt = DtsHelper.extractLongValue(trimmed)
-            } else if (trimmed == "};") {
-                insideTable = false
-            }
-        }
-        return opps
-    }
-
-    /**
-     * Locates the line range [start, end] for a specific Bin/Level in the text.
-     * Essential for surgical edits.
-     */
-    private fun findLevelLineRange(lines: List<String>, binIndex: Int, levelIndex: Int): Pair<Int, Int>? {
-        val chip = chipRepository.currentChip.value ?: return null
-        val strategy = chipRepository.getArchitecture(chip)
-        
-        var currentBinIdx = -1
-        var insideTargetBin = false
-        var currentLevelIdx = -1
-        
-        for (i in lines.indices) {
-            val line = lines[i].trim()
-            
-            // Check Bin Start
-            if (strategy.isStartLine(line)) {
-                currentBinIdx++
-                insideTargetBin = (currentBinIdx == binIndex)
-                currentLevelIdx = -1 // Reset level count for new bin
-                continue
-            }
-            
-            if (!insideTargetBin) continue
-            
-            // Check Level Start
-            // Standard pattern: qcom,gpu-pwrlevel@X {
-            if (line.startsWith("qcom,gpu-pwrlevel@")) {
-                currentLevelIdx++
-                if (currentLevelIdx == levelIndex) {
-                    // Found start. Now find matching brace end.
-                    var braceCount = 1
-                    for (j in i + 1 until lines.size) {
-                        if (lines[j].contains("{")) braceCount++
-                        if (lines[j].contains("}")) braceCount--
-                        if (braceCount == 0) return Pair(i, j)
-                    }
-                }
-            }
-        }
-        return null
-    }
-
     // --- History Logic ---
 
-    private fun snapshot(description: String) {
-        val current = _dtsLines.value
-        undoStack.push(HistoryItem(ArrayList(current), description))
-        if (undoStack.size > MAX_HISTORY) undoStack.removeLast()
-        redoStack.clear()
-        updateHistoryFlags()
-        refreshHistoryList()
-    }
-
     fun undo() {
-        if (undoStack.isEmpty()) return
-        val current = _dtsLines.value
-        val historyItem = undoStack.pop()
-        
-        // Push current text to Redo Stack
-        // Description for redo? It's "Undo 'XYZ'" effectively.
-        // We'll store the 'undo' action as a Redo item. 
-        redoStack.push(HistoryItem(current, "Undo of '${historyItem.description}'"))
-        
-        updateContent(historyItem.lines, addToHistory = false)
-        updateHistoryFlags()
-        refreshHistoryList()
+        val currentState = _dtsLines.value
+        val revertedState = historyManager.undo(currentState)
+        if (revertedState != null) {
+            updateContent(revertedState, addToHistory = false)
+        }
     }
 
     fun redo() {
-        if (redoStack.isEmpty()) return
-        val current = _dtsLines.value
-        val historyItem = redoStack.pop()
-        
-        undoStack.push(HistoryItem(current, "Redo of '${historyItem.description}'"))
-        
-        updateContent(historyItem.lines, addToHistory = false)
-        updateHistoryFlags()
-        refreshHistoryList()
-    }
-
-    private fun updateHistoryFlags() {
-        _canUndo.value = undoStack.isNotEmpty()
-        _canRedo.value = redoStack.isNotEmpty()
+        val currentState = _dtsLines.value
+        val revertedState = historyManager.redo(currentState)
+        if (revertedState != null) {
+            updateContent(revertedState, addToHistory = false)
+        }
     }
 }

@@ -19,7 +19,6 @@ fun RawDtsScreen(viewModel: SharedGpuViewModel) {
     
     val treeScrollIdx by viewModel.treeScrollIndex.collectAsState()
     val treeScrollOff by viewModel.treeScrollOffset.collectAsState()
-    
     val parsedTree by viewModel.parsedTree.collectAsState()
     
     // View Mode (Local switch for standalone activity)

@@ -55,14 +55,23 @@ class SharedGpuViewModel @Inject constructor(
 
     // --- Derived UI Models ---
     
-    val binUiModels: StateFlow<Map<Int, List<LevelUiModel>>> = combine(bins, _binOffsets) { list, offsets ->
+    val binUiModels: StateFlow<Map<Int, List<LevelUiModel>>> = combine(bins, _binOffsets, currentChip) { list, offsets, _ ->
         mapBinsToUiModels(list, offsets)
     }
     .flowOn(Dispatchers.Default)
     .stateIn(viewModelScope, SharingStarted.Lazily, emptyMap())
 
-
-    // --- Persistent UI State (Scroll/Expansion) ---
+    init {
+        // Automatically start highlighting whenever DTS content changes
+        viewModelScope.launch {
+            // Monitor both content and search query
+            combine(repository.dtsLines, _searchState) { lines, search ->
+                lines to search.query
+            }.collect { (lines, query) ->
+                 com.ireddragonicy.konabessnext.editor.EditorSession.update(lines, query, viewModelScope)
+            }
+        }
+    }
     val textScrollIndex = MutableStateFlow(0)
     val textScrollOffset = MutableStateFlow(0)
     val treeScrollIndex = MutableStateFlow(0)
@@ -260,11 +269,14 @@ class SharedGpuViewModel @Inject constructor(
         
         val vLevel = level.voltageLevel
         val chip = currentChip.value
-        val levelName = if (chip != null && chip.levels.containsKey(vLevel)) {
-             " - " + chip.levels[vLevel]
+        val levelName = if (chip != null) {
+             val raw = chip.levels[vLevel - 1] ?: chip.levels[vLevel] ?: ""
+             if (raw.contains(" - ")) raw.substringAfter(" - ") else raw
         } else {
              ""
         }
+        
+        val finalLevelName = if (levelName.isNotEmpty()) " - $levelName" else ""
         
         return LevelUiModel(
             originalIndex = index,
@@ -273,7 +285,7 @@ class SharedGpuViewModel @Inject constructor(
             busMax = if (bMax > -1) "Max: $bMax" else "",
             busFreq = if (bFreq > -1) "Freq: $bFreq" else "",
             voltageLabel = UiText.DynamicString("Volt: $vLevel"),
-            voltageVal = "Volt: $vLevel$levelName",
+            voltageVal = "Volt: $vLevel$finalLevelName",
             isVisible = true
         )
     }
