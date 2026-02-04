@@ -14,6 +14,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.graphicsLayer
 import com.ireddragonicy.konabessnext.R
 import com.ireddragonicy.konabessnext.viewmodel.SharedGpuViewModel
@@ -38,6 +39,7 @@ fun GpuEditorToolbar(
     onViewModeChanged: (SharedGpuViewModel.ViewMode) -> Unit,
     onChipsetClick: () -> Unit = {},
     onFlashClick: () -> Unit,
+    applyStatusBarPadding: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val haptic = LocalHapticFeedback.current
@@ -51,7 +53,7 @@ fun GpuEditorToolbar(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .statusBarsPadding() // Padding inside, so background extends behind status bar
+                .then(if (applyStatusBarPadding) Modifier.statusBarsPadding() else Modifier)
                 .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
             // Row 1: Save, Undo, Redo, History
@@ -224,3 +226,75 @@ fun GpuEditorToolbar(
 
 // Helper for alpha value
 fun Modifier.alpha(alpha: Float) = this.then(Modifier.wrapContentSize(Alignment.Center).graphicsLayer(alpha = alpha))
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SearchAndToolsBar(
+    query: String,
+    matchCount: Int,
+    currentMatchIndex: Int,
+    onQueryChange: (String) -> Unit,
+    onNext: () -> Unit,
+    onPrev: () -> Unit,
+    onCopyAll: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        tonalElevation = 1.dp
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            // Search Field
+            OutlinedTextField(
+                value = query,
+                onValueChange = onQueryChange,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(50.dp),
+                placeholder = { Text(androidx.compose.ui.res.stringResource(android.R.string.search_go), fontSize = 12.sp) }, // Fallback string or generic
+                singleLine = true,
+                textStyle = MaterialTheme.typography.bodyMedium,
+                leadingIcon = {
+                    Icon(Icons.Default.Search, null, modifier = Modifier.size(16.dp))
+                },
+                trailingIcon = {
+                    if (query.isNotEmpty()) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (matchCount > 0) {
+                                Text(
+                                    text = "${currentMatchIndex + 1}/$matchCount",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.padding(end = 4.dp)
+                                )
+                            }
+                            IconButton(onClick = { onQueryChange("") }, modifier = Modifier.size(24.dp)) {
+                                Icon(Icons.Default.Close, null, modifier = Modifier.size(14.dp))
+                            }
+                        }
+                    }
+                }
+            ) // Removed invalid colors parameter that contained contentPadding
+
+            // Navigation
+            IconButton(onClick = onPrev, enabled = matchCount > 0) {
+                Icon(painter = painterResource(R.drawable.ic_arrow_upward), contentDescription = "Prev")
+            }
+            IconButton(onClick = onNext, enabled = matchCount > 0) {
+                Icon(painter = painterResource(R.drawable.ic_arrow_downward), contentDescription = "Next")
+            }
+
+            // Copy All
+            IconButton(onClick = onCopyAll) {
+                Icon(painter = painterResource(R.drawable.ic_content_copy), contentDescription = "Copy All")
+            }
+        }
+    }
+}

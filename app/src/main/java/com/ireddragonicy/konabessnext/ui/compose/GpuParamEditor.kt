@@ -38,140 +38,138 @@ fun GpuParamEditor(
 ) {
     val context = LocalContext.current
     
-    com.ireddragonicy.konabessnext.ui.theme.KonaBessTheme {
-        // Parse lines into displayable items
-        val params = remember(level) {
-            level.lines.mapIndexed { index, line ->
-                val decoded = DtsHelper.decode_hex_line(line)
-                val name = decoded.name
-                val rawValue = decoded.value
-                val title = ChipStringHelper.convertLevelParams(name, context)
-                
-                // Format value for display
-                val displayValue = try {
-                    if (name == "qcom,gpu-freq") {
-                        val hz = if (rawValue.startsWith("0x")) java.lang.Long.decode(rawValue) else rawValue.toLong()
-                        com.ireddragonicy.konabessnext.utils.FrequencyFormatter.format(context, hz)
-                    } else if (name == "qcom,level" || name == "qcom,cx-level") {
-                        val lvl = if (rawValue.startsWith("0x")) java.lang.Long.decode(rawValue) else rawValue.toLong()
-                        val idx = com.ireddragonicy.konabessnext.core.editor.LevelOperations.levelint2int(lvl, levelValues)
-                        levelStrings.getOrNull(idx) ?: rawValue
-                    } else if (rawValue.startsWith("0x")) {
-                        // Try to convert generic hex to nice decimal if short
-                        val longVal = java.lang.Long.decode(rawValue)
-                        if (longVal < 1000) longVal.toString() else rawValue
-                    } else {
-                        rawValue
-                    }
-                } catch (e: Exception) {
+    // Parse lines into displayable items
+    val params = remember(level) {
+        level.lines.mapIndexed { index, line ->
+            val decoded = DtsHelper.decode_hex_line(line)
+            val name = decoded.name
+            val rawValue = decoded.value
+            val title = ChipStringHelper.convertLevelParams(name, context)
+            
+            // Format value for display
+            val displayValue = try {
+                if (name == "qcom,gpu-freq") {
+                    val hz = if (rawValue.startsWith("0x")) java.lang.Long.decode(rawValue) else rawValue.toLong()
+                    com.ireddragonicy.konabessnext.utils.FrequencyFormatter.format(context, hz)
+                } else if (name == "qcom,level" || name == "qcom,cx-level") {
+                    val lvl = if (rawValue.startsWith("0x")) java.lang.Long.decode(rawValue) else rawValue.toLong()
+                    val idx = com.ireddragonicy.konabessnext.core.editor.LevelOperations.levelint2int(lvl, levelValues)
+                    levelStrings.getOrNull(idx) ?: rawValue
+                } else if (rawValue.startsWith("0x")) {
+                    // Try to convert generic hex to nice decimal if short
+                    val longVal = java.lang.Long.decode(rawValue)
+                    if (longVal < 1000) longVal.toString() else rawValue
+                } else {
                     rawValue
                 }
-                
-                ParamItem(index, name, rawValue, displayValue, title, line)
+            } catch (e: Exception) {
+                rawValue
             }
-        }
-
-        var editingParam by remember { mutableStateOf<ParamItem?>(null) }
-        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-
-        if (editingParam != null) {
-            ModalBottomSheet(
-                onDismissRequest = { editingParam = null },
-                sheetState = sheetState,
-                containerColor = MaterialTheme.colorScheme.surface,
-                contentColor = MaterialTheme.colorScheme.onSurface
-            ) {
-                EditParamSheetContent(
-                    param = editingParam!!,
-                    onSave = { encodedLine, historyMsg ->
-                        onUpdateParam(editingParam!!.index, encodedLine, historyMsg)
-                        editingParam = null
-                    },
-                    onCancel = { editingParam = null },
-                    levelStrings = levelStrings,
-                    levelValues = levelValues,
-                    ignoreVoltTable = ignoreVoltTable
-                )
-            }
-        }
-
-        Scaffold(
-            containerColor = MaterialTheme.colorScheme.background,
-            topBar = {
-                TopAppBar(
-                    title = { Text(stringResource(R.string.edit_level)) },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.background,
-                        titleContentColor = MaterialTheme.colorScheme.onBackground,
-                        navigationIconContentColor = MaterialTheme.colorScheme.onBackground,
-                        actionIconContentColor = MaterialTheme.colorScheme.onBackground
-                    ),
-                    navigationIcon = {
-                        IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back))
-                        }
-                    },
-                    actions = {
-                        TextButton(onClick = onDeleteLevel) {
-                             Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error)
-                        }
-                    }
-                )
-            }
-        ) { paddingValues ->
-            // Separate "header" params (bus-min, bus-max, bus-freq) from the rest
-            val headerKeys = setOf("qcom,bus-min", "qcom,bus-max", "qcom,bus-freq")
-            val paramsMap = params.associateBy { it.rawName }
             
-            // Explicit order: Min, Max, Freq
-            val headerParams = listOfNotNull(
-                paramsMap["qcom,bus-min"],
-                paramsMap["qcom,bus-max"],
-                paramsMap["qcom,bus-freq"]
+            ParamItem(index, name, rawValue, displayValue, title, line)
+        }
+    }
+
+    var editingParam by remember { mutableStateOf<ParamItem?>(null) }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    if (editingParam != null) {
+        ModalBottomSheet(
+            onDismissRequest = { editingParam = null },
+            sheetState = sheetState,
+            containerColor = MaterialTheme.colorScheme.surface,
+            contentColor = MaterialTheme.colorScheme.onSurface
+        ) {
+            EditParamSheetContent(
+                param = editingParam!!,
+                onSave = { encodedLine, historyMsg ->
+                    onUpdateParam(editingParam!!.index, encodedLine, historyMsg)
+                    editingParam = null
+                },
+                onCancel = { editingParam = null },
+                levelStrings = levelStrings,
+                levelValues = levelValues,
+                ignoreVoltTable = ignoreVoltTable
             )
-            val otherParams = params.filterNot { it.rawName in headerKeys }
+        }
+    }
 
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues)
-                    .padding(horizontal = 16.dp)
-            ) {
-                // Top 3 Boxes Header Row
-                if (headerParams.isNotEmpty()) {
-                    Spacer(Modifier.height(8.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        headerParams.forEach { item ->
-                            HeaderParamBox(
-                                item = item,
-                                modifier = Modifier.weight(1f),
-                                onClick = { editingParam = item }
-                            )
-                        }
+    Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.edit_level)) },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background,
+                    titleContentColor = MaterialTheme.colorScheme.onBackground,
+                    navigationIconContentColor = MaterialTheme.colorScheme.onBackground,
+                    actionIconContentColor = MaterialTheme.colorScheme.onBackground
+                ),
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back))
                     }
-                    Spacer(Modifier.height(24.dp))
-                    Text(
-                        text = "Properties",
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
+                },
+                actions = {
+                    TextButton(onClick = onDeleteLevel) {
+                            Text(stringResource(R.string.delete), color = MaterialTheme.colorScheme.error)
+                    }
                 }
+            )
+        }
+    ) { paddingValues ->
+        // Separate "header" params (bus-min, bus-max, bus-freq) from the rest
+        val headerKeys = setOf("qcom,bus-min", "qcom,bus-max", "qcom,bus-freq")
+        val paramsMap = params.associateBy { it.rawName }
+        
+        // Explicit order: Min, Max, Freq
+        val headerParams = listOfNotNull(
+            paramsMap["qcom,bus-min"],
+            paramsMap["qcom,bus-max"],
+            paramsMap["qcom,bus-freq"]
+        )
+        val otherParams = params.filterNot { it.rawName in headerKeys }
 
-                // Remaining params in scrollable list
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .padding(horizontal = 16.dp)
+        ) {
+            // Top 3 Boxes Header Row
+            if (headerParams.isNotEmpty()) {
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    itemsIndexed(otherParams) { _, item ->
-                        ParamCard(
+                    headerParams.forEach { item ->
+                        HeaderParamBox(
                             item = item,
+                            modifier = Modifier.weight(1f),
                             onClick = { editingParam = item }
                         )
                     }
+                }
+                Spacer(Modifier.height(24.dp))
+                Text(
+                    text = "Properties",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+            }
+
+            // Remaining params in scrollable list
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                itemsIndexed(otherParams) { _, item ->
+                    ParamCard(
+                        item = item,
+                        onClick = { editingParam = item }
+                    )
                 }
             }
         }

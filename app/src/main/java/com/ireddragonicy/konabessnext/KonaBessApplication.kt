@@ -4,7 +4,7 @@ import android.app.Application
 import android.content.Context
 import com.ireddragonicy.konabessnext.utils.LocaleUtil
 import com.ireddragonicy.konabessnext.utils.RootHelper
-import com.ireddragonicy.konabessnext.ui.SettingsActivity
+import com.ireddragonicy.konabessnext.viewmodel.SettingsViewModel
 import com.topjohnwu.superuser.Shell
 import dagger.hilt.android.HiltAndroidApp
 

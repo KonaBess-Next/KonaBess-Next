@@ -14,6 +14,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.ireddragonicy.konabessnext.R
 import com.ireddragonicy.konabessnext.utils.ChipStringHelper
+import com.ireddragonicy.konabessnext.utils.DtsHelper
 import com.ireddragonicy.konabessnext.model.Bin
 
 @Composable
@@ -26,61 +27,65 @@ fun GpuBinList(
 ) {
     val context = LocalContext.current
 
-    com.ireddragonicy.konabessnext.ui.theme.KonaBessTheme {
-        Scaffold(
-            containerColor = MaterialTheme.colorScheme.background
-        ) { paddingValues ->
-            Box(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
-                if (isLoading) {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator()
-                    }
-                } else if (bins.isEmpty()) {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(32.dp)) {
-                            Icon(
-                                painter = painterResource(R.drawable.ic_search),
-                                contentDescription = null,
-                                modifier = Modifier.size(48.dp).padding(bottom = 16.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Text(
-                                text = stringResource(R.string.no_gpu_tables_found),
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Button(onClick = onReload) {
-                                Text(stringResource(R.string.reload_data))
-                            }
+    Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0) // Fix double padding
+    ) { paddingValues ->
+        Box(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
+            if (isLoading) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
+            } else if (bins.isEmpty()) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(32.dp)) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_search),
+                            contentDescription = null,
+                            modifier = Modifier.size(48.dp).padding(bottom = 16.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = stringResource(R.string.no_gpu_tables_found),
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Button(onClick = onReload) {
+                            Text(stringResource(R.string.reload_data))
                         }
                     }
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize().padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        itemsIndexed(bins) { index, bin ->
-                            val binName = remember(bin.id, context) {
-                                try {
-                                    if (context is android.app.Activity) {
-                                        ChipStringHelper.convertBins(bin.id, context, chipDef)
-                                    } else {
-                                        context.getString(R.string.bin_id_format, bin.id)
-                                    }
-                                } catch (e: Exception) {
-                                    context.getString(R.string.unknown_table) + bin.id
-                                }
-                            }
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize().padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    itemsIndexed(bins) { index, bin ->
+                        // Try to extract the real speed-bin ID from the header
+                        val speedBinLine = bin.header.find { it.contains("qcom,speed-bin") }
+                        val realBinId = if (speedBinLine != null) {
+                            val extracted = DtsHelper.extractLongValue(speedBinLine)
+                            if (extracted != -1L) extracted.toInt() else bin.id
+                        } else {
+                            bin.id
+                        }
 
-                            BinItemCard(
-                                name = binName,
-                                onClick = { onBinClick(index) }
-                            )
+                        val binName = remember(realBinId, context, chipDef) {
+                            try {
+                                ChipStringHelper.convertBins(realBinId, context, chipDef)
+                            } catch (e: Exception) {
+                                context.getString(R.string.unknown_table) + realBinId
+                            }
                         }
+
+                        BinItemCard(
+                            name = binName,
+                            onClick = { onBinClick(index) }
+                        )
                     }
                 }
             }

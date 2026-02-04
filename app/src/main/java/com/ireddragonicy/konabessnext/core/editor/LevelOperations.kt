@@ -3,7 +3,7 @@ package com.ireddragonicy.konabessnext.core.editor
 import android.app.Activity
 import com.ireddragonicy.konabessnext.model.Bin
 import com.ireddragonicy.konabessnext.model.Level
-import com.ireddragonicy.konabessnext.ui.SettingsActivity
+
 
 import com.ireddragonicy.konabessnext.utils.DtsHelper
 import java.util.regex.Pattern

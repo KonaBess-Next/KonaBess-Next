@@ -16,7 +16,7 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.ireddragonicy.konabessnext.R
 import com.ireddragonicy.konabessnext.utils.ChipStringHelper
 import com.ireddragonicy.konabessnext.model.Bin
-import com.ireddragonicy.konabessnext.ui.SettingsActivity
+import com.ireddragonicy.konabessnext.viewmodel.SettingsViewModel
 import com.ireddragonicy.konabessnext.utils.DialogUtil
 import com.ireddragonicy.konabessnext.utils.DtsHelper
 import java.util.Locale
@@ -74,21 +74,21 @@ object FrequencyDialogHelper {
         }
 
         val prefs = activity.getSharedPreferences(
-            SettingsActivity.PREFS_NAME, android.content.Context.MODE_PRIVATE
+            SettingsViewModel.PREFS_NAME, android.content.Context.MODE_PRIVATE
         )
-        val preferredUnit = prefs.getInt(SettingsActivity.KEY_FREQ_UNIT, SettingsActivity.FREQ_UNIT_MHZ)
+        val preferredUnit = prefs.getInt(SettingsViewModel.KEY_FREQ_UNIT, SettingsViewModel.FREQ_UNIT_MHZ)
 
         val finalCurrentHz = currentHz
         when (preferredUnit) {
-            SettingsActivity.FREQ_UNIT_HZ -> {
+            SettingsViewModel.FREQ_UNIT_HZ -> {
                 editText.setText(currentHz.toString())
                 unitSpinner.setSelection(0)
             }
-            SettingsActivity.FREQ_UNIT_MHZ -> {
+            SettingsViewModel.FREQ_UNIT_MHZ -> {
                 editText.setText((currentHz / 1000000).toString())
                 unitSpinner.setSelection(1)
             }
-            SettingsActivity.FREQ_UNIT_GHZ -> {
+            SettingsViewModel.FREQ_UNIT_GHZ -> {
                 editText.setText(String.format(Locale.US, "%.3f", currentHz / 1000000000.0))
                 unitSpinner.setSelection(2)
             }
@@ -108,8 +108,8 @@ object FrequencyDialogHelper {
 
         val previousUnit = IntArray(1)
         previousUnit[0] = when (preferredUnit) {
-            SettingsActivity.FREQ_UNIT_HZ -> 0
-            SettingsActivity.FREQ_UNIT_GHZ -> 2
+            SettingsViewModel.FREQ_UNIT_HZ -> 0
+            SettingsViewModel.FREQ_UNIT_GHZ -> 2
             else -> 1
         }
 

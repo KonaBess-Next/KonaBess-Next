@@ -120,122 +120,120 @@ fun GpuLevelList(
         localList.addAll(uiModels)
     }}
 
-    com.ireddragonicy.konabessnext.ui.theme.KonaBessTheme {
-        Column(
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
+        // Header
+        Surface(
+            tonalElevation = 3.dp,
+            shadowElevation = 3.dp,
+            modifier = Modifier.zIndex(1f)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Button(
+                    onClick = onBack,
+                    modifier = Modifier.weight(1f),
+                    shape = MaterialTheme.shapes.medium,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                ) {
+                    Icon(iconBack, null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(androidx.compose.ui.res.stringResource(R.string.btn_back))
+                }
+                
+                Button(
+                    onClick = onOpenCurveEditor,
+                    modifier = Modifier.weight(1f),
+                    shape = MaterialTheme.shapes.medium,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onTertiaryContainer
+                    )
+                ) {
+                    Icon(iconEdit, null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(androidx.compose.ui.res.stringResource(R.string.btn_curve_editor))
+                }
+            }
+        }
+
+        // High-Performance List
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
+                .padding(horizontal = 16.dp),
+            // Optimization: SpacedBy removes the need for individual Spacer items
+            verticalArrangement = Arrangement.spacedBy(8.dp), 
+            contentPadding = PaddingValues(top = 8.dp, bottom = 88.dp)
         ) {
-            // Header
-            Surface(
-                tonalElevation = 3.dp,
-                shadowElevation = 3.dp,
-                modifier = Modifier.zIndex(1f)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+            item(key = "hdr_add", contentType = "action") {
+                OutlinedButton(
+                    onClick = onAddLevelTop,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.medium
                 ) {
-                    Button(
-                        onClick = onBack,
-                        modifier = Modifier.weight(1f),
-                        shape = MaterialTheme.shapes.medium,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                        )
-                    ) {
-                        Icon(iconBack, null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text(androidx.compose.ui.res.stringResource(R.string.btn_back))
-                    }
-                    
-                    Button(
-                        onClick = onOpenCurveEditor,
-                        modifier = Modifier.weight(1f),
-                        shape = MaterialTheme.shapes.medium,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onTertiaryContainer
-                        )
-                    ) {
-                        Icon(iconEdit, null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text(androidx.compose.ui.res.stringResource(R.string.btn_curve_editor))
-                    }
+                    Icon(iconAdd, null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(androidx.compose.ui.res.stringResource(R.string.btn_add_freq_top))
                 }
             }
 
-            // High-Performance List
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 16.dp),
-                // Optimization: SpacedBy removes the need for individual Spacer items
-                verticalArrangement = Arrangement.spacedBy(8.dp), 
-                contentPadding = PaddingValues(top = 8.dp, bottom = 88.dp)
-            ) {
-                item(key = "hdr_add", contentType = "action") {
-                    OutlinedButton(
-                        onClick = onAddLevelTop,
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = MaterialTheme.shapes.medium
-                    ) {
-                        Icon(iconAdd, null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text(androidx.compose.ui.res.stringResource(R.string.btn_add_freq_top))
-                    }
-                }
-
-                itemsIndexed(
-                    items = localList,
-                    key = { _, uiModel -> uiModel.originalIndex },
-                    contentType = { _, _ -> "level" }
-                ) { listIndex, uiModel ->
-                    
-                    val isDragging = listIndex == draggingItemIndex
-                    
-                    LevelCard(
-                        uiModel = uiModel,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .zIndex(if (isDragging) 1f else 0f)
-                            .graphicsLayer {
-                                if (isDragging) {
-                                    translationY = draggingItemOffset
-                                    scaleX = 1.05f
-                                    scaleY = 1.05f
-                                    alpha = 0.95f
-                                    shadowElevation = 8.dp.toPx()
-                                }
-                            },
-                        listIndex = listIndex,
-                        onLevelClick = onLevelClick,
-                        onDelete = onDeleteLevel,
-                        onCopy = onDuplicateLevel,
-                        onDragStart = onDragStart,
-                        onDrag = onDrag,
-                        onDragEnd = onDragEnd,
-                        onDragCancel = onDragCancel,
-                        // Pass resources
-                        res = LevelCardResources(
-                            iconCopy, iconBusFreq, iconMin, iconMax, iconLevel, iconVolt, iconMenu, iconDelete
-                        )
+            itemsIndexed(
+                items = localList,
+                key = { _, uiModel -> uiModel.originalIndex },
+                contentType = { _, _ -> "level" }
+            ) { listIndex, uiModel ->
+                
+                val isDragging = listIndex == draggingItemIndex
+                
+                LevelCard(
+                    uiModel = uiModel,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .zIndex(if (isDragging) 1f else 0f)
+                        .graphicsLayer {
+                            if (isDragging) {
+                                translationY = draggingItemOffset
+                                scaleX = 1.05f
+                                scaleY = 1.05f
+                                alpha = 0.95f
+                                shadowElevation = 8.dp.toPx()
+                            }
+                        },
+                    listIndex = listIndex,
+                    onLevelClick = onLevelClick,
+                    onDelete = onDeleteLevel,
+                    onCopy = onDuplicateLevel,
+                    onDragStart = onDragStart,
+                    onDrag = onDrag,
+                    onDragEnd = onDragEnd,
+                    onDragCancel = onDragCancel,
+                    // Pass resources
+                    res = LevelCardResources(
+                        iconCopy, iconBusFreq, iconMin, iconMax, iconLevel, iconVolt, iconMenu, iconDelete
                     )
-                }
+                )
+            }
 
-                item(key = "ftr_add", contentType = "action") {
-                    OutlinedButton(
-                        onClick = onAddLevelBottom,
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = MaterialTheme.shapes.medium
-                    ) {
-                        Icon(iconAdd, null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text(androidx.compose.ui.res.stringResource(R.string.btn_add_freq_bottom))
-                    }
+            item(key = "ftr_add", contentType = "action") {
+                OutlinedButton(
+                    onClick = onAddLevelBottom,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.medium
+                ) {
+                    Icon(iconAdd, null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(androidx.compose.ui.res.stringResource(R.string.btn_add_freq_bottom))
                 }
             }
         }

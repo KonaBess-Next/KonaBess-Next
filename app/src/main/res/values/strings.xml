@@ -71,7 +71,7 @@
     <string name="sdm865">Snapdragon 865</string>
     <string name="sdm865p">Snapdragon 865+</string>
     <string name="sdm865m">Snapdragon 865-</string>
-    <string name="unknown_table">Unknown frequency table</string>
+    <string name="unknown_table">Unknown frequency table </string>
     <string name="sdm865_singlebin">Snapdragon 865 (Android Q)</string>
     <string name="sdm855">Snapdragon 855</string>
     <string name="sdm855p">Snapdragon 855+</string>
@@ -377,4 +377,25 @@
     <string name="btn_add_freq_bottom">Add Frequency to Bottom</string>
     <string name="btn_back">Back</string>
     <string name="btn_curve_editor">Curve Editor</string>
+
+
+    <!-- Settings Headers & Updates -->
+    <string name="header_appearance">Appearance</string>
+    <string name="header_localization">Localization</string>
+    <string name="header_behavior">Behavior</string>
+    <string name="header_about">About</string>
+    
+    <string name="update_channel">Update Channel</string>
+    <string name="channel_stable">Stable</string>
+    <string name="channel_prerelease">Prerelease</string>
+    <string name="channel_desc_stable">Stable releases only</string>
+    <string name="channel_desc_prerelease">Get early access to new features</string>
+    <string name="check_updates">Check for Updates</string>
+    <string name="check_updates_desc">Check for the latest version</string>
+    <string name="checking_updates">Checking...</string>
+    <string name="update_available_title">Update Available (%1$s)</string>
+    <string name="btn_download">Download</string>
+    <string name="btn_later">Later</string>
+    <string name="toast_no_updates">No updates available</string>
+    <string name="toast_update_error">Update check failed: %1$s</string>
 </resources>

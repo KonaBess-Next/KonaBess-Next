@@ -9,6 +9,7 @@ import com.ireddragonicy.konabessnext.repository.GpuRepository
 import com.ireddragonicy.konabessnext.utils.GzipUtils
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -61,6 +62,9 @@ class ImportExportViewModel @Inject constructor(
     private val _batchProgress = MutableStateFlow<String?>(null)
     val batchProgress: StateFlow<String?> = _batchProgress.asStateFlow()
 
+    private val _importPreview = MutableStateFlow<ImportPreview?>(null)
+    val importPreview: StateFlow<ImportPreview?> = _importPreview.asStateFlow()
+
     fun updateExportAvailability() {
         // Logic to check if export is available (e.g. data loaded)
     }
@@ -105,17 +109,196 @@ class ImportExportViewModel @Inject constructor(
         loadHistory()
     }
     
-    fun importConfig(jsonString: String) {
+
+    fun previewConfig(inputString: String) {
         viewModelScope.launch {
             try {
-                val json = JSONObject(jsonString)
-                val chip = json.getString("chip")
-                if (chip != chipRepository.currentChip.value?.id) {
-                    _errorEvent.emit("Incompatible chip: $chip")
-                    return@launch
+                // Pre-process input
+                var cleanedInput = inputString.trim()
+                if (cleanedInput.startsWith("konabess://")) {
+                    cleanedInput = cleanedInput.removePrefix("konabess://")
+                }
+
+                // Detect if it's a raw JSON or a Compressed Base64 String
+                val jsonString = if (cleanedInput.startsWith("{")) {
+                    cleanedInput
+                } else {
+                    // Try to uncompress assuming it is GZIP Base64
+                    try {
+                        val uncompressed = GzipUtils.uncompress(cleanedInput)
+                        if (uncompressed != null && uncompressed.trim().startsWith("{")) {
+                            uncompressed
+                        } else {
+                            throw IllegalArgumentException("Invalid compressed data")
+                        }
+                    } catch (e: Exception) {
+                        throw IllegalArgumentException("Invalid format: Not valid JSON or KonaBess Compressed String")
+                    }
                 }
                 
+                // Double check JSON validity before parsing
+                val trimmedJson = jsonString.trim()
+                if (!trimmedJson.startsWith("{")) {
+                     throw IllegalArgumentException("Invalid JSON format")
+                }
+
+                val json = JSONObject(trimmedJson)
+                val chip = json.getString("chip")
+                val currentChipId = chipRepository.currentChip.value?.id
+                
+                // Parse Description
                 val desc = json.optString("desc", "Imported Config")
+                
+                // Parse Frequencies and Bins
+                val freqData = if (json.has("freq")) json.getString("freq") else ""
+                val bins = parseBinsFromDts(freqData)
+                
+                // Parse Voltages (Legacy Voltage Table or Embedded)
+                // If we found bins with frequencies, we usually have voltage pairs there too (opp levels)
+                // But check explicit "volt" key count too.
+                val legacyVoltCount = if (json.has("volt")) json.getString("volt").count { it == '\n' } else 0
+                
+                // Hard validation only if we are on a known chip to avoid blocking experimental usage
+                if (chip != currentChipId && currentChipId != null) {
+                    // Just warn in UI, but for now we might let it pass or show error.
+                    // Let's emit error but maybe still show preview? 
+                    // For safety, error.
+                    // _errorEvent.emit("Incompatible chip: $chip (Target: $currentChipId)")
+                    // return@launch
+                }
+                
+                _importPreview.value = ImportPreview(chip, desc, bins, legacyVoltCount, jsonString)
+                
+            } catch (e: Exception) {
+                _errorEvent.emit("Import parsing failed: ${e.message}")
+            }
+        }
+    }
+    
+
+    private fun parseBinsFromDts(dtsContent: String): List<BinInfo> {
+        val bins = ArrayList<BinInfo>()
+        // Simple regex strategy: find "qcom,gpu-pwrlevels-X" blocks
+        val binStartPattern = Regex("qcom,gpu-pwrlevels-(\\d+)")
+        val binMatches = binStartPattern.findAll(dtsContent).toList()
+        
+        if (binMatches.isEmpty()) {
+            // Flattened single bin structure (rare in modern chips but possible)
+            val levels = parseLevels(dtsContent)
+            if (levels.isNotEmpty()) {
+                val freqs = levels.map { it.freqMhz }
+                val min = freqs.minOrNull() ?: 0
+                val max = freqs.maxOrNull() ?: 0
+                // Check if any level has valid voltage label
+                val voltCount = levels.count { it.voltageLabel.isNotEmpty() }
+                bins.add(BinInfo(0, freqs.size, min, max, voltCount, freqs, levels))
+            }
+        } else {
+            // We have multiple bins or at least one structured bin
+            for (i in binMatches.indices) {
+                val match = binMatches[i]
+                val startIndex = match.range.first
+                val endIndex = if (i < binMatches.lastIndex) binMatches[i+1].range.first else dtsContent.length
+                
+                val binContent = dtsContent.substring(startIndex, endIndex)
+                
+                // Extract Bin ID
+                val binIdMatch = Regex("qcom,speed-bin\\s*=\\s*<([^>]+)>").find(binContent)
+                val binId = binIdMatch?.groupValues?.get(1)?.trim()?.replace("0x", "")?.toIntOrNull(16) ?: 0
+                
+                val levels = parseLevels(binContent)
+                if (levels.isNotEmpty()) {
+                    val freqs = levels.map { it.freqMhz }
+                    val min = freqs.minOrNull() ?: 0
+                    val max = freqs.maxOrNull() ?: 0
+                    val voltCount = levels.count { it.voltageLabel.isNotEmpty() }
+                    bins.add(BinInfo(binId, freqs.size, min, max, voltCount, freqs, levels))
+                }
+            }
+        }
+        return bins
+    }
+
+    private fun parseLevels(content: String): List<PreviewLevel> {
+        val list = ArrayList<PreviewLevel>()
+        var currentIndex = 0
+        while (true) {
+            val startIdx = content.indexOf("qcom,gpu-pwrlevel@", currentIndex)
+            if (startIdx == -1) break
+            
+            val openBrace = content.indexOf("{", startIdx)
+            if (openBrace == -1) break
+            
+            val closeBrace = findClosingBrace(content, openBrace)
+            if (closeBrace == -1) break
+            
+            val levelBlock = content.substring(openBrace, closeBrace)
+            
+            // Parse Freq
+            val freqMatch = Regex("qcom,gpu-freq\\s*=\\s*<([^>]+)>").find(levelBlock)
+            val freqHz = freqMatch?.groupValues?.get(1)?.trim()?.replace("0x", "")?.toLongOrNull(16) ?: 0L
+            val freqMhz = (freqHz / 1000000).toInt()
+            
+            // Parse Voltage / Level
+            var label = ""
+            // Try qcom,level or qcom,corner
+            val levelPattern = Regex("qcom,(level|corner|bw-level)\\s*=\\s*<([^>]+)>")
+            val levelMatch = levelPattern.find(levelBlock)
+            
+            if (levelMatch != null) {
+                 val key = levelMatch.groupValues[1]
+                 val hex = levelMatch.groupValues[2].trim()
+                 val intVal = hex.replace("0x", "").toIntOrNull(16)
+                 
+                 if (intVal != null) {
+                     // Pretty format depending on key?
+                     label = if (key == "level" && intVal > 16) {
+                         // Likely a voltage level like 448 (TURBO), 296 (SVS)
+                         "Level: $intVal"
+                     } else {
+                         // Likely a corner index 0,1,2...
+                         "${key.replaceFirstChar { it.uppercase() }}: $intVal"
+                     }
+                 }
+            }
+
+            // Parse Bus Info
+            val busMin = Regex("qcom,bus-min\\s*=\\s*<([^>]+)>").find(levelBlock)
+                ?.groupValues?.get(1)?.trim()?.replace("0x", "")?.toIntOrNull(16)
+            
+            val busMax = Regex("qcom,bus-max\\s*=\\s*<([^>]+)>").find(levelBlock)
+                ?.groupValues?.get(1)?.trim()?.replace("0x", "")?.toIntOrNull(16)
+                
+            val busFreq = Regex("qcom,bus-freq\\s*=\\s*<([^>]+)>").find(levelBlock)
+                ?.groupValues?.get(1)?.trim()?.replace("0x", "")?.toIntOrNull(16)
+            
+            if (freqMhz > 0) {
+                 list.add(PreviewLevel(freqMhz, label, busMin, busMax, busFreq))
+            }
+            
+            currentIndex = closeBrace
+        }
+        return list.sortedByDescending { it.freqMhz }
+    }
+    
+    private fun findClosingBrace(text: String, openPos: Int): Int {
+        var balance = 0
+        for (i in openPos until text.length) {
+            if (text[i] == '{') balance++
+            else if (text[i] == '}') {
+                balance--
+                if (balance == 0) return i
+            }
+        }
+        return -1
+    }
+
+
+    fun confirmImport() {
+        val preview = _importPreview.value ?: return
+        viewModelScope.launch {
+            try {
+                val json = JSONObject(preview.rawJsonString)
                 
                 if (json.has("freq")) {
                     val freqData = json.getString("freq")
@@ -129,12 +312,21 @@ class ImportExportViewModel @Inject constructor(
                     gpuRepository.importVoltTable(lines)
                 }
                 
-                _messageEvent.emit("Successfully imported: $desc")
-                
+                _messageEvent.emit("Successfully imported: ${preview.description}")
+                _importPreview.value = null
             } catch (e: Exception) {
-                _errorEvent.emit("Import failed: ${e.message}")
+                _errorEvent.emit("Apply failed: ${e.message}")
             }
         }
+    }
+
+    fun cancelImport() {
+        _importPreview.value = null
+    }
+
+    // Deprecated: use previewConfig then confirmImport
+    fun importConfig(inputString: String) {
+        previewConfig(inputString)
     }
 
     fun notifyExportResult(content: String) {
@@ -163,6 +355,122 @@ class ImportExportViewModel @Inject constructor(
 
     fun getHistoryManager(): com.ireddragonicy.konabessnext.utils.ExportHistoryManager {
         return exportHistoryManager
+    }
+
+    fun deleteHistoryItem(item: com.ireddragonicy.konabessnext.model.ExportHistoryItem) {
+        exportHistoryManager.deleteItem(item)
+        loadHistory()
+        viewModelScope.launch { _messageEvent.emit("Item deleted") }
+    }
+
+    fun updateHistoryItem(item: com.ireddragonicy.konabessnext.model.ExportHistoryItem) {
+        exportHistoryManager.updateItem(item)
+        loadHistory()
+    }
+
+    fun shareHistoryItem(context: Context, item: com.ireddragonicy.konabessnext.model.ExportHistoryItem) {
+        viewModelScope.launch {
+            try {
+                val uri: Uri = withContext(Dispatchers.IO) {
+                    if (item.filePath.startsWith("content:")) {
+                        try {
+                            val sourceUri = Uri.parse(item.filePath)
+                            val inputStream = context.contentResolver.openInputStream(sourceUri)
+                            if (inputStream != null) {
+                                val cacheFile = File(context.cacheDir, "share_temp_${item.chipType}_${System.currentTimeMillis()}.txt")
+                                val outputStream = FileOutputStream(cacheFile)
+                                inputStream.copyTo(outputStream)
+                                inputStream.close()
+                                outputStream.close()
+                                
+                                androidx.core.content.FileProvider.getUriForFile(
+                                    context,
+                                    "${context.packageName}.fileprovider",
+                                    cacheFile
+                                )
+                            } else {
+                                throw java.io.FileNotFoundException("Could not open content URI")
+                            }
+                        } catch (e: Exception) {
+                            Uri.parse(item.filePath)
+                        }
+                    } else if (item.filePath.startsWith("clipboard:")) {
+                        try {
+                           val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                           val clip = clipboard.primaryClip
+                           if (clip != null && clip.itemCount > 0) {
+                               val text = clip.getItemAt(0).text.toString()
+                               val cacheFile = File(context.cacheDir, "share_clipboard_${System.currentTimeMillis()}.txt")
+                               cacheFile.writeText(text)
+                               androidx.core.content.FileProvider.getUriForFile(
+                                    context,
+                                    "${context.packageName}.fileprovider",
+                                    cacheFile
+                                )
+                           } else {
+                               throw java.io.IOException("Clipboard is empty")
+                           }
+                        } catch (e: Exception) {
+                            throw java.io.IOException("Could not share clipboard content: ${e.message}")
+                        }
+                    } else {
+                        val file = File(item.filePath)
+                        if (!file.exists()) {
+                             throw java.io.FileNotFoundException("File not found: ${item.filePath}")
+                        }
+                        androidx.core.content.FileProvider.getUriForFile(
+                            context,
+                            "${context.packageName}.fileprovider",
+                            file
+                        )
+                    }
+                }
+                
+                val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                    addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                context.startActivity(android.content.Intent.createChooser(intent, "Share Config"))
+            } catch (e: Exception) {
+                _errorEvent.emit("Share failed: ${e.message}")
+            }
+        }
+    }
+
+    fun applyHistoryItem(context: Context, item: com.ireddragonicy.konabessnext.model.ExportHistoryItem) {
+        if (item.filePath.startsWith("content:")) {
+            importConfigFromUri(context, Uri.parse(item.filePath))
+        } else if (item.filePath.startsWith("clipboard:")) {
+            try {
+                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                val clip = clipboard.primaryClip
+                if (clip != null && clip.itemCount > 0) {
+                    val text = clip.getItemAt(0).text
+                    if (!text.isNullOrEmpty()) {
+                        importConfig(text.toString())
+                    } else {
+                        viewModelScope.launch { _errorEvent.emit("Clipboard is empty") }
+                    }
+                } else {
+                    viewModelScope.launch { _errorEvent.emit("Clipboard is empty") }
+                }
+            } catch (e: Exception) {
+                viewModelScope.launch { _errorEvent.emit("Failed to read clipboard: ${e.message}") }
+            }
+        } else {
+             // Local file
+             try {
+                 val file = File(item.filePath)
+                 if (file.exists()) {
+                     importConfig(file.readText())
+                 } else {
+                     viewModelScope.launch { _errorEvent.emit("File not found: ${item.filePath}") }
+                 }
+             } catch (e: Exception) {
+                 viewModelScope.launch { _errorEvent.emit("Import failed: ${e.message}") }
+             }
+        }
     }
 
     fun importConfigFromUri(context: Context, uri: Uri) {
@@ -359,3 +667,33 @@ class ImportExportViewModel @Inject constructor(
         }
     }
 }
+
+
+
+data class ImportPreview(
+    val chip: String,
+    val description: String,
+    val bins: List<BinInfo>,
+    val legacyVoltCount: Int,
+    val rawJsonString: String
+)
+
+data class BinInfo(
+    val binId: Int,
+    val frequencyCount: Int,
+    val minFreqMhz: Int,
+    val maxFreqMhz: Int,
+    val voltageCount: Int,
+    val frequencies: List<Int>,
+    val levels: List<PreviewLevel>
+)
+
+data class PreviewLevel(
+    val freqMhz: Int,
+    val voltageLabel: String,
+    val busMin: Int?,
+    val busMax: Int?,
+    val busFreq: Int?
+)
+
+

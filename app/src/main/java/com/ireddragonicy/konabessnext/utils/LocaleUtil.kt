@@ -4,7 +4,7 @@ import android.content.Context
 import android.content.res.Configuration
 import android.os.Build
 import android.os.LocaleList
-import com.ireddragonicy.konabessnext.ui.SettingsActivity
+import com.ireddragonicy.konabessnext.viewmodel.SettingsViewModel
 import java.util.Locale
 
 object LocaleUtil {
@@ -18,7 +18,7 @@ object LocaleUtil {
 
     private fun applyLocale(context: Context): Context {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val language = prefs.getString(KEY_LANGUAGE, SettingsActivity.LANGUAGE_ENGLISH) ?: SettingsActivity.LANGUAGE_ENGLISH
+        val language = prefs.getString(KEY_LANGUAGE, SettingsViewModel.LANGUAGE_ENGLISH) ?: SettingsViewModel.LANGUAGE_ENGLISH
 
         val locale = parseLocale(language)
         Locale.setDefault(locale)

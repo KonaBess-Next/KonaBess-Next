@@ -1,80 +1,51 @@
-package com.ireddragonicy.konabessnext.ui.fragments
+package com.ireddragonicy.konabessnext.ui.compose
 
-import android.os.Bundle
-import android.view.LayoutInflater
-import android.view.View
-import android.view.ViewGroup
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
-import androidx.fragment.app.Fragment
-import androidx.fragment.app.activityViewModels
-import com.ireddragonicy.konabessnext.ui.MainActivity
-import com.ireddragonicy.konabessnext.ui.compose.*
-import com.ireddragonicy.konabessnext.viewmodel.DeviceViewModel
-import com.ireddragonicy.konabessnext.viewmodel.GpuFrequencyViewModel
-import com.ireddragonicy.konabessnext.viewmodel.SharedGpuViewModel
-import com.ireddragonicy.konabessnext.viewmodel.UiState
-import dagger.hilt.android.AndroidEntryPoint
+import androidx.activity.compose.BackHandler
+import com.ireddragonicy.konabessnext.viewmodel.*
 
-@AndroidEntryPoint
-class GpuFrequencyFragment : Fragment() {
+@Composable
+fun HomeScreen(
+    deviceViewModel: DeviceViewModel,
+    gpuFrequencyViewModel: GpuFrequencyViewModel,
+    sharedViewModel: SharedGpuViewModel,
+    onOpenCurveEditor: (Int) -> Unit,
+    onStartRepack: () -> Unit
+) {
+    val isFilesExtracted by deviceViewModel.isFilesExtracted.collectAsState()
 
-    private val deviceViewModel: DeviceViewModel by activityViewModels()
-    private val gpuFrequencyViewModel: GpuFrequencyViewModel by activityViewModels()
-    private val sharedViewModel: SharedGpuViewModel by activityViewModels()
-
-    override fun onCreateView(
-        inflater: LayoutInflater, container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): View {
-        return ComposeView(requireContext()).apply {
-            // CRITICAL FIX: Dispose strategy handles View lifecycle correctly during recreation
-            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-            
-            setContent {
-                com.ireddragonicy.konabessnext.ui.theme.KonaBessTheme {
-                    Surface(
-                        modifier = Modifier.fillMaxSize(),
-                        color = MaterialTheme.colorScheme.background
-                    ) {
-                        val isFilesExtracted by deviceViewModel.isFilesExtracted.collectAsState()
-
-                        // Load data when extracted (Preserves state across rotation/theme change)
-                        LaunchedEffect(isFilesExtracted) {
-                            if (isFilesExtracted) {
-                                sharedViewModel.loadData()
-                            }
-                        }
-
-                        if (isFilesExtracted) {
-                            GpuEditorMainScreen(
-                                deviceViewModel = deviceViewModel,
-                                gpuFrequencyViewModel = gpuFrequencyViewModel,
-                                sharedViewModel = sharedViewModel,
-                                activity = requireActivity() as MainActivity
-                            )
-                        } else {
-                            InitialSetupScreen(
-                                deviceViewModel = deviceViewModel
-                            )
-                        }
-                    }
-                }
-            }
+    // Load data when extracted (Preserves state across rotation/theme change)
+    LaunchedEffect(isFilesExtracted) {
+        if (isFilesExtracted) {
+            sharedViewModel.loadData()
         }
+    }
+
+    if (isFilesExtracted) {
+        GpuEditorMainContent(
+            deviceViewModel = deviceViewModel,
+            gpuFrequencyViewModel = gpuFrequencyViewModel,
+            sharedViewModel = sharedViewModel,
+            onOpenCurveEditor = onOpenCurveEditor,
+            onStartRepack = onStartRepack
+        )
+    } else {
+        InitialSetupScreen(
+            deviceViewModel = deviceViewModel
+        )
     }
 }
 
@@ -102,7 +73,7 @@ fun InitialSetupScreen(deviceViewModel: DeviceViewModel) {
 
     Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
         when (detectionState) {
-            is UiState.Loading -> LoadingScreen()
+            is UiState.Loading -> CircularProgressIndicator()
             is UiState.Error -> {
                 ErrorScreen(
                     message = (detectionState as UiState.Error).message.asString(),
@@ -117,19 +88,31 @@ fun InitialSetupScreen(deviceViewModel: DeviceViewModel) {
     }
 }
 
-@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
-fun GpuEditorMainScreen(
+fun GpuEditorMainContent(
     deviceViewModel: DeviceViewModel,
     gpuFrequencyViewModel: GpuFrequencyViewModel,
     sharedViewModel: SharedGpuViewModel,
-    activity: MainActivity
+    onOpenCurveEditor: (Int) -> Unit,
+    onStartRepack: () -> Unit
 ) {
     val isDirty by gpuFrequencyViewModel.isDirty.collectAsState()
     val canUndo by gpuFrequencyViewModel.canUndo.collectAsState()
     val canRedo by gpuFrequencyViewModel.canRedo.collectAsState()
     val history by gpuFrequencyViewModel.history.collectAsState()
     val currentMode by sharedViewModel.viewMode.collectAsState()
+
+    val selectedBinIndex by gpuFrequencyViewModel.selectedBinIndex.collectAsState()
+    val selectedLevelIndex by gpuFrequencyViewModel.selectedLevelIndex.collectAsState()
+
+    // Handle Back Press for Editor Navigation
+    BackHandler(enabled = selectedBinIndex != -1) {
+        if (selectedLevelIndex != -1) {
+            gpuFrequencyViewModel.selectedLevelIndex.value = -1
+        } else {
+            gpuFrequencyViewModel.selectedBinIndex.value = -1
+        }
+    }
 
     var activeSheet by remember { mutableStateOf(WorkbenchSheetType.NONE) }
     var manualSetupIndex by remember { mutableIntStateOf(-1) }
@@ -188,10 +171,9 @@ fun GpuEditorMainScreen(
             onShowHistory = { activeSheet = WorkbenchSheetType.HISTORY },
             onViewModeChanged = { mode -> sharedViewModel.switchViewMode(mode) },
             onChipsetClick = { activeSheet = WorkbenchSheetType.CHIPSET },
-            onFlashClick = { activity.startRepack() }
+            onFlashClick = { onStartRepack() }
         )
 
-        // Pure Compose Switching - No Fragments, No ID Mismatches
         Crossfade(targetState = currentMode, label = "ViewModeSwitch") { mode ->
             Box(modifier = Modifier.fillMaxSize()) {
                 when (mode) {
@@ -199,7 +181,7 @@ fun GpuEditorMainScreen(
                         sharedViewModel, 
                         deviceViewModel, 
                         gpuFrequencyViewModel,
-                        onOpenCurveEditor = { binId -> activity.openCurveEditor(binId) }
+                        onOpenCurveEditor = onOpenCurveEditor
                     )
                     SharedGpuViewModel.ViewMode.TEXT_ADVANCED -> UnifiedDtsEditorScreen(sharedViewModel)
                     SharedGpuViewModel.ViewMode.VISUAL_TREE -> VisualTreeContent(sharedViewModel)

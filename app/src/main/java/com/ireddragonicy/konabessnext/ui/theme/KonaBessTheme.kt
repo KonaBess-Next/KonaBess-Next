@@ -14,7 +14,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
-import com.ireddragonicy.konabessnext.ui.SettingsActivity
+import com.ireddragonicy.konabessnext.viewmodel.SettingsViewModel
 
 // Color definitions (approximated from XML/screenshots)
 private val PurplePrimary = Color(0xFF4F378B)
@@ -34,35 +34,25 @@ private val PinkContainer = Color(0xFFFFD9E2)
 @Composable
 fun KonaBessTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
+    isDynamicColor: Boolean = true,
+    colorPaletteId: Int = SettingsViewModel.PALETTE_DYNAMIC,
+    isAmoledMode: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val context = LocalContext.current
-    val prefs = remember { context.getSharedPreferences(SettingsActivity.PREFS_NAME, Context.MODE_PRIVATE) }
     
-    // Read preferences
-    val dynamicColor = prefs.getBoolean(SettingsActivity.KEY_DYNAMIC_COLOR, true)
-    // Default to Dynamic(0) if not set, but handle the case where it might be 0
-    val colorPalette = prefs.getInt(SettingsActivity.KEY_COLOR_PALETTE, SettingsActivity.PALETTE_DYNAMIC)
-    val amoledMode = prefs.getBoolean(SettingsActivity.KEY_AMOLED_MODE, false)
-    val savedTheme = prefs.getInt(SettingsActivity.KEY_THEME, SettingsActivity.THEME_SYSTEM)
-
-    // Determine effective dark mode
-    val effectiveDarkTheme = when (savedTheme) {
-        SettingsActivity.THEME_LIGHT -> false
-        SettingsActivity.THEME_DARK -> true
-        else -> darkTheme
-    }
+    val effectiveDarkTheme = darkTheme
 
     val colorScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
+        isDynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val scheme = if (effectiveDarkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-             if (effectiveDarkTheme && amoledMode) scheme.copy(background = Color.Black, surface = Color.Black) else scheme
+             if (effectiveDarkTheme && isAmoledMode) scheme.copy(background = Color.Black, surface = Color.Black) else scheme
         }
         else -> {
             // Manual Palettes
             val baseScheme = if (effectiveDarkTheme) {
-                when (colorPalette) {
-                    SettingsActivity.PALETTE_BLUE -> darkColorScheme(
+                when (colorPaletteId) {
+                    SettingsViewModel.PALETTE_BLUE -> darkColorScheme(
                         primary = Color(0xFF69C4FF),
                         onPrimary = Color(0xFF003258),
                         primaryContainer = Color(0xFF00497D),
@@ -73,7 +63,7 @@ fun KonaBessTheme(
                         onSecondaryContainer = Color(0xFFD1E4FF),
                         tertiary = Color(0xFF82CFFF)
                     )
-                    SettingsActivity.PALETTE_GREEN -> darkColorScheme(
+                    SettingsViewModel.PALETTE_GREEN -> darkColorScheme(
                         primary = Color(0xFF43E086),
                         onPrimary = Color(0xFF00381E),
                         primaryContainer = Color(0xFF00522F),
@@ -84,7 +74,7 @@ fun KonaBessTheme(
                         onSecondaryContainer = Color(0xFF5FFDA6),
                         tertiary = Color(0xFF43E086)
                     )
-                    SettingsActivity.PALETTE_PINK -> darkColorScheme(
+                    SettingsViewModel.PALETTE_PINK -> darkColorScheme(
                         primary = Color(0xFFFFB0C9),
                         onPrimary = Color(0xFF650033),
                         primaryContainer = Color(0xFF8D0049),
@@ -108,8 +98,8 @@ fun KonaBessTheme(
                     )
                 }
             } else {
-                 when (colorPalette) {
-                    SettingsActivity.PALETTE_BLUE -> lightColorScheme(
+                when (colorPaletteId) {
+                    SettingsViewModel.PALETTE_BLUE -> lightColorScheme(
                         primary = BluePrimary,
                         onPrimary = Color.White,
                         primaryContainer = BlueContainer,
@@ -120,7 +110,7 @@ fun KonaBessTheme(
                         onSecondaryContainer = Color(0xFF001D36),
                         tertiary = Color(0xFF57A9FF)
                     )
-                    SettingsActivity.PALETTE_GREEN -> lightColorScheme(
+                    SettingsViewModel.PALETTE_GREEN -> lightColorScheme(
                         primary = GreenPrimary,
                         onPrimary = Color.White,
                         primaryContainer = GreenContainer,
@@ -131,7 +121,7 @@ fun KonaBessTheme(
                         onSecondaryContainer = Color(0xFF002110),
                         tertiary = GreenPrimary
                     )
-                    SettingsActivity.PALETTE_PINK -> lightColorScheme(
+                    SettingsViewModel.PALETTE_PINK -> lightColorScheme(
                         primary = PinkPrimary,
                         onPrimary = Color.White,
                         primaryContainer = PinkContainer,
@@ -156,7 +146,7 @@ fun KonaBessTheme(
                 }
             }
             
-            if (effectiveDarkTheme && amoledMode) {
+            if (effectiveDarkTheme && isAmoledMode) {
                 baseScheme.copy(background = Color.Black, surface = Color.Black)
             } else {
                 baseScheme
@@ -176,7 +166,7 @@ fun KonaBessTheme(
                 
                 WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !effectiveDarkTheme
                 
-                if (effectiveDarkTheme && amoledMode) {
+                if (effectiveDarkTheme && isAmoledMode) {
                      @Suppress("DEPRECATION")
                      window.navigationBarColor = Color.Black.toArgb()
                      WindowCompat.getInsetsController(window, view).isAppearanceLightNavigationBars = false

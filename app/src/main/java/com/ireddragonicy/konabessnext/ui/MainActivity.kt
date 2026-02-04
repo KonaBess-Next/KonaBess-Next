@@ -1,291 +1,203 @@
 package com.ireddragonicy.konabessnext.ui
 
-import android.Manifest
-import android.app.Activity
-import android.content.Context
-import android.content.Intent
-import android.content.pm.PackageManager
-import android.os.Build
 import android.os.Bundle
-import android.widget.Toast
-import android.view.View
-import androidx.activity.OnBackPressedCallback
-import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
 import androidx.activity.viewModels
-import androidx.appcompat.app.AppCompatActivity
-import androidx.core.content.ContextCompat
-import androidx.fragment.app.Fragment
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.lifecycleScope
-import androidx.lifecycle.repeatOnLifecycle
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import androidx.core.view.WindowCompat
-import android.graphics.Color
-import androidx.viewpager2.widget.ViewPager2
-import androidx.viewpager2.widget.ViewPager2.OnPageChangeCallback
-import androidx.compose.ui.platform.ComposeView
-import androidx.compose.runtime.mutableIntStateOf
-import com.ireddragonicy.konabessnext.ui.compose.MainNavigationBar
-import com.ireddragonicy.konabessnext.ui.theme.KonaBessTheme
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
 import com.ireddragonicy.konabessnext.R
-import kotlinx.coroutines.launch
-import com.ireddragonicy.konabessnext.viewmodel.GpuFrequencyViewModel
-import com.ireddragonicy.konabessnext.ui.adapters.ViewPagerAdapter
-import com.ireddragonicy.konabessnext.ui.fragments.GpuFrequencyFragment
-import com.ireddragonicy.konabessnext.ui.fragments.ImportExportFragment
-import com.ireddragonicy.konabessnext.ui.fragments.SettingsFragment
+import com.ireddragonicy.konabessnext.ui.compose.MainNavigationBar
+import com.ireddragonicy.konabessnext.ui.navigation.AppDestinations
+import com.ireddragonicy.konabessnext.ui.navigation.AppNavGraph
+import com.ireddragonicy.konabessnext.ui.theme.KonaBessTheme
 import com.ireddragonicy.konabessnext.utils.LocaleUtil
-import com.ireddragonicy.konabessnext.viewmodel.DeviceViewModel
-import com.ireddragonicy.konabessnext.viewmodel.UiState
+import com.ireddragonicy.konabessnext.viewmodel.*
 import dagger.hilt.android.AndroidEntryPoint
-import java.util.ArrayList
-import java.util.Arrays
 
 @AndroidEntryPoint
-class MainActivity : AppCompatActivity() {
+class MainActivity : ComponentActivity() {
 
-    var gpuTableEditorBackCallback: OnBackPressedCallback? = null
+    private val deviceViewModel: DeviceViewModel by viewModels()
+    private val gpuFrequencyViewModel: GpuFrequencyViewModel by viewModels()
+    private val sharedViewModel: SharedGpuViewModel by viewModels()
+    private val settingsViewModel: SettingsViewModel by viewModels()
+    private val importExportViewModel: ImportExportViewModel by viewModels()
 
-    private lateinit var viewPager: ViewPager2
-    private lateinit var bottomNav: ComposeView
-    private var currentTab = mutableIntStateOf(0)
-    private var isPageChangeFromUser = true
-    private var gpuFrequencyFragment: GpuFrequencyFragment? = null
-
-    val deviceViewModel: DeviceViewModel by viewModels()
-    val gpuFrequencyViewModel: GpuFrequencyViewModel by viewModels()
-
-    private var pendingPermissionAction: (() -> Unit)? = null
-    private val requestPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { permissions ->
-        val allGranted = permissions.entries.all { it.value }
-        if (allGranted) {
-            pendingPermissionAction?.invoke()
-        } else {
-            Toast.makeText(this, R.string.storage_permission_failed, Toast.LENGTH_SHORT).show()
-        }
-        pendingPermissionAction = null
-    }
-
-    private var pendingFileAction: ((Intent?) -> Unit)? = null
-    private val filePickerLauncher = registerForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
-            pendingFileAction?.invoke(result.data)
-        }
-    }
-
-    override fun attachBaseContext(newBase: Context) {
+    override fun attachBaseContext(newBase: android.content.Context) {
         super.attachBaseContext(LocaleUtil.wrap(newBase))
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        WindowCompat.setDecorFitsSystemWindows(window, false)
-        @Suppress("DEPRECATION")
-        window.statusBarColor = Color.TRANSPARENT
-        
         super.onCreate(savedInstanceState)
-
-        try {
-            val pInfo = packageManager.getPackageInfo(packageName, 0)
-            title = "${getString(R.string.app_name)} ${pInfo.versionName}"
-        } catch (ignored: PackageManager.NameNotFoundException) {
-        }
+        WindowCompat.setDecorFitsSystemWindows(window, false)
 
         if (!deviceViewModel.isFilesExtracted.value) {
             deviceViewModel.detectChipset()
         }
 
-        showMainView()
-        observeRepackState()
-    }
+        setContent {
+            val uiState by settingsViewModel.uiState.collectAsState()
+            
+            // Calculate Theme Params
+            val darkTheme = when (uiState.themeMode) {
+                ThemeMode.LIGHT -> false
+                ThemeMode.DARK -> true
+                ThemeMode.SYSTEM -> isSystemInDarkTheme()
+            }
+            
+            val paletteId = when (uiState.colorPalette) {
+                "Blue" -> SettingsViewModel.PALETTE_BLUE
+                "Green" -> SettingsViewModel.PALETTE_GREEN
+                "Pink" -> SettingsViewModel.PALETTE_PINK
+                "Purple" -> SettingsViewModel.PALETTE_PURPLE
+                else -> SettingsViewModel.PALETTE_DYNAMIC
+            }
 
-    private fun observeRepackState() {
-        lifecycleScope.launch {
-            repeatOnLifecycle(Lifecycle.State.STARTED) {
-                deviceViewModel.repackState.collect { state ->
-                    when (state) {
-                        is UiState.Loading -> {
-                            showRepackLoading()
-                        }
-                        is UiState.Success -> {
-                            hideRepackLoading()
-                            MaterialAlertDialogBuilder(this@MainActivity)
-                                .setTitle(R.string.success)
-                                .setMessage(state.data.asString(this@MainActivity))
-                                .setPositiveButton(R.string.reboot) { _, _ -> deviceViewModel.reboot() }
-                                .setNegativeButton(R.string.ok, null)
-                                .show()
-                        }
-                        is UiState.Error -> {
-                            hideRepackLoading()
-                            MaterialAlertDialogBuilder(this@MainActivity)
-                                .setTitle(R.string.error)
-                                .setMessage(state.message.asString(this@MainActivity))
-                                .setPositiveButton(R.string.ok, null)
-                                .show()
-                        }
-                        null -> {}
+            KonaBessTheme(
+                darkTheme = darkTheme,
+                isDynamicColor = uiState.isDynamicColor,
+                colorPaletteId = paletteId,
+                isAmoledMode = uiState.isAmoledMode
+            ) {
+                val navController = rememberNavController()
+                val navBackStackEntry by navController.currentBackStackEntryAsState()
+                val currentRoute = navBackStackEntry?.destination?.route
+
+                val selectedItem = remember(currentRoute) {
+                    when (currentRoute) {
+                        AppDestinations.HOME -> 0
+                        AppDestinations.IMPORT_EXPORT -> 1
+                        AppDestinations.SETTINGS -> 2
+                        else -> 0
                     }
                 }
-            }
-        }
-    }
 
-    private var repackDialog: androidx.appcompat.app.AlertDialog? = null
+                // Show BottomBar only on main screens
+                val showBottomBar = currentRoute in listOf(
+                    AppDestinations.HOME,
+                    AppDestinations.IMPORT_EXPORT,
+                    AppDestinations.SETTINGS
+                ) || currentRoute?.startsWith("curve_editor") == true
 
-    private fun showRepackLoading() {
-        if (repackDialog == null) {
-            repackDialog = MaterialAlertDialogBuilder(this)
-                .setTitle(R.string.processing)
-                .setMessage("Repacking and Flashing...")
-                .setCancelable(false)
-                .create()
-        }
-        repackDialog?.show()
-    }
+                val snackbarHostState = remember { SnackbarHostState() }
 
-    private fun hideRepackLoading() {
-        repackDialog?.dismiss()
-    }
-
-    fun startRepack() {
-        deviceViewModel.packAndFlash(this)
-    }
-
-    fun openRawDtsEditor() {
-        val intent = Intent(this, RawDtsEditorActivity::class.java)
-        startActivity(intent)
-    }
-
-    fun openCurveEditor(binId: Int) {
-        val fragment = com.ireddragonicy.konabessnext.ui.fragments.GpuCurveEditorFragment()
-        val args = Bundle()
-        args.putInt("binId", binId)
-        fragment.arguments = args
-
-        supportFragmentManager.beginTransaction()
-            .replace(android.R.id.content, fragment)
-            .addToBackStack("curve_editor")
-            .commit()
-    }
-
-    fun runWithStoragePermission(action: () -> Unit) {
-        pendingPermissionAction = action
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            action()
-            pendingPermissionAction = null
-        } else {
-            val permissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE, Manifest.permission.READ_EXTERNAL_STORAGE)
-            } else {
-                arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE)
-            }
-
-            val needed = permissions.any {
-                ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
-            }
-
-            if (needed) {
-                requestPermissionLauncher.launch(permissions)
-            } else {
-                action()
-                pendingPermissionAction = null
-            }
-        }
-    }
-
-    fun runWithFilePath(callback: (Intent?) -> Unit) {
-        pendingFileAction = callback
-        val intent = Intent(Intent.ACTION_GET_CONTENT)
-        intent.type = "*/*"
-        intent.addCategory(Intent.CATEGORY_OPENABLE)
-        filePickerLauncher.launch(intent)
-    }
-
-    private fun showMainView() {
-        setContentView(R.layout.activity_main)
-
-        viewPager = findViewById(R.id.view_pager)
-        bottomNav = findViewById(R.id.compose_bottom_nav)
-
-        if (gpuTableEditorBackCallback == null) {
-            gpuTableEditorBackCallback = object : OnBackPressedCallback(false) {
-                override fun handleOnBackPressed() {
-                    val binIdx = gpuFrequencyViewModel.selectedBinIndex.value
-                    if (binIdx != -1) {
-                        val lvlIdx = gpuFrequencyViewModel.selectedLevelIndex.value
-                        if (lvlIdx != -1) {
-                            gpuFrequencyViewModel.selectedLevelIndex.value = -1
-                        } else {
-                            gpuFrequencyViewModel.selectedBinIndex.value = -1
+                Scaffold(
+                    snackbarHost = { SnackbarHost(snackbarHostState) },
+                    bottomBar = {
+                        AnimatedVisibility(visible = showBottomBar) {
+                            MainNavigationBar(
+                                selectedItem = selectedItem,
+                                onItemSelected = { index ->
+                                    val route = when (index) {
+                                        0 -> AppDestinations.HOME
+                                        1 -> AppDestinations.IMPORT_EXPORT
+                                        2 -> AppDestinations.SETTINGS
+                                        else -> AppDestinations.HOME
+                                    }
+                                    if (currentRoute != route) {
+                                        navController.navigate(route) {
+                                            popUpTo(AppDestinations.HOME) {
+                                                // saveState = true
+                                            }
+                                            launchSingleTop = true
+                                            // restoreState = true
+                                        }
+                                    }
+                                }
+                            )
                         }
-                    } else {
-                        isEnabled = false
-                        onBackPressedDispatcher.onBackPressed()
-                        if (viewPager.currentItem == 0) {
-                            isEnabled = true
+                    }
+                ) { innerPadding ->
+                    val context = LocalContext.current
+                    AppNavGraph(
+                        navController = navController,
+                        deviceViewModel = deviceViewModel,
+                        gpuFrequencyViewModel = gpuFrequencyViewModel,
+                        sharedViewModel = sharedViewModel,
+                        settingsViewModel = settingsViewModel,
+                        importExportViewModel = importExportViewModel,
+                        snackbarHostState = snackbarHostState,
+                        onStartRepack = { deviceViewModel.packAndFlash(this) },
+                        onLanguageChange = { lang ->
+                            settingsViewModel.setLanguage(lang)
+                            (context as? android.app.Activity)?.recreate()
+                        },
+                        modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding())
+                    )
+                }
+
+                RepackStatusScreen(deviceViewModel)
+            }
+        }
+    }
+
+    @Composable
+    private fun RepackStatusScreen(deviceViewModel: DeviceViewModel) {
+        val repackState by deviceViewModel.repackState.collectAsState(initial = null)
+
+        when (repackState) {
+            is UiState.Loading -> {
+                Dialog(onDismissRequest = {}) {
+                    Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surface) {
+                        Row(
+                            modifier = Modifier.padding(24.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            CircularProgressIndicator()
+                            Spacer(Modifier.width(16.dp))
+                            Text(stringResource(R.string.processing))
                         }
                     }
                 }
             }
-            onBackPressedDispatcher.addCallback(this, gpuTableEditorBackCallback!!)
-            gpuTableEditorBackCallback?.isEnabled = (viewPager.currentItem == 0)
-        } else {
-            gpuTableEditorBackCallback?.isEnabled = (viewPager.currentItem == 0)
-        }
-
-        setupViewPager()
-        setupBottomNavigation()
-    }
-
-    private fun setupViewPager() {
-        gpuFrequencyFragment = GpuFrequencyFragment()
-        val fragments = ArrayList<Fragment>(
-            Arrays.asList(
-                gpuFrequencyFragment!!,
-                ImportExportFragment(),
-                SettingsFragment()
-            )
-        )
-        val adapter = ViewPagerAdapter(this, fragments)
-        viewPager.adapter = adapter
-
-        viewPager.registerOnPageChangeCallback(object : OnPageChangeCallback() {
-            override fun onPageSelected(position: Int) {
-                super.onPageSelected(position)
-                gpuTableEditorBackCallback?.isEnabled = (position == 0)
-                if (isPageChangeFromUser) {
-                    currentTab.intValue = position
-                }
-            }
-        })
-    }
-
-    private fun setupBottomNavigation() {
-        bottomNav.setContent {
-            KonaBessTheme {
-                MainNavigationBar(
-                    selectedItem = currentTab.intValue,
-                    onItemSelected = { index ->
-                        isPageChangeFromUser = false
-                        viewPager.setCurrentItem(index, true)
-                        currentTab.intValue = index
-                        isPageChangeFromUser = true
+            is UiState.Success -> {
+                AlertDialog(
+                    onDismissRequest = { /* Prevent dismiss? or allow? */ },
+                    title = { Text(stringResource(R.string.success)) },
+                    text = { Text((repackState as UiState.Success).data.asString()) },
+                    confirmButton = {
+                        TextButton(onClick = { deviceViewModel.reboot() }) {
+                            Text(stringResource(R.string.reboot))
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { /* Dismiss logic needed in VM or ignore */ }) {
+                            Text(stringResource(R.string.ok))
+                        }
                     }
                 )
             }
+            is UiState.Error -> {
+                AlertDialog(
+                    onDismissRequest = { /* Dismiss logic needed */ },
+                    title = { Text(stringResource(R.string.error)) },
+                    text = { Text((repackState as UiState.Error).message.asString()) },
+                    confirmButton = {
+                        TextButton(onClick = { /* Dismiss */ }) {
+                            Text(stringResource(R.string.ok))
+                        }
+                    }
+                )
+            }
+            else -> {}
         }
-    }
-
-    fun notifyGpuTableChanged() {
-        // Reactive UI logic handles this via sharedViewModel loadData
-    }
-
-    fun notifyPreparationSuccess() {
-        notifyGpuTableChanged()
     }
 }

@@ -52,8 +52,10 @@ open class GpuRepository @Inject constructor(
         .stateIn(CoroutineScope(Dispatchers.Main), SharingStarted.Lazily, emptyList())
 
     // --- History Management (Unified) ---
-    private val undoStack: Deque<List<String>> = ArrayDeque()
-    private val redoStack: Deque<List<String>> = ArrayDeque()
+    private data class HistoryItem(val lines: List<String>, val description: String)
+    
+    private val undoStack: Deque<HistoryItem> = ArrayDeque()
+    private val redoStack: Deque<HistoryItem> = ArrayDeque()
     private val MAX_HISTORY = 50
 
     private val _canUndo = MutableStateFlow(false)
@@ -64,6 +66,14 @@ open class GpuRepository @Inject constructor(
 
     private val _isDirty = MutableStateFlow(false)
     val isDirty: StateFlow<Boolean> = _isDirty.asStateFlow()
+    
+    // Exposed History List (Reverse order for UI: Newest first)
+    private val _historyList = MutableStateFlow<List<String>>(emptyList())
+    val history: StateFlow<List<String>> = _historyList.asStateFlow()
+    
+    private fun refreshHistoryList() {
+        _historyList.value = undoStack.map { it.description }.reversed()
+    }
 
     private var initialContentHash: Int = 0
 
@@ -80,6 +90,7 @@ open class GpuRepository @Inject constructor(
         undoStack.clear()
         redoStack.clear()
         updateHistoryFlags()
+        refreshHistoryList()
         
         // Set Truth
         _dtsLines.value = lines
@@ -100,11 +111,11 @@ open class GpuRepository @Inject constructor(
      * The Universal Update Method.
      * All Views (Text, GUI, Tree) call this to modify data.
      */
-    fun updateContent(newLines: List<String>, addToHistory: Boolean = true) {
+    fun updateContent(newLines: List<String>, description: String = "Edit", addToHistory: Boolean = true) {
         if (newLines == _dtsLines.value) return
 
         if (addToHistory) {
-            snapshot()
+            snapshot(description)
         }
         
         _dtsLines.value = newLines
@@ -119,7 +130,7 @@ open class GpuRepository @Inject constructor(
      * Efficiently updates a specific parameter in the text without regenerating the whole file.
      * This keeps comments and formatting intact.
      */
-    fun updateParameterInBin(binIndex: Int, levelIndex: Int, paramKey: String, newValue: String) {
+    fun updateParameterInBin(binIndex: Int, levelIndex: Int, paramKey: String, newValue: String, historyDesc: String? = null) {
         val currentLines = ArrayList(_dtsLines.value)
         val range = findLevelLineRange(currentLines, binIndex, levelIndex) ?: return
         
@@ -129,13 +140,15 @@ open class GpuRepository @Inject constructor(
                 // regex replace value inside <...>
                 val updatedLine = line.replace(Regex("<[^>]+>"), "<$newValue>")
                 currentLines[i] = updatedLine
-                updateContent(currentLines)
+                
+                val desc = historyDesc ?: "Update $paramKey to $newValue (Bin $binIndex, Lvl $levelIndex)"
+                updateContent(currentLines, desc)
                 return
             }
         }
     }
 
-    fun batchUpdateParameters(updates: List<ParameterUpdate>) {
+    fun batchUpdateParameters(updates: List<ParameterUpdate>, description: String = "Batch Update") {
         val currentLines = ArrayList(_dtsLines.value)
         var dirty = false
         
@@ -157,12 +170,12 @@ open class GpuRepository @Inject constructor(
         }
         
         if (dirty) {
-            updateContent(currentLines)
+            updateContent(currentLines, description)
         }
     }
     
     fun applySnapshot(content: String) {
-        updateContent(content.split("\n"))
+        updateContent(content.split("\n"), "Applied external snapshot")
     }
 
     fun updateOpps(newOpps: List<Opp>) {
@@ -205,8 +218,20 @@ open class GpuRepository @Inject constructor(
             val newLines = newBlock.toString().split("\n")
             validLines.addAll(startIdx, newLines)
             
-            updateContent(validLines)
+            updateContent(validLines, "Updated OPP Table")
         }
+    }
+
+    fun deleteLevel(binIndex: Int, levelIndex: Int) {
+        val currentLines = ArrayList(_dtsLines.value)
+        val range = findLevelLineRange(currentLines, binIndex, levelIndex) ?: return
+        
+        // Remove range. second is inclusive, so count = second - first + 1
+        val removalCount = range.second - range.first + 1
+        for (i in 0 until removalCount) {
+             currentLines.removeAt(range.first)
+        }
+        updateContent(currentLines, "Deleted Level $levelIndex from Bin $binIndex")
     }
     
     fun importTable(lines: List<String>) {
@@ -232,7 +257,7 @@ open class GpuRepository @Inject constructor(
                 val removalCount = endIdx - startIdx + 1
                 for (k in 0 until removalCount) validLines.removeAt(startIdx)
                 validLines.addAll(startIdx, lines)
-                updateContent(validLines)
+                updateContent(validLines, "Imported Frequency Table")
             }
         }
     }
@@ -258,7 +283,7 @@ open class GpuRepository @Inject constructor(
                 val removalCount = endIdx - startIdx + 1
                 for (k in 0 until removalCount) validLines.removeAt(startIdx)
                 validLines.addAll(startIdx, lines)
-                updateContent(validLines)
+                updateContent(validLines, "Imported Voltage Table")
             }
         }
     }
@@ -364,39 +389,44 @@ open class GpuRepository @Inject constructor(
 
     // --- History Logic ---
 
-    private fun snapshot() {
+    private fun snapshot(description: String) {
         val current = _dtsLines.value
-        undoStack.push(ArrayList(current))
+        undoStack.push(HistoryItem(ArrayList(current), description))
         if (undoStack.size > MAX_HISTORY) undoStack.removeLast()
         redoStack.clear()
         updateHistoryFlags()
+        refreshHistoryList()
     }
 
     fun undo() {
         if (undoStack.isEmpty()) return
         val current = _dtsLines.value
-        redoStack.push(current)
-        val prev = undoStack.pop()
-        updateContent(prev, addToHistory = false)
+        val historyItem = undoStack.pop()
+        
+        // Push current text to Redo Stack
+        // Description for redo? It's "Undo 'XYZ'" effectively.
+        // We'll store the 'undo' action as a Redo item. 
+        redoStack.push(HistoryItem(current, "Undo of '${historyItem.description}'"))
+        
+        updateContent(historyItem.lines, addToHistory = false)
         updateHistoryFlags()
+        refreshHistoryList()
     }
 
     fun redo() {
         if (redoStack.isEmpty()) return
         val current = _dtsLines.value
-        undoStack.push(current)
-        val next = redoStack.pop()
-        updateContent(next, addToHistory = false)
+        val historyItem = redoStack.pop()
+        
+        undoStack.push(HistoryItem(current, "Redo of '${historyItem.description}'"))
+        
+        updateContent(historyItem.lines, addToHistory = false)
         updateHistoryFlags()
+        refreshHistoryList()
     }
 
     private fun updateHistoryFlags() {
         _canUndo.value = undoStack.isNotEmpty()
         _canRedo.value = redoStack.isNotEmpty()
     }
-    
-    // For UI compatibility
-    val history: StateFlow<List<String>> = _canUndo.map { 
-        List(undoStack.size) { "Edit Step $it" } 
-    }.stateIn(CoroutineScope(Dispatchers.Main), SharingStarted.Lazily, emptyList())
 }

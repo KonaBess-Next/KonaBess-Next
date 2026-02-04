@@ -12,6 +12,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import com.ireddragonicy.konabessnext.BuildConfig
 import com.ireddragonicy.konabessnext.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.DarkMode
@@ -91,20 +92,24 @@ fun SettingsScreen(
     val amoledTitle = androidx.compose.ui.res.stringResource(R.string.palette_amoled)
 
     // Updater Strings
-    val updatesHeader = "Updates"
-    val channelTitle = "Update Channel"
-    val channelStable = "Stable"
-    val channelPrerelease = "Prerelease"
-    val channelDesc = if (updateChannel == "prerelease") "Get early access to new features" else "Stable releases only"
-    val checkUpdatesTitle = "Check for Updates"
-    val checkUpdatesDesc = if (updateStatus is UpdateStatus.Checking) "Checking..." else "Check for the latest version"
+    val headerAppearance = stringResource(R.string.header_appearance)
+    val headerLocalization = stringResource(R.string.header_localization)
+    val headerBehavior = stringResource(R.string.header_behavior)
+    val headerAbout = stringResource(R.string.header_about)
+    
+    val channelTitle = stringResource(R.string.update_channel)
+    val channelStable = stringResource(R.string.channel_stable)
+    val channelPrerelease = stringResource(R.string.channel_prerelease)
+    val channelDesc = if (updateChannel == "prerelease") stringResource(R.string.channel_desc_prerelease) else stringResource(R.string.channel_desc_stable)
+    val checkUpdatesTitle = stringResource(R.string.check_updates)
+    val checkUpdatesDesc = if (updateStatus is UpdateStatus.Checking) stringResource(R.string.checking_updates) else stringResource(R.string.check_updates_desc)
 
     val context = LocalContext.current
 
     val settingsItems = remember(currentTheme, isDynamicColor, currentColorPalette, currentLanguage, currentFreqUnit, isAutoSave, isAmoledMode, themeTitle, updateChannel, updateStatus) {
         buildList {
             // Appearance section
-            add(SettingsListItem.Header("Appearance"))
+            add(SettingsListItem.Header(headerAppearance))
             add(SettingsListItem.Setting(SettingItem.Clickable(Icons.Rounded.DarkMode, themeTitle, themeDesc, currentTheme)))
             add(SettingsListItem.Setting(SettingItem.Toggle(
                 Icons.Rounded.Contrast, // Pure Amoled - Contrast icon fits well
@@ -112,98 +117,88 @@ fun SettingsScreen(
                 "Pure black background in Dark Mode", 
                 isAmoledMode
             )))
-            add(SettingsListItem.Setting(SettingItem.Toggle(
-                Icons.Rounded.Palette, // Dynamic Color - Palette icon
-                dynamicColorTitle, 
-                dynamicColorDesc, 
-                isDynamicColor
-            )))
-            if (!isDynamicColor) {
-                add(SettingsListItem.Setting(SettingItem.Clickable(Icons.Rounded.Palette, paletteTitle, paletteDesc, currentColorPalette)))
-            }
+            add(SettingsListItem.Setting(SettingItem.Clickable(Icons.Rounded.Palette, paletteTitle, paletteDesc, currentColorPalette)))
 
             // Localization section
-            add(SettingsListItem.Header("Localization"))
+            add(SettingsListItem.Header(headerLocalization))
             add(SettingsListItem.Setting(SettingItem.Clickable(Icons.Rounded.Translate, langTitle, langDesc, currentLanguage)))
             add(SettingsListItem.Setting(SettingItem.Clickable(Icons.Rounded.Speed, freqTitle, freqDesc, currentFreqUnit)))
 
             // Behavior section
-            add(SettingsListItem.Header("Behavior"))
+            add(SettingsListItem.Header(headerBehavior))
             add(SettingsListItem.Setting(SettingItem.Toggle(Icons.Rounded.Save, autoSaveTitle, autoSaveDesc, isAutoSave)))
 
             // About section
-            add(SettingsListItem.Header("About"))
+            add(SettingsListItem.Header(headerAbout))
             add(SettingsListItem.Setting(SettingItem.Clickable(Icons.Rounded.SystemUpdate, channelTitle, channelDesc, if (updateChannel == "prerelease") channelPrerelease else channelStable)))
             add(SettingsListItem.Setting(SettingItem.Clickable(Icons.Rounded.SystemUpdate, checkUpdatesTitle, checkUpdatesDesc, "")))
             add(SettingsListItem.Setting(SettingItem.Clickable(Icons.Rounded.Info, helpTitle, versionTitle, "")))
         }
     }
 
-    com.ireddragonicy.konabessnext.ui.theme.KonaBessTheme {
-        Surface(
-            modifier = modifier.fillMaxSize(),
-            color = MaterialTheme.colorScheme.background
+    Surface(
+        modifier = modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.background
+    ) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding(),
+            contentPadding = PaddingValues(vertical = 8.dp)
         ) {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .statusBarsPadding(),
-                contentPadding = PaddingValues(vertical = 8.dp)
-            ) {
-                items(settingsItems) { listItem ->
-                    when (listItem) {
-                        is SettingsListItem.Header -> {
-                            SettingsSectionHeader(title = listItem.title)
-                        }
-                        is SettingsListItem.Setting -> {
-                            when (val item = listItem.item) {
-                                is SettingItem.Clickable -> {
-                                    val iconPainter = if (item.icon is Int) painterResource(item.icon) else rememberVectorPainter(item.icon as ImageVector)
-                                    SettingsClickableItem(
-                                        icon = iconPainter,
-                                        title = item.title,
-                                        subtitle = item.subtitle,
-                                        currentValue = item.currentValue,
-                                        onClick = {
-                                            when (item.title) {
-                                                themeTitle -> onThemeClick()
-                                                paletteTitle -> onColorPaletteClick()
-                                                langTitle -> onLanguageClick()
-                                                freqTitle -> onFreqUnitClick()
-                                                helpTitle -> onHelpClick()
-                                                channelTitle -> onUpdateChannelChange(if (updateChannel == "stable") "prerelease" else "stable")
-                                                checkUpdatesTitle -> onCheckForUpdates()
-                                            }
+            items(settingsItems) { listItem ->
+                when (listItem) {
+                    is SettingsListItem.Header -> {
+                        SettingsSectionHeader(title = listItem.title)
+                    }
+                    is SettingsListItem.Setting -> {
+                        when (val item = listItem.item) {
+                            is SettingItem.Clickable -> {
+                                val iconPainter = if (item.icon is Int) painterResource(item.icon) else rememberVectorPainter(item.icon as ImageVector)
+                                SettingsClickableItem(
+                                    icon = iconPainter,
+                                    title = item.title,
+                                    subtitle = item.subtitle,
+                                    currentValue = item.currentValue,
+                                    onClick = {
+                                        when (item.title) {
+                                            themeTitle -> onThemeClick()
+                                            paletteTitle -> onColorPaletteClick()
+                                            langTitle -> onLanguageClick()
+                                            freqTitle -> onFreqUnitClick()
+                                            helpTitle -> onHelpClick()
+                                            channelTitle -> onUpdateChannelChange(if (updateChannel == "stable") "prerelease" else "stable")
+                                            checkUpdatesTitle -> onCheckForUpdates()
                                         }
-                                    )
-                                }
-                                        is SettingItem.Toggle -> {
-                                    val iconPainter = if (item.icon is Int) painterResource(item.icon) else rememberVectorPainter(item.icon as ImageVector)
-                                    SettingsToggleItem(
-                                        icon = iconPainter,
-                                        title = item.title,
-                                        subtitle = item.subtitle,
-                                        isChecked = item.isChecked,
-                                        onToggle = {
-                                            when (item.title) {
-                                                dynamicColorTitle -> onDynamicColorToggle()
-                                                autoSaveTitle -> onAutoSaveToggle()
-                                                amoledTitle -> onAmoledModeToggle()
-                                            }
+                                    }
+                                )
+                            }
+                                    is SettingItem.Toggle -> {
+                                val iconPainter = if (item.icon is Int) painterResource(item.icon) else rememberVectorPainter(item.icon as ImageVector)
+                                SettingsToggleItem(
+                                    icon = iconPainter,
+                                    title = item.title,
+                                    subtitle = item.subtitle,
+                                    isChecked = item.isChecked,
+                                    onToggle = {
+                                        when (item.title) {
+                                            dynamicColorTitle -> onDynamicColorToggle()
+                                            autoSaveTitle -> onAutoSaveToggle()
+                                            amoledTitle -> onAmoledModeToggle()
                                         }
-                                    )
-                                }
+                                    }
+                                )
                             }
                         }
                     }
                 }
-                
+            }
+            
 
-                
-                // Bottom spacer for navigation bar
-                item {
-                    Spacer(Modifier.height(88.dp))
-                }
+            
+            // Bottom spacer for navigation bar
+            item {
+                Spacer(Modifier.height(88.dp))
             }
         }
     }
@@ -214,7 +209,7 @@ fun SettingsScreen(
         val release = updateStatus.release
         AlertDialog(
             onDismissRequest = { onClearUpdateStatus() },
-            title = { Text("Update Available (${release.tagName})") },
+            title = { Text(stringResource(R.string.update_available_title, release.tagName)) },
             text = {
                 Column {
                     Text(release.body.take(500) + if(release.body.length > 500) "..." else "")
@@ -226,12 +221,12 @@ fun SettingsScreen(
                     val intent = Intent(Intent.ACTION_VIEW, Uri.parse(release.htmlUrl))
                     context.startActivity(intent)
                 }) {
-                    Text("Download")
+                    Text(stringResource(R.string.btn_download))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { onClearUpdateStatus() }) {
-                    Text("Later")
+                    Text(stringResource(R.string.btn_later))
                 }
             }
         )
@@ -240,15 +235,17 @@ fun SettingsScreen(
     // Error Snackbar/Toast Handling
     if (updateStatus is UpdateStatus.Error) {
         val msg = updateStatus.message
+        val toastMsg = stringResource(R.string.toast_update_error, msg)
         LaunchedEffect(msg) {
-            android.widget.Toast.makeText(context, "Update check failed: $msg", android.widget.Toast.LENGTH_LONG).show()
+            android.widget.Toast.makeText(context, toastMsg, android.widget.Toast.LENGTH_LONG).show()
             onClearUpdateStatus()
         }
     }
 
     if (updateStatus is UpdateStatus.NoUpdate) {
+        val toastMsg = stringResource(R.string.toast_no_updates)
         LaunchedEffect(updateStatus) { // Key on UpdateStatus
-            android.widget.Toast.makeText(context, "No updates available", android.widget.Toast.LENGTH_SHORT).show()
+            android.widget.Toast.makeText(context, toastMsg, android.widget.Toast.LENGTH_SHORT).show()
             onClearUpdateStatus()
         }
     }

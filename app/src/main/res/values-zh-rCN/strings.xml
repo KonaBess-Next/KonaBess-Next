@@ -370,4 +370,25 @@
     <string name="unsaved_changes_title">未保存的更改</string>
     <string name="visual_view">可视化视图</string>
     <string name="export_raw_dts">导出原始 DTS</string>
+
+
+    <!-- Settings Headers & Updates -->
+    <string name="header_appearance">外观</string>
+    <string name="header_localization">本地化</string>
+    <string name="header_behavior">行为</string>
+    <string name="header_about">关于</string>
+    
+    <string name="update_channel">更新通道</string>
+    <string name="channel_stable">正式版</string>
+    <string name="channel_prerelease">预览版</string>
+    <string name="channel_desc_stable">仅获取稳定版本</string>
+    <string name="channel_desc_prerelease">抢先体验新功能</string>
+    <string name="check_updates">检查更新</string>
+    <string name="check_updates_desc">检查是否有新版本</string>
+    <string name="checking_updates">正在检查...</string>
+    <string name="update_available_title">发现新版本 (%1$s)</string>
+    <string name="btn_download">下载</string>
+    <string name="btn_later">稍后</string>
+    <string name="toast_no_updates">当前已是最新版本</string>
+    <string name="toast_update_error">检查更新失败：%1$s</string>
 </resources>

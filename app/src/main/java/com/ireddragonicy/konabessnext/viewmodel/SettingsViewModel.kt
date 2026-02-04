@@ -1,151 +1,202 @@
 package com.ireddragonicy.konabessnext.viewmodel
 
 import android.content.Context
-import androidx.lifecycle.LiveData
-import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.ireddragonicy.konabessnext.ui.SettingsActivity
+import com.ireddragonicy.konabessnext.R
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONArray
 import org.json.JSONObject
+import javax.inject.Inject
 
-/**
- * ViewModel for Settings management.
- * Provides observable settings state.
- */
-class SettingsViewModel : ViewModel() {
+data class SettingsUiState(
+    val themeMode: ThemeMode = ThemeMode.SYSTEM,
+    val language: String = "en",
+    val frequencyUnit: String = "MHz",
+    val autoSave: Boolean = false,
+    val colorPalette: String = "Green",
+    val isDynamicColor: Boolean = true,
+    val isAmoledMode: Boolean = false,
+    val updateChannel: String = "stable",
+    val updateStatus: UpdateStatus = UpdateStatus.Idle
+)
 
-    private val _themeMode = MutableLiveData<Int>()
-    private val _language = MutableLiveData<String>()
-    private val _frequencyUnit = MutableLiveData<Int>()
-    private val _autoSaveEnabled = MutableLiveData<Boolean>()
-    private val _colorPalette = MutableLiveData<Int>()
-    private val _dynamicColorEnabled = MutableLiveData<Boolean>()
+enum class ThemeMode { SYSTEM, LIGHT, DARK }
 
-    // Events
-    private val _restartRequired = MutableLiveData<Event<Boolean>>()
+@HiltViewModel
+class SettingsViewModel @Inject constructor(
+    private val repository: com.ireddragonicy.konabessnext.repository.SettingsRepository
+) : ViewModel() {
 
-    // ========================================================================
-    // LiveData Getters
-    // ========================================================================
+    private val _uiState = MutableStateFlow(SettingsUiState())
+    val uiState = _uiState.asStateFlow()
+    
+    // Updater
+    val updateStatus = _uiState.asStateFlow() 
 
-    val themeMode: LiveData<Int> get() = _themeMode
-    val language: LiveData<String> get() = _language
-    val frequencyUnit: LiveData<Int> get() = _frequencyUnit
-    val autoSaveEnabled: LiveData<Boolean> get() = _autoSaveEnabled
-    val colorPalette: LiveData<Int> get() = _colorPalette
-    val dynamicColorEnabled: LiveData<Boolean> get() = _dynamicColorEnabled
-    val restartRequired: LiveData<Event<Boolean>> get() = _restartRequired
+    companion object {
+        const val PREFS_NAME = "KonaBessSettings"
+        const val KEY_LANGUAGE = "language"
+        const val KEY_FREQ_UNIT = "freq_unit"
+        const val KEY_THEME = "theme"
+        const val KEY_COLOR_PALETTE = "color_palette"
+        const val KEY_AUTO_SAVE_GPU_TABLE = "auto_save_gpu_table"
+        const val KEY_DYNAMIC_COLOR = "dynamic_color"
+        const val KEY_AMOLED_MODE = "amoled_mode"
 
-    // ========================================================================
-    // Load Settings
-    // ========================================================================
+        const val FREQ_UNIT_HZ = 0
+        const val FREQ_UNIT_MHZ = 1
+        const val FREQ_UNIT_GHZ = 2
 
-    fun loadSettings(context: Context) {
-        val prefs = context.getSharedPreferences(SettingsActivity.PREFS_NAME, Context.MODE_PRIVATE)
+        const val THEME_SYSTEM = 0
+        const val THEME_LIGHT = 1
+        const val THEME_DARK = 2
 
-        _themeMode.value = prefs.getInt(SettingsActivity.KEY_THEME, SettingsActivity.THEME_SYSTEM)
-        _language.value = prefs.getString(SettingsActivity.KEY_LANGUAGE, "system")
-        _frequencyUnit.value = prefs.getInt(SettingsActivity.KEY_FREQ_UNIT, 1) // Default MHz
-        _autoSaveEnabled.value = prefs.getBoolean(SettingsActivity.KEY_AUTO_SAVE_GPU_TABLE, false)
-        _colorPalette.value = prefs.getInt(SettingsActivity.KEY_COLOR_PALETTE, 0)
-        _dynamicColorEnabled.value = prefs.getBoolean(SettingsActivity.KEY_DYNAMIC_COLOR, false)
+        const val PALETTE_DYNAMIC = 0
+        const val PALETTE_PURPLE = 1
+        const val PALETTE_BLUE = 2
+        const val PALETTE_GREEN = 3
+        const val PALETTE_PINK = 4
+        
+        const val LANGUAGE_ENGLISH = "en"
+        const val LANGUAGE_GERMAN = "de"
+        const val LANGUAGE_CHINESE = "zh-rCN"
+        const val LANGUAGE_INDONESIAN = "in"
     }
 
-    // ========================================================================
-    // Update Settings
-    // ========================================================================
-
-    fun setThemeMode(context: Context, theme: Int) {
-        val prefs = context.getSharedPreferences(SettingsActivity.PREFS_NAME, Context.MODE_PRIVATE)
-        prefs.edit().putInt(SettingsActivity.KEY_THEME, theme).apply()
-        _themeMode.value = theme
-        _restartRequired.value = Event(true)
+    init {
+        loadSettings()
+        checkForUpdates()
     }
 
-    fun setLanguage(context: Context, lang: String) {
-        val prefs = context.getSharedPreferences(SettingsActivity.PREFS_NAME, Context.MODE_PRIVATE)
-        prefs.edit().putString(SettingsActivity.KEY_LANGUAGE, lang).apply()
-        _language.value = lang
-        _restartRequired.value = Event(true)
+    private fun loadSettings() {
+        // Theme
+        val themeMode = when (repository.getTheme()) {
+            THEME_LIGHT -> ThemeMode.LIGHT
+            THEME_DARK -> ThemeMode.DARK
+            else -> ThemeMode.SYSTEM
+        }
+
+        // Language
+        val language = repository.getLanguage()
+
+        // Freq Unit
+        val freqUnitInt = repository.getFrequencyUnit()
+        val freqUnit = when(freqUnitInt) {
+            FREQ_UNIT_HZ -> "Hz"
+            FREQ_UNIT_GHZ -> "GHz"
+            else -> "MHz"
+        }
+
+        // Auto Save
+        val autoSave = repository.isAutoSave()
+        
+        // Customization
+        val dynamicColor = repository.isDynamicColor()
+        val amoledMode = repository.isAmoledMode()
+        val paletteInt = repository.getColorPalette()
+        val paletteName = getPaletteName(paletteInt)
+        val updateChannel = repository.getUpdateChannel()
+
+        _uiState.update {
+            it.copy(
+                themeMode = themeMode,
+                language = language,
+                frequencyUnit = freqUnit,
+                autoSave = autoSave,
+                isDynamicColor = dynamicColor,
+                isAmoledMode = amoledMode,
+                colorPalette = paletteName,
+                updateChannel = updateChannel
+            )
+        }
+    }
+    
+    // Actions
+    fun cycleThemeMode() {
+        val nextMode = when (_uiState.value.themeMode) {
+            ThemeMode.SYSTEM -> ThemeMode.LIGHT
+            ThemeMode.LIGHT -> ThemeMode.DARK
+            ThemeMode.DARK -> ThemeMode.SYSTEM
+        }
+        
+        val themeInt = when (nextMode) {
+            ThemeMode.LIGHT -> THEME_LIGHT
+            ThemeMode.DARK -> THEME_DARK
+            ThemeMode.SYSTEM -> THEME_SYSTEM
+        }
+        
+        repository.setTheme(themeInt)
+        _uiState.update { it.copy(themeMode = nextMode) }
     }
 
-    fun setFrequencyUnit(context: Context, unit: Int) {
-        val prefs = context.getSharedPreferences(SettingsActivity.PREFS_NAME, Context.MODE_PRIVATE)
-        prefs.edit().putInt(SettingsActivity.KEY_FREQ_UNIT, unit).apply()
-        _frequencyUnit.value = unit
+    fun toggleDynamicColor() {
+        val newState = !_uiState.value.isDynamicColor
+        repository.setDynamicColor(newState)
+        _uiState.update { it.copy(isDynamicColor = newState) }
+    }
+    
+    fun toggleAutoSave() {
+        val newState = !_uiState.value.autoSave
+        repository.setAutoSave(newState)
+        _uiState.update { it.copy(autoSave = newState) }
     }
 
-    fun toggleAutoSave(context: Context) {
-        val current = _autoSaveEnabled.value
-        val newValue = current == null || !current
-
-        val prefs = context.getSharedPreferences(SettingsActivity.PREFS_NAME, Context.MODE_PRIVATE)
-        prefs.edit().putBoolean(SettingsActivity.KEY_AUTO_SAVE_GPU_TABLE, newValue).apply()
-        _autoSaveEnabled.value = newValue
+    fun toggleAmoledMode() {
+        val newState = !_uiState.value.isAmoledMode
+        repository.setAmoledMode(newState)
+        _uiState.update { it.copy(isAmoledMode = newState) }
+    }
+    
+    fun toggleFrequencyUnit() {
+        val currentStr = _uiState.value.frequencyUnit
+        val (newStr, newInt) = when (currentStr) {
+            "MHz" -> "GHz" to FREQ_UNIT_GHZ
+            "GHz" -> "Hz" to FREQ_UNIT_HZ
+            else -> "MHz" to FREQ_UNIT_MHZ
+        }
+        repository.setFrequencyUnit(newInt)
+        _uiState.update { it.copy(frequencyUnit = newStr) }
+    }
+    
+    fun setUpdateChannel(channel: String) {
+        repository.setUpdateChannel(channel)
+        _uiState.update { it.copy(updateChannel = channel) }
     }
 
-    fun setColorPalette(context: Context, palette: Int) {
-        val prefs = context.getSharedPreferences(SettingsActivity.PREFS_NAME, Context.MODE_PRIVATE)
-        prefs.edit().putInt(SettingsActivity.KEY_COLOR_PALETTE, palette).apply()
-        _colorPalette.value = palette
-        _restartRequired.value = Event(true)
+    fun setLanguage(languageCode: String) {
+        repository.setLanguage(languageCode)
+        _uiState.update { it.copy(language = languageCode) }
     }
 
-    fun toggleDynamicColor(context: Context) {
-        val current = _dynamicColorEnabled.value
-        val newValue = current == null || !current
-
-        val prefs = context.getSharedPreferences(SettingsActivity.PREFS_NAME, Context.MODE_PRIVATE)
-        prefs.edit().putBoolean(SettingsActivity.KEY_DYNAMIC_COLOR, newValue).apply()
-        _dynamicColorEnabled.value = newValue
-        _restartRequired.value = Event(true)
+    fun setColorPalette(paletteInt: Int) {
+        repository.setColorPalette(paletteInt)
+        _uiState.update { it.copy(colorPalette = getPaletteName(paletteInt)) }
     }
 
-    // ========================================================================
-    // Getters for current values
-    // ========================================================================
-
-    val currentTheme: Int
-        get() = _themeMode.value ?: SettingsActivity.THEME_SYSTEM
-
-    val currentFrequencyUnit: Int
-        get() = _frequencyUnit.value ?: 1
-
-    val isAutoSaveEnabledValue: Boolean
-        get() = _autoSaveEnabled.value == true
-
-
-    // ========================================================================
-    // Update Checker Logic
-    // ========================================================================
-
-    private val _updateChannel = MutableLiveData<String>()
-    val updateChannel: LiveData<String> get() = _updateChannel
-
-    private val _updateStatus = MutableLiveData<UpdateStatus>(UpdateStatus.Idle)
-    val updateStatus: LiveData<UpdateStatus> get() = _updateStatus
-
-    fun loadUpdateSettings(context: Context) {
-        val prefs = context.getSharedPreferences(SettingsActivity.PREFS_NAME, Context.MODE_PRIVATE)
-        _updateChannel.value = prefs.getString("update_channel", "stable")
+    private fun getPaletteName(paletteInt: Int): String {
+        return when(paletteInt) {
+            PALETTE_PURPLE -> "Purple"
+            PALETTE_BLUE -> "Blue"
+            PALETTE_GREEN -> "Green"
+            PALETTE_PINK -> "Pink"
+            else -> "Dynamic"
+        }
     }
-
-    fun setUpdateChannel(context: Context, channel: String) {
-        val prefs = context.getSharedPreferences(SettingsActivity.PREFS_NAME, Context.MODE_PRIVATE)
-        prefs.edit().putString("update_channel", channel).apply()
-        _updateChannel.value = channel
-    }
-
+    
     fun checkForUpdates() {
-        if (_updateStatus.value is UpdateStatus.Checking) return
+        if (_uiState.value.updateStatus is UpdateStatus.Checking) return
 
-        _updateStatus.value = UpdateStatus.Checking
-        val isPrerelease = _updateChannel.value == "prerelease"
+        _uiState.update { it.copy(updateStatus = UpdateStatus.Checking) }
+        val channel = _uiState.value.updateChannel
+        val isPrerelease = channel == "prerelease"
         val url = if (isPrerelease) {
             "https://api.github.com/repos/IRedDragonICY/KonaBess-Next/releases"
         } else {
@@ -153,21 +204,22 @@ class SettingsViewModel : ViewModel() {
         }
 
         viewModelScope.launch(Dispatchers.IO) {
-            val client = OkHttpClient()
-            val request = Request.Builder()
-                .url(url)
-                .header("Accept", "application/vnd.github.v3+json")
-                .build()
-
             try {
+                val client = OkHttpClient()
+                val request = Request.Builder()
+                    .url(url)
+                    .header("Accept", "application/vnd.github.v3+json")
+                    .build()
+                    
                 client.newCall(request).execute().use { response ->
-                    if (!response.isSuccessful) {
-                        _updateStatus.postValue(UpdateStatus.Error("Network error: ${response.code}"))
-                        return@launch
-                    }
-
-                    val responseBody = response.body?.string() ?: ""
-                    val releaseJson = if (isPrerelease) {
+                     if (!response.isSuccessful) {
+                         _uiState.update { it.copy(updateStatus = UpdateStatus.Error("Network error: ${response.code}")) }
+                         return@launch
+                     }
+                     
+                     val responseBody = response.body?.string() ?: ""
+                     // ... reuse parsing logic ...
+                     val releaseJson = if (isPrerelease) {
                         val jsonArray = JSONArray(responseBody)
                         if (jsonArray.length() > 0) jsonArray.getJSONObject(0) else null
                     } else {
@@ -175,37 +227,37 @@ class SettingsViewModel : ViewModel() {
                     }
 
                     if (releaseJson == null) {
-                        _updateStatus.postValue(UpdateStatus.NoUpdate)
+                        _uiState.update { it.copy(updateStatus = UpdateStatus.NoUpdate) }
                         return@launch
                     }
 
                     val tagName = releaseJson.getString("tag_name").removePrefix("v")
+                    // Assuming BuildConfig is available
                     val currentVersion = com.ireddragonicy.konabessnext.BuildConfig.VERSION_NAME
 
-                    // Simple string comparison for date-based versions (yyyy.MM.dd...)
                     if (tagName > currentVersion) {
                         val release = GitHubRelease(
                             tagName = tagName,
                             htmlUrl = releaseJson.getString("html_url"),
                             body = releaseJson.optString("body", "No release notes.")
                         )
-                        _updateStatus.postValue(UpdateStatus.Available(release))
+                        _uiState.update { it.copy(updateStatus = UpdateStatus.Available(release)) }
                     } else {
-                        _updateStatus.postValue(UpdateStatus.NoUpdate)
+                        _uiState.update { it.copy(updateStatus = UpdateStatus.NoUpdate) }
                     }
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
-                _updateStatus.postValue(UpdateStatus.Error(e.message ?: "Unknown error"))
+                _uiState.update { it.copy(updateStatus = UpdateStatus.Error(e.message ?: "Unknown error")) }
             }
         }
     }
-
+    
     fun clearUpdateStatus() {
-        _updateStatus.value = UpdateStatus.Idle
+        _uiState.update { it.copy(updateStatus = UpdateStatus.Idle) }
     }
 }
 
+// Data classes
 data class GitHubRelease(
     val tagName: String,
     val htmlUrl: String,

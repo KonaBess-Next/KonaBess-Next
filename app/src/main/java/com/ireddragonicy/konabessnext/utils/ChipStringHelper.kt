@@ -12,16 +12,14 @@ object ChipStringHelper {
     private const val ACD = "acd"
 
     fun convertBins(which: Int, context: Context, chipDef: com.ireddragonicy.konabessnext.model.ChipDefinition?): String {
-        val current = chipDef ?: return context.getString(R.string.unknown_table) + which
-        
         // Priority 1: Check dynamic mapping in ChipDefinition (from JSON)
-        val description = current.binDescriptions?.get(which)
+        val description = chipDef?.binDescriptions?.get(which)
         if (description != null) {
             return description
         }
 
-        // Fallback: If no mapping found
-        return context.getString(R.string.unknown_table) + which
+        // Fallback: Use generic "Bin X" format
+        return context.getString(R.string.bin_id_format, which)
     }
 
     fun convertLevelParams(input: String, context: Context): String {
