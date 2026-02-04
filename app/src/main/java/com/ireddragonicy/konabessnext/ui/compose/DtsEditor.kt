@@ -204,15 +204,19 @@ fun EditorLine(
                 var tfValue by remember { mutableStateOf(TextFieldValue(content, selection = TextRange(content.length))) }
 
                 // State to hold the async result
-                var asyncHighlight by remember { mutableStateOf<AnnotatedString?>(null) }
+                // We use produceState to handle the debouncing and async calculation
+                val asyncHighlight by produceState<AnnotatedString?>(initialValue = null, key1 = content, key2 = searchQuery) {
+                    // Start with null or keep previous value? 
+                    // ideally we want to keep showing the old valid highlight if possible, but produceState resets on key change?
+                    // actually produceState doesn't reset 'value' if we don't tell it to.
+                    // But here we are producing a NEW state object.
+                    
+                    // Delay for debounce
+                    if (content.isNotEmpty()) delay(300)
 
-                // Trigger async calculation
-                LaunchedEffect(content, searchQuery) {
                     withContext(Dispatchers.Default) {
                         val result = ComposeHighlighter.highlight(content, searchQuery)
-                        withContext(Dispatchers.Main) {
-                            asyncHighlight = result
-                        }
+                        value = result
                     }
                 }
 
@@ -232,6 +236,9 @@ fun EditorLine(
                         if (currentHighlight != null && currentHighlight.text == text.text) {
                             TransformedText(currentHighlight, OffsetMapping.Identity)
                         } else {
+                            // While waiting for async highlight, show plain text (or we could cache prev highlight if we had it passed in)
+                            // Passing 'cachedHighlight' into EditorLine helps, but that is "global cache" which might be stale too?
+                            // For now, plain text fallback is safest for responsiveness.
                             TransformedText(AnnotatedString(text.text), OffsetMapping.Identity)
                         }
                     }

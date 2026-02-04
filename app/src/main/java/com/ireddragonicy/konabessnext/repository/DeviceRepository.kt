@@ -211,7 +211,24 @@ open class DeviceRepository @Inject constructor(
     suspend fun writeBootImage() = withContext(Dispatchers.IO) {
         val newBootPath = "$filesDir/boot_new.img"
         val partition = "/dev/block/by-name/$bootName${getCurrent("slot")}"
+        
+        verifyPartitionSize(partition, newBootPath)
+        
         shellRepository.execAndCheck("dd if=$newBootPath of=$partition")
+    }
+
+    private suspend fun verifyPartitionSize(partitionPath: String, imagePath: String) {
+        val imageSize = File(imagePath).length()
+        if (imageSize == 0L) throw IOException("New boot image is empty or not found at $imagePath")
+
+        val output = shellRepository.execForOutput("blockdev --getsize64 $partitionPath")
+        val partitionSizeStr = output.firstOrNull()?.trim()
+        val partitionSize = partitionSizeStr?.toLongOrNull() 
+            ?: throw IOException("Failed to get partition size for $partitionPath. Output: $output")
+
+        if (imageSize > partitionSize) {
+            throw IOException("Build failed: Image size ($imageSize bytes) exceeds partition size ($partitionSize bytes).")
+        }
     }
     
     fun getBootImageFile(): File = File("$filesDir/boot.img")
