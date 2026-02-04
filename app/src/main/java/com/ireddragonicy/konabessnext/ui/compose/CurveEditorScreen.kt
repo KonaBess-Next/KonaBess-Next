@@ -67,6 +67,24 @@ fun CurveEditorScreen(
     val isPendingChanges = globalOffset != 0f
     val effectiveIsDirty = isDirty || isPendingChanges
 
+    // Fix for Bin Button Label (Sync with GpuBinList logic)
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val currentBinName = remember(bin, context, currentChip) {
+        if (bin == null) return@remember "Bin $currentBinId"
+        val speedBinLine = bin?.header?.find { it.contains("qcom,speed-bin") }
+        val realBinId = if (speedBinLine != null) {
+            val extracted = com.ireddragonicy.konabessnext.utils.DtsHelper.extractLongValue(speedBinLine)
+            if (extracted != -1L) extracted.toInt() else bin?.id ?: currentBinId
+        } else {
+            bin?.id ?: currentBinId
+        }
+        try {
+            com.ireddragonicy.konabessnext.utils.ChipStringHelper.convertBins(realBinId, context, currentChip)
+        } catch (e: Exception) {
+            "Bin $realBinId"
+        }
+    }
+
     val chartData = remember(bin, globalOffset) {
         if (bin == null) return@remember emptyList<Entry>()
         
@@ -100,9 +118,28 @@ fun CurveEditorScreen(
             onDismissRequest = { showBinDialog = false },
             title = { Text("Select Frequency Table (Bin)") },
             text = {
+                val context = androidx.compose.ui.platform.LocalContext.current
                 Column {
                     bins.forEach { item ->
                         val isSelected = item.id == currentBinId
+                        
+                        // Fix for Bin Naming (Sync with GpuBinList logic)
+                        val speedBinLine = item.header.find { it.contains("qcom,speed-bin") }
+                        val realBinId = if (speedBinLine != null) {
+                            val extracted = com.ireddragonicy.konabessnext.utils.DtsHelper.extractLongValue(speedBinLine)
+                            if (extracted != -1L) extracted.toInt() else item.id
+                        } else {
+                            item.id
+                        }
+                        
+                        val binName = remember(realBinId, context, currentChip) {
+                            try {
+                                com.ireddragonicy.konabessnext.utils.ChipStringHelper.convertBins(realBinId, context, currentChip)
+                            } catch (e: Exception) {
+                                "Bin $realBinId"
+                            }
+                        }
+
                         Surface(
                             onClick = {
                                 currentBinId = item.id
@@ -119,7 +156,7 @@ fun CurveEditorScreen(
                             ) {
                                 RadioButton(selected = isSelected, onClick = null)
                                 Spacer(Modifier.width(8.dp))
-                                Text("Bin ${item.id}")
+                                Text(binName)
                             }
                         }
                     }
@@ -205,7 +242,7 @@ fun CurveEditorScreen(
                         ) {
                             Icon(Icons.Rounded.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(8.dp))
-                            Text("Bin $currentBinId")
+                            Text(currentBinName)
                         }
                     }
                     

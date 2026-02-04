@@ -12,6 +12,7 @@ import com.ireddragonicy.konabessnext.repository.GpuRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -53,6 +54,20 @@ class SharedGpuViewModel @Inject constructor(
 
     val currentChip = chipRepository.currentChip
 
+    // --- UI State (SSOT Refactor) ---
+    private val _isLoading = MutableStateFlow(true)
+
+    // Combined Atomic State for Bins List
+    val binListState: StateFlow<UiState<List<Bin>>> = combine(repository.bins, _isLoading) { bins, loading ->
+        if (loading) {
+            UiState.Loading
+        } else if (bins.isNotEmpty()) {
+            UiState.Success(bins)
+        } else {
+            UiState.Error(UiText.StringResource(com.ireddragonicy.konabessnext.R.string.no_gpu_tables_found))
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), UiState.Loading)
+
     // --- Derived UI Models ---
     
     val binUiModels: StateFlow<Map<Int, List<LevelUiModel>>> = combine(bins, _binOffsets, currentChip) { list, offsets, _ ->
@@ -83,8 +98,33 @@ class SharedGpuViewModel @Inject constructor(
     // --- Actions ---
 
     fun loadData() {
+        // Lock UI to Loading immediately
+        _isLoading.value = true
+        _workbenchState.value = WorkbenchState.Loading
+        
         viewModelScope.launch {
-            try { repository.loadTable() } catch (e: Exception) { e.printStackTrace() }
+            try { 
+                repository.loadTable()
+                
+                // DATA SYNCHRONIZATION BARRIER
+                // If we loaded text, we MUST wait for the background parser to emit bins.
+                // Otherwise, the UI sees "Success" + "Empty Bins" -> Error Flash.
+                val lines = repository.dtsLines.value
+                if (lines.isNotEmpty()) {
+                    // Wait up to 500ms for bins to be populated (Optimized)
+                    withTimeoutOrNull(500) {
+                        repository.bins.first { it.isNotEmpty() }
+                    }
+                }
+                
+                // Done loading
+                _isLoading.value = false
+                _workbenchState.value = WorkbenchState.Ready
+            } catch (e: Exception) { 
+                e.printStackTrace()
+                _isLoading.value = false // Errors should be handled by repository bins being empty or error state
+                _workbenchState.value = WorkbenchState.Error(e.message ?: "Unknown Error")
+            }
         }
     }
 
@@ -326,6 +366,7 @@ class SharedGpuViewModel @Inject constructor(
     
     fun reorderFrequency(binIndex: Int, from: Int, to: Int) {}
     
-    val workbenchState = MutableStateFlow<WorkbenchState>(WorkbenchState.Ready) // Always ready with SSOT
+    private val _workbenchState = MutableStateFlow<WorkbenchState>(WorkbenchState.Loading)
+    val workbenchState = _workbenchState.asStateFlow()
     sealed class WorkbenchState { object Loading : WorkbenchState(); object Ready : WorkbenchState(); data class Error(val msg: String) : WorkbenchState() }
 }

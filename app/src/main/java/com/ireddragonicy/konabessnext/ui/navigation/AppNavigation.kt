@@ -11,12 +11,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.navigation.NavHostController
-import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
-import androidx.navigation.navArgument
 import com.ireddragonicy.konabessnext.ui.compose.HomeScreen
-import com.ireddragonicy.konabessnext.ui.compose.CurveEditorScreen
 import com.ireddragonicy.konabessnext.ui.compose.ImportExportScreen
 import com.ireddragonicy.konabessnext.ui.compose.SettingsScreen
 import com.ireddragonicy.konabessnext.ui.compose.LanguageSelectionDialog
@@ -29,10 +26,7 @@ object AppDestinations {
     const val HOME = "home"
     const val IMPORT_EXPORT = "import_export"
     const val SETTINGS = "settings"
-    const val CURVE_EDITOR = "curve_editor/{binId}"
     const val EXPORT_HISTORY = "export_history"
-
-    fun curveEditor(binId: Int) = "curve_editor/$binId"
 }
 
 @Composable
@@ -63,26 +57,9 @@ fun AppNavGraph(
                 snackbarHostState = snackbarHostState,
                 onStartRepack = onStartRepack,
                 onLanguageChange = onLanguageChange,
-                onNavigateToCurveEditor = { binId ->
-                    navController.navigate(AppDestinations.curveEditor(binId))
-                },
                 onNavigateToExportHistory = {
                     navController.navigate(AppDestinations.EXPORT_HISTORY)
                 }
-            )
-        }
-        
-        // Curve Editor route
-        composable(
-            route = AppDestinations.CURVE_EDITOR,
-            arguments = listOf(navArgument("binId") { type = NavType.IntType })
-        ) { backStackEntry ->
-            val binId = backStackEntry.arguments?.getInt("binId") ?: 0
-            CurveEditorScreen(
-                binId = binId,
-                sharedViewModel = sharedViewModel,
-                onBack = { navController.popBackStack() },
-                onRepack = onStartRepack
             )
         }
         

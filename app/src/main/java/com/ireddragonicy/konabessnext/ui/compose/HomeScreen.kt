@@ -23,7 +23,6 @@ fun HomeScreen(
     gpuFrequencyViewModel: GpuFrequencyViewModel,
     sharedViewModel: SharedGpuViewModel,
     highlightCache: Map<Int, androidx.compose.ui.text.AnnotatedString> = emptyMap(),
-    onOpenCurveEditor: (Int) -> Unit,
     onStartRepack: () -> Unit
 ) {
     val isFilesExtracted by deviceViewModel.isFilesExtracted.collectAsState()
@@ -40,7 +39,6 @@ fun HomeScreen(
             deviceViewModel = deviceViewModel,
             gpuFrequencyViewModel = gpuFrequencyViewModel,
             sharedViewModel = sharedViewModel,
-            onOpenCurveEditor = onOpenCurveEditor,
             onStartRepack = onStartRepack
         )
     } else {
@@ -94,7 +92,6 @@ fun GpuEditorMainContent(
     deviceViewModel: DeviceViewModel,
     gpuFrequencyViewModel: GpuFrequencyViewModel,
     sharedViewModel: SharedGpuViewModel,
-    onOpenCurveEditor: (Int) -> Unit,
     onStartRepack: () -> Unit
 ) {
     val isDirty by gpuFrequencyViewModel.isDirty.collectAsState()
@@ -106,8 +103,16 @@ fun GpuEditorMainContent(
     val selectedBinIndex by gpuFrequencyViewModel.selectedBinIndex.collectAsState()
     val selectedLevelIndex by gpuFrequencyViewModel.selectedLevelIndex.collectAsState()
 
-    // Handle Back Press for Editor Navigation
-    BackHandler(enabled = selectedBinIndex != -1) {
+    // Local State for Curve Editor Overlay (Keeps BottomBar visible)
+    var activeCurveEditorBinId by remember { mutableIntStateOf(-1) }
+
+    // Handle Back Press for Curve Editor
+    BackHandler(enabled = activeCurveEditorBinId != -1) {
+        activeCurveEditorBinId = -1
+    }
+
+    // Handle Back Press for Editor Navigation (Only if Curve Editor is closed)
+    BackHandler(enabled = activeCurveEditorBinId == -1 && selectedBinIndex != -1) {
         if (selectedLevelIndex != -1) {
             gpuFrequencyViewModel.selectedLevelIndex.value = -1
         } else {
@@ -158,34 +163,43 @@ fun GpuEditorMainContent(
         onAddNewDtb = { manualSetupIndex = 0 }
     )
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        GpuEditorToolbar(
-            isDirty = isDirty,
-            canUndo = canUndo,
-            canRedo = canRedo,
-            historyCount = history.size,
-            currentViewMode = currentMode,
-            showChipsetSelector = true,
-            onSave = { gpuFrequencyViewModel.save(true) },
-            onUndo = { gpuFrequencyViewModel.undo() },
-            onRedo = { gpuFrequencyViewModel.redo() },
-            onShowHistory = { activeSheet = WorkbenchSheetType.HISTORY },
-            onViewModeChanged = { mode -> sharedViewModel.switchViewMode(mode) },
-            onChipsetClick = { activeSheet = WorkbenchSheetType.CHIPSET },
-            onFlashClick = { onStartRepack() }
+    if (activeCurveEditorBinId != -1) {
+        CurveEditorScreen(
+            binId = activeCurveEditorBinId,
+            sharedViewModel = sharedViewModel,
+            onBack = { activeCurveEditorBinId = -1 },
+            onRepack = onStartRepack
         )
-
-        Crossfade(targetState = currentMode, label = "ViewModeSwitch") { mode ->
-            Box(modifier = Modifier.fillMaxSize()) {
-                when (mode) {
-                    SharedGpuViewModel.ViewMode.MAIN_EDITOR -> GuiEditorContent(
-                        sharedViewModel, 
-                        deviceViewModel, 
-                        gpuFrequencyViewModel,
-                        onOpenCurveEditor = onOpenCurveEditor
-                    )
-                    SharedGpuViewModel.ViewMode.TEXT_ADVANCED -> UnifiedDtsEditorScreen(sharedViewModel)
-                    SharedGpuViewModel.ViewMode.VISUAL_TREE -> VisualTreeContent(sharedViewModel)
+    } else {
+        Column(modifier = Modifier.fillMaxSize()) {
+            GpuEditorToolbar(
+                isDirty = isDirty,
+                canUndo = canUndo,
+                canRedo = canRedo,
+                historyCount = history.size,
+                currentViewMode = currentMode,
+                showChipsetSelector = true,
+                onSave = { gpuFrequencyViewModel.save(true) },
+                onUndo = { gpuFrequencyViewModel.undo() },
+                onRedo = { gpuFrequencyViewModel.redo() },
+                onShowHistory = { activeSheet = WorkbenchSheetType.HISTORY },
+                onViewModeChanged = { mode -> sharedViewModel.switchViewMode(mode) },
+                onChipsetClick = { activeSheet = WorkbenchSheetType.CHIPSET },
+                onFlashClick = { onStartRepack() }
+            )
+    
+            Crossfade(targetState = currentMode, label = "ViewModeSwitch") { mode ->
+                Box(modifier = Modifier.fillMaxSize()) {
+                    when (mode) {
+                        SharedGpuViewModel.ViewMode.MAIN_EDITOR -> GuiEditorContent(
+                            sharedViewModel, 
+                            deviceViewModel, 
+                            gpuFrequencyViewModel,
+                            onOpenCurveEditor = { binId -> activeCurveEditorBinId = binId }
+                        )
+                        SharedGpuViewModel.ViewMode.TEXT_ADVANCED -> UnifiedDtsEditorScreen(sharedViewModel)
+                        SharedGpuViewModel.ViewMode.VISUAL_TREE -> VisualTreeContent(sharedViewModel)
+                    }
                 }
             }
         }

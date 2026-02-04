@@ -16,22 +16,35 @@ object DtsHelper {
     @JvmStatic
     fun extractLongValue(line: String): Long {
         val start = line.indexOf('<')
-        val end = line.indexOf('>')
-        if (start != -1 && end != -1 && end > start) {
-            val inner = line.substring(start + 1, end).trim()
-            // Handle lists like <0x0 587000000> -> take last
-            val valueStr = if (inner.contains(" ")) inner.substringAfterLast(" ") else inner
-            
-            return try {
-                if (valueStr.startsWith("0x")) {
-                    // Use parseUnsignedLong or decode to handle full 32-bit uints
-                    java.lang.Long.decode(valueStr) 
-                } else {
-                    valueStr.toLong()
-                }
-            } catch (e: Exception) { -1L }
+        val end = line.indexOf('>', start + 1)
+        if (start == -1 || end == -1) return -1L
+
+        // Find the start of the last value (handle lists like <0x0 1234>)
+        var valEnd = end
+        while (valEnd > start + 1 && line[valEnd - 1] <= ' ') {
+            valEnd-- // Trim trailing whitespace
         }
-        return -1L
+        
+        if (valEnd <= start + 1) return -1L
+
+        var valStart = valEnd - 1
+        while (valStart > start + 1 && line[valStart - 1] > ' ') {
+            valStart-- // Find start of the last token
+        }
+
+        // Now line.substring(valStart, valEnd) is the value
+        // We still need to substring to parse, but we avoided intermediate 'inner' and 'trim' allocations
+        val valueStr = line.substring(valStart, valEnd)
+
+        return try {
+            if (valueStr.startsWith("0x") || valueStr.startsWith("0X")) {
+                // Remove 0x for explicit hex parsing if needed, usually decode handles it
+                // Long.decode handles 0x
+                java.lang.Long.decode(valueStr)
+            } else {
+                valueStr.toLong()
+            }
+        } catch (e: Exception) { -1L }
     }
 
     @JvmStatic

@@ -28,7 +28,6 @@ fun MainScreen(
     snackbarHostState: SnackbarHostState,
     onStartRepack: () -> Unit,
     onLanguageChange: (String) -> Unit,
-    onNavigateToCurveEditor: (Int) -> Unit,
     onNavigateToExportHistory: () -> Unit
 ) {
     val pagerState = rememberPagerState(pageCount = { 3 })
@@ -41,7 +40,12 @@ fun MainScreen(
                 selectedItem = pagerState.currentPage,
                 onItemSelected = { index ->
                     scope.launch {
-                        pagerState.animateScrollToPage(index)
+                        pagerState.animateScrollToPage(
+                            index,
+                            animationSpec = androidx.compose.animation.core.spring(
+                                stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow
+                            )
+                        )
                     }
                 }
             )
@@ -49,6 +53,7 @@ fun MainScreen(
     ) { innerPadding ->
         HorizontalPager(
             state = pagerState,
+            beyondViewportPageCount = 2,
             modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding())
         ) { page ->
             when (page) {
@@ -56,7 +61,6 @@ fun MainScreen(
                     deviceViewModel = deviceViewModel,
                     gpuFrequencyViewModel = gpuFrequencyViewModel,
                     sharedViewModel = sharedViewModel,
-                    onOpenCurveEditor = onNavigateToCurveEditor,
                     onStartRepack = onStartRepack
                 )
                 1 -> ImportExportScreenWrapper(

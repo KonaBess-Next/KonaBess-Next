@@ -19,6 +19,10 @@ fun GuiEditorContent(
 ) {
     val isPrepared by deviceViewModel.isPrepared.collectAsState()
     val detectionState by deviceViewModel.detectionState.collectAsState()
+    
+    // EXPERT OPTIMIZATION: Consume the unified state from ViewModel
+    val binListState by sharedViewModel.binListState.collectAsState()
+    
     val bins by sharedViewModel.bins.collectAsState()
     val binUiModels by sharedViewModel.binUiModels.collectAsState()
     val selectedBinIndex by gpuFrequencyViewModel.selectedBinIndex.collectAsState()
@@ -63,9 +67,8 @@ fun GuiEditorContent(
         }
     } else if (selectedBinIndex == -1) {
         GpuBinList(
-            bins = bins,
+            state = binListState,
             chipDef = currentChip,
-            isLoading = workbenchState is SharedGpuViewModel.WorkbenchState.Loading,
             onBinClick = { gpuFrequencyViewModel.selectedBinIndex.value = it },
             onReload = { sharedViewModel.loadData() }
         )

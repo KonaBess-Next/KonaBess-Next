@@ -191,7 +191,7 @@ class SettingsViewModel @Inject constructor(
         }
     }
     
-    fun checkForUpdates() {
+    fun checkForUpdates(isManual: Boolean = false) {
         if (_uiState.value.updateStatus is UpdateStatus.Checking) return
 
         _uiState.update { it.copy(updateStatus = UpdateStatus.Checking) }
@@ -213,12 +213,15 @@ class SettingsViewModel @Inject constructor(
                     
                 client.newCall(request).execute().use { response ->
                      if (!response.isSuccessful) {
-                         _uiState.update { it.copy(updateStatus = UpdateStatus.Error("Network error: ${response.code}")) }
+                         if (isManual) {
+                             _uiState.update { it.copy(updateStatus = UpdateStatus.Error("Network error: ${response.code}")) }
+                         } else {
+                             _uiState.update { it.copy(updateStatus = UpdateStatus.Idle) }
+                         }
                          return@launch
                      }
                      
                      val responseBody = response.body?.string() ?: ""
-                     // ... reuse parsing logic ...
                      val releaseJson = if (isPrerelease) {
                         val jsonArray = JSONArray(responseBody)
                         if (jsonArray.length() > 0) jsonArray.getJSONObject(0) else null
@@ -227,12 +230,15 @@ class SettingsViewModel @Inject constructor(
                     }
 
                     if (releaseJson == null) {
-                        _uiState.update { it.copy(updateStatus = UpdateStatus.NoUpdate) }
+                        if (isManual) {
+                            _uiState.update { it.copy(updateStatus = UpdateStatus.NoUpdate) }
+                        } else {
+                            _uiState.update { it.copy(updateStatus = UpdateStatus.Idle) }
+                        }
                         return@launch
                     }
 
                     val tagName = releaseJson.getString("tag_name").removePrefix("v")
-                    // Assuming BuildConfig is available
                     val currentVersion = com.ireddragonicy.konabessnext.BuildConfig.VERSION_NAME
 
                     if (tagName > currentVersion) {
@@ -243,11 +249,19 @@ class SettingsViewModel @Inject constructor(
                         )
                         _uiState.update { it.copy(updateStatus = UpdateStatus.Available(release)) }
                     } else {
-                        _uiState.update { it.copy(updateStatus = UpdateStatus.NoUpdate) }
+                        if (isManual) {
+                            _uiState.update { it.copy(updateStatus = UpdateStatus.NoUpdate) }
+                        } else {
+                            _uiState.update { it.copy(updateStatus = UpdateStatus.Idle) }
+                        }
                     }
                 }
             } catch (e: Exception) {
-                _uiState.update { it.copy(updateStatus = UpdateStatus.Error(e.message ?: "Unknown error")) }
+                if (isManual) {
+                    _uiState.update { it.copy(updateStatus = UpdateStatus.Error(e.message ?: "Unknown error")) }
+                } else {
+                    _uiState.update { it.copy(updateStatus = UpdateStatus.Idle) }
+                }
             }
         }
     }
