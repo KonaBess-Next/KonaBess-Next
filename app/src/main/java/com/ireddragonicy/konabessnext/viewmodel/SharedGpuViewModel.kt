@@ -150,7 +150,7 @@ class SharedGpuViewModel @Inject constructor(
     // Text Editor -> Repository
     fun updateFromText(content: String, description: String) {
         val lines = content.split("\n")
-        repository.updateContent(lines)
+        repository.updateContent(lines, description)
     }
 
     // GUI -> Repository

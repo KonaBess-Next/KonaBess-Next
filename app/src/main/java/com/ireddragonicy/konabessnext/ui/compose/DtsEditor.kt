@@ -68,28 +68,62 @@ fun DtsEditor(
     
     var activeLineIndex by remember { mutableIntStateOf(-1) }
     
-    // Initial Load & Line Sync
-    LaunchedEffect(content) {
-        val current = lines.joinToString("\n")
-        if (current != content) {
-            lines.clear()
-            if (content.isNotEmpty()) {
-                lines.addAll(content.split("\n"))
-            } else {
-                lines.add("")
+    // Debounced Save State
+    // pendingContent holds the latest content that needs to be saved
+    // When it changes, we wait 500ms before actually calling onContentChanged
+    var pendingContent by remember { mutableStateOf<String?>(null) }
+    var lastCommittedContent by remember { mutableStateOf(content) }
+    
+    // Debounced save effect - only commits after 500ms of idle time
+    LaunchedEffect(pendingContent) {
+        pendingContent?.let { newContent ->
+            delay(500) // Wait for typing to stop
+            if (newContent != lastCommittedContent) {
+                lastCommittedContent = newContent
+                onContentChanged(newContent)
             }
         }
     }
     
+    // Initial Load & External Change Sync (undo/redo/load)
+    // CRITICAL: Only sync if this is an EXTERNAL change, not our own commit bouncing back
+    LaunchedEffect(content) {
+        // If incoming content matches what we last committed, it's just our change
+        // bouncing back from ViewModel. Ignore it to preserve user's continued typing.
+        if (content == lastCommittedContent) {
+            return@LaunchedEffect
+        }
+        
+        // This is an external change (initial load, undo, redo, etc.)
+        // Sync lines to match the external content
+        lines.clear()
+        if (content.isNotEmpty()) {
+            lines.addAll(content.split("\n"))
+        } else {
+            lines.add("")
+        }
+        lastCommittedContent = content
+        pendingContent = null // Cancel any pending debounced save
+    }
+    
     // EditorSession handles highlighting externally. DtsEditor is just a viewer/editor.
-    // If lines change locally (edit), we should ideally notify session, but DtsEditor calls onContentChanged which updates Repo -> VM -> EditorSession.
-    // So loop is closed. But local edits might flicker briefly unhighlighted?
-    // User edits -> lines update -> requestSave -> onContentChanged -> Repo Update -> VM Flow -> EditorSession Update -> highlightCache update.
-    // This is fast enough for typing.
+    // Debounced save prevents history spam - user types freely, we batch updates.
     
     fun requestSave() {
+        // Instead of immediately calling onContentChanged, we set pendingContent
+        // This triggers the debounced LaunchedEffect above
         val newContent = lines.joinToString("\n")
-        if (newContent != content) {
+        if (newContent != lastCommittedContent) {
+            pendingContent = newContent
+        }
+    }
+    
+    // Force immediate save (for structural changes like new line, delete line)
+    fun requestImmediateSave() {
+        val newContent = lines.joinToString("\n")
+        if (newContent != lastCommittedContent) {
+            lastCommittedContent = newContent
+            pendingContent = null // Cancel any pending debounced save
             onContentChanged(newContent)
         }
     }
@@ -132,7 +166,7 @@ fun DtsEditor(
                         if (index + 1 <= lines.size) {
                             lines.add(index + 1, "")
                             activeLineIndex = index + 1
-                            requestSave()
+                            requestImmediateSave() // Structural change - immediate commit
                         }
                     },
                     onBackspaceAtStart = {
@@ -142,7 +176,7 @@ fun DtsEditor(
                             lines[index - 1] = prevLine + currentLine
                             lines.removeAt(index)
                             activeLineIndex = index - 1
-                            requestSave()
+                            requestImmediateSave() // Structural change - immediate commit
                         }
                     }
                 )
@@ -271,7 +305,7 @@ fun EditorLine(
                     textStyle = textStyle,
                     visualTransformation = visualTransformation,
                     cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                    singleLine = true
+                    singleLine = false
                 )
             } else {
                 // LIGHT: Text
