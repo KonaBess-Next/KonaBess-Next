@@ -1,8 +1,11 @@
 package com.ireddragonicy.konabessnext.repository
 
 import com.ireddragonicy.konabessnext.model.Bin
+import com.ireddragonicy.konabessnext.model.Level
 import com.ireddragonicy.konabessnext.model.Opp
+import com.ireddragonicy.konabessnext.model.dts.DtsNode
 import com.ireddragonicy.konabessnext.utils.DtsHelper
+import com.ireddragonicy.konabessnext.utils.DtsTreeHelper
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -11,86 +14,178 @@ class GpuDomainManager @Inject constructor(
     private val chipRepository: ChipRepositoryInterface
 ) {
 
+    /**
+     * Parses the full DTS file content (joined from lines) into Bins and Levels using AST.
+     */
     fun parseBins(lines: List<String>): List<Bin> {
-        val currentChip = chipRepository.currentChip.value ?: return emptyList()
-        val strategy = chipRepository.getArchitecture(currentChip)
+        if (lines.isEmpty()) return emptyList()
+
+        // 1. Parse entire file to AST
+        val fullText = lines.joinToString("\n")
+        val root = DtsTreeHelper.parse(fullText)
         val bins = ArrayList<Bin>()
-        val mutableLines = ArrayList(lines) 
-        
-        var i = -1
-        while (++i < mutableLines.size) {
-            val line = mutableLines[i].trim()
-            if (strategy.isStartLine(line)) {
-                try {
-                    strategy.decode(mutableLines, bins, i)
-                    i-- 
-                } catch (e: Exception) { e.printStackTrace() }
+
+        // 2. Find Bin Nodes (qcom,gpu-pwrlevels or qcom,gpu-pwrlevels-X)
+        val binNodes = findAllBinNodes(root)
+
+        binNodes.forEachIndexed { index, node ->
+            // Try to deduce ID from name suffix (e.g. pwrlevels-1 -> 1), otherwise use index
+            val suffix = node.name.substringAfterLast("-", "")
+            val binId = suffix.toIntOrNull() ?: index
+            
+            val bin = Bin(id = binId)
+
+            // 3. Extract Header (Properties of the Bin Node)
+            // The UI expects "lines" like "propertyName = value;" to display in the editor
+            node.properties.forEach { prop ->
+                // Reconstruct simple line format
+                bin.addHeaderLine("${prop.name} = ${prop.originalValue};")
             }
+
+            // 4. Extract Levels (Children of the Bin Node matching pattern)
+            val levelNodes = node.children
+                .filter { it.name.startsWith("qcom,gpu-pwrlevel@") }
+                // Sort by level index from name
+                .sortedBy { it.name.substringAfter("@").toIntOrNull() ?: 0 }
+
+            levelNodes.forEach { lvlNode ->
+                val level = Level()
+                // Reconstruct lines for the Level object
+                lvlNode.properties.forEach { prop ->
+                    level.addLine("${prop.name} = ${prop.originalValue};")
+                }
+                bin.addLevel(level)
+            }
+            
+            bins.add(bin)
         }
+        
         return bins
     }
 
-    fun parseOpps(lines: List<String>): List<Opp> {
-        val opps = ArrayList<Opp>()
-        val pattern = chipRepository.currentChip.value?.voltTablePattern ?: return emptyList()
-        
-        var insideTable = false
-        var insideNode = false
-        var currentFreq = 0L
-        var currentVolt = 0L
-        
-        for (line in lines) {
-            val trimmed = line.trim()
-            if (trimmed.contains(pattern) && trimmed.endsWith("{")) insideTable = true
-            if (!insideTable) continue
+    private fun findAllBinNodes(root: DtsNode): List<DtsNode> {
+        val results = ArrayList<DtsNode>()
+        fun recurse(node: DtsNode) {
+            val compatible = node.getProperty("compatible")?.originalValue
             
-            if (trimmed.startsWith("opp-") && trimmed.endsWith("{")) {
-                insideNode = true
-                currentFreq = 0
-                currentVolt = 0
-            } else if (trimmed == "};" && insideNode) {
-                if (currentFreq > 0) opps.add(Opp(currentFreq, currentVolt))
-                insideNode = false
-            } else if (insideNode) {
-                if (trimmed.contains("opp-hz")) currentFreq = DtsHelper.extractLongValue(trimmed)
-                if (trimmed.contains("opp-microvolt")) currentVolt = DtsHelper.extractLongValue(trimmed)
-            } else if (trimmed == "};") {
-                insideTable = false
+            // Standard check or legacy name check, BUT exclude "bins" container if it matches compatible
+            val isCompatibleBin = compatible?.contains("qcom,gpu-pwrlevels") == true && compatible?.contains("bins") == false
+            val isNameMatch = node.name.startsWith("qcom,gpu-pwrlevels")
+            
+            if (isCompatibleBin || isNameMatch) {
+                results.add(node)
+                // Don't recurse into a bin node looking for more bins
+                return 
             }
+            node.children.forEach { recurse(it) }
         }
-        return opps
+        recurse(root)
+        return results
     }
 
-    fun findLevelLineRange(lines: List<String>, binIndex: Int, levelIndex: Int): Pair<Int, Int>? {
-        val chip = chipRepository.currentChip.value ?: return null
-        val strategy = chipRepository.getArchitecture(chip)
+    fun parseOpps(lines: List<String>): List<Opp> {
+        if (lines.isEmpty()) return emptyList()
+        val pattern = chipRepository.currentChip.value?.voltTablePattern ?: return emptyList()
         
-        var currentBinIdx = -1
+        // 1. Parse AST
+        val fullText = lines.joinToString("\n")
+        val root = DtsTreeHelper.parse(fullText)
+        val opps = ArrayList<Opp>()
+        
+        // 2. Find Voltage Table Node
+        val tableNode = findNodeByNameOrCompatible(root, pattern) ?: return emptyList()
+        
+        // 3. Iterate Children (opp nodes)
+        tableNode.children.forEach { child ->
+             // Usually named opp-12345 or similar, but structure defines content
+             val freq = child.getLongValue("opp-hz")
+             val volt = child.getLongValue("opp-microvolt")
+             
+             if (freq != null && volt != null) {
+                 opps.add(Opp(freq, volt))
+             }
+        }
+        
+        return opps
+    }
+    
+    // Helper to find specific node deep in tree
+    private fun findNodeByNameOrCompatible(root: DtsNode, pattern: String): DtsNode? {
+        if (root.name == pattern || root.getProperty("compatible")?.originalValue?.contains(pattern) == true) {
+            return root
+        }
+        for (child in root.children) {
+            val found = findNodeByNameOrCompatible(child, pattern)
+            if (found != null) return found
+        }
+        return null
+    }
+
+    /**
+     * Legacy helper used by GpuRepository to find line ranges for text replacement.
+     * We kept GpuRepository text-based injection for safety, so we still need this logic mostly intact due to index reliance in updateParameterInBin.
+     * However, ideally GpuRepository would ask DomainManager "where is this parameter?".
+     * 
+     * Since we are operating on 'lines', we revert to a simpler line scanning here or we could usage AST source tracking if we had it.
+     * DtsParser/Lexer doesn't track line numbers perfectly yet for every property.
+     * 
+     * For now, I will modify this to be robust enough without full AST source map, 
+     * likely keeping a simplified line scan similar to before BUT without the complex Strategy dependency.
+     */
+    fun findLevelLineRange(lines: List<String>, binIndex: Int, levelIndex: Int): Pair<Int, Int>? {
+        // Simple state machine to find the Nth bin and Mth level
+        var currentBinCount = -1
+        var currentLevelCount = -1
         var insideTargetBin = false
-        var currentLevelIdx = -1
         
         for (i in lines.indices) {
             val line = lines[i].trim()
             
-            // Check Bin Start
-            if (strategy.isStartLine(line)) {
-                currentBinIdx++
-                insideTargetBin = (currentBinIdx == binIndex)
-                currentLevelIdx = -1 
-                continue
+            // Detect Bin Start
+            // compatible = "qcom,gpu-pwrlevels" OR node name qcom,gpu-pwrlevels...
+            // A bit heuristic on line-based scan:
+            if ((line.contains("qcom,gpu-pwrlevels") && line.endsWith("{")) || 
+                (line.contains("compatible") && line.contains("qcom,gpu-pwrlevels"))) {
+                
+                // If it's a "compatible" line, we might be inside the node already started previous line?
+                // Actually standard DTS: 
+                // qcom,gpu-pwrlevels { 
+                //    compatible = "qcom,gpu-pwrlevels";
+                // }
+                // Just counting the node start is safer:
             }
             
-            if (!insideTargetBin) continue
+            // Regex match for node start
+            if (line.matches(Regex(".*qcom,gpu-pwrlevels.*\\{.*"))) {
+                currentBinCount++
+                if (currentBinCount == binIndex) {
+                    insideTargetBin = true
+                    currentLevelCount = -1
+                } else {
+                    insideTargetBin = false
+                }
+            }
             
-            if (line.startsWith("qcom,gpu-pwrlevel@")) {
-                currentLevelIdx++
-                if (currentLevelIdx == levelIndex) {
-                    var braceCount = 1
-                    for (j in i + 1 until lines.size) {
-                        if (lines[j].contains("{")) braceCount++
-                        if (lines[j].contains("}")) braceCount--
-                        if (braceCount == 0) return Pair(i, j)
+            if (insideTargetBin) {
+                if (line.contains("qcom,gpu-pwrlevel@") && line.endsWith("{")) {
+                    currentLevelCount++
+                    if (currentLevelCount == levelIndex) {
+                        // Found start line i
+                        // Scan forward for matching brace
+                        var braces = 1
+                        for (j in i + 1 until lines.size) {
+                            if (lines[j].contains("{")) braces++
+                            if (lines[j].contains("}")) braces--
+                            if (braces == 0) return Pair(i, j)
+                        }
                     }
+                }
+                
+                // If we exit the bin
+                if (line == "};" && insideTargetBin && currentLevelCount == -1) { 
+                    // This logic is tricky with nested braces. 
+                    // Assuming indentation or just strict brace counting would be better if we tracked it from bin start.
+                    // But for this specific function, we just need to find the level if it exists.
                 }
             }
         }
@@ -109,5 +204,36 @@ class GpuDomainManager @Inject constructor(
         }
         newBlock.append("\t\t};")
         return newBlock.toString()
+    }
+
+    /**
+     * Generates DTS text representation of the given bins for export.
+     * Replaces the deprecated ChipArchitecture.generateTable() method.
+     */
+    fun generateTableDts(bins: List<Bin>): List<String> {
+        val lines = ArrayList<String>()
+        
+        bins.forEachIndexed { binIndex, bin ->
+            // Bin Header
+            lines.add("qcom,gpu-pwrlevels-$binIndex {")
+            
+            // Bin Properties (from header lines)
+            bin.header.forEach { headerLine ->
+                lines.add("\t$headerLine")
+            }
+            
+            // Levels
+            bin.levels.forEachIndexed { levelIndex, level ->
+                lines.add("\tqcom,gpu-pwrlevel@$levelIndex {")
+                level.lines.forEach { levelLine ->
+                    lines.add("\t\t$levelLine")
+                }
+                lines.add("\t};")
+            }
+            
+            lines.add("};")
+        }
+        
+        return lines
     }
 }

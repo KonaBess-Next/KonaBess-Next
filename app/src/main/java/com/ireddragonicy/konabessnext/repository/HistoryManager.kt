@@ -134,24 +134,10 @@ class HistoryManager @Inject constructor() {
         // Case: Deletion (New middle is empty, Old middle has content)
         if (newMiddleStart == newMiddleEnd && oldMiddleStart < oldMiddleEnd) {
             for (i in oldMiddleStart until oldMiddleEnd) {
-                // To delete indices correctly, we must consider that deleting index i shifts subsequent items.
-                // However, for storage, we just record "Delete at index X"
-                // But wait, if we delete 5 lines, do we record "Delete 5 items at X"?
-                // Let's record individual line deletes.
-                // NOTE: When applying deletes, order matters (delete from end to start to avoid index shift issues)
-                // But here we just record WHAT changed.
-                diffs.add(LineDiff.Delete(oldMiddleStart, oldList[i])) 
-                // We record index 'oldMiddleStart' for all because as we remove them, the next one falls into that place?
-                // No, let's store absolute indices in the ORIGINAL list for verification?
-                // Or simplified: Just store "Range Delete".
-                // Let's stick to simple LineDiffs but apply careful logic.
-                // Actually, storing "Delete index X" multiple times is ambiguous unless we specify "Simultaneous" or "Sequential".
-                // Let's assume Sequential Application for Redo, and Reverse Sequential for Undo.
+                // Store the ABSOLUTE index in the original list for each deleted line.
+                // This preserves the correct order for restoration.
+                diffs.add(LineDiff.Delete(i, oldList[i])) 
             }
-            // Better: Record them as a block or sequence.
-            // If I delete lines 10, 11, 12.
-            // Diff: Delete(10, val), Delete(10, val), Delete(10, val)? No.
-            // Diff: Delete(10, val1), Delete(11, val2), Delete(12, val3).
         }
         
         // Case: Insertion (Old middle is empty, New middle has content)

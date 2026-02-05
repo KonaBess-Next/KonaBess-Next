@@ -1,8 +1,6 @@
 package com.ireddragonicy.konabessnext.repository
 
 import com.ireddragonicy.konabessnext.core.interfaces.FileDataSource
-import com.ireddragonicy.konabessnext.core.strategy.ChipArchitecture
-import com.ireddragonicy.konabessnext.core.strategy.MultiBinStrategy
 import com.ireddragonicy.konabessnext.model.ChipDefinition
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -172,13 +170,10 @@ class FakeChipRepository : ChipRepositoryInterface {
 
     private val _currentChip = MutableStateFlow<ChipDefinition?>(null)
     override val currentChip: StateFlow<ChipDefinition?> = _currentChip.asStateFlow()
-    
-    private val multiBinStrategy = MultiBinStrategy()
 
     override fun loadDefinitions() {}
     override fun setCurrentChip(chip: ChipDefinition?) { _currentChip.value = chip }
     override fun getChipById(id: String): ChipDefinition? = null
-    override fun getArchitecture(def: ChipDefinition?): ChipArchitecture = multiBinStrategy
     override fun getLevelsForCurrentChip(): IntArray = IntArray(0)
     override fun getLevelStringsForCurrentChip(): Array<String> = emptyArray()
 }

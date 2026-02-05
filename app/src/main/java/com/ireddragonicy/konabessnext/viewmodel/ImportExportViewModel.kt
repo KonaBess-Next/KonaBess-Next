@@ -35,6 +35,7 @@ import com.ireddragonicy.konabessnext.utils.UriPathHelper
 class ImportExportViewModel @Inject constructor(
     private val deviceRepository: DeviceRepository,
     private val gpuRepository: GpuRepository,
+    private val gpuDomainManager: com.ireddragonicy.konabessnext.repository.GpuDomainManager,
     private val chipRepository: com.ireddragonicy.konabessnext.repository.ChipRepository,
     private val exportHistoryManager: com.ireddragonicy.konabessnext.utils.ExportHistoryManager
 ) : ViewModel() {
@@ -81,7 +82,7 @@ class ImportExportViewModel @Inject constructor(
            // Safe call in case bins are empty or not ready
            if (bins.isEmpty()) throw IllegalStateException("No GPU table data to export")
            
-           val tableLines = chipRepository.getArchitecture(current).generateTable(java.util.ArrayList(bins))
+           val tableLines = gpuDomainManager.generateTableDts(bins)
            
            for (line in tableLines) {
                freqData.append(line).append("\n")

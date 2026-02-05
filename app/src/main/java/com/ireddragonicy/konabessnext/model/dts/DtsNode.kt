@@ -42,6 +42,23 @@ class DtsNode(name: String?) {
         return "$parentPath/$name"
     }
 
+    fun getProperty(name: String): DtsProperty? {
+        return properties.find { it.name == name }
+    }
+
+    fun getChild(name: String): DtsNode? {
+        return children.find { it.name == name }
+    }
+
+    fun getChildrenByPrefix(prefix: String): List<DtsNode> {
+        return children.filter { it.name.startsWith(prefix) }
+    }
+
+    fun getLongValue(propName: String): Long? {
+        val prop = getProperty(propName) ?: return null
+        return com.ireddragonicy.konabessnext.utils.DtsHelper.extractLongValue(prop.name + " = " + prop.originalValue + ";")
+    }
+
     // Helpful for debugging
     override fun toString(): String {
         return name

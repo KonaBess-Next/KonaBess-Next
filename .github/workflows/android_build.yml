@@ -148,17 +148,51 @@ jobs:
       shell: bash
       run: |
         ANALYSIS="${{ steps.virustotal.outputs.analysis }}"
-        VT_LIST=""
+        VERSION="${{ steps.version.outputs.version }}"
+        REPO="${{ github.repository }}"
+        TAG="v${VERSION}"
         
+        # Initialize table header
+        TABLE="| Type | Architecture | Size | Download | VirusTotal |\n"
+        TABLE+="|------|--------------|------|----------|------------|\n"
+        
+        # Parse each entry
         IFS=',' read -ra ENTRIES <<< "$ANALYSIS"
         for entry in "${ENTRIES[@]}"; do
-          FILENAME=$(echo "$entry" | cut -d'=' -f1 | xargs basename)
+          FILEPATH=$(echo "$entry" | cut -d'=' -f1)
           URL=$(echo "$entry" | cut -d'=' -f2-)
-          VT_LIST="${VT_LIST}- [${FILENAME}](${URL})\n"
+          FILENAME=$(basename "$FILEPATH")
+          
+          # Get file size
+          if [ -f "$FILEPATH" ]; then
+            SIZE_BYTES=$(stat -c%s "$FILEPATH" 2>/dev/null || stat -f%z "$FILEPATH" 2>/dev/null || echo "0")
+            SIZE_MB=$(echo "scale=2; $SIZE_BYTES / 1048576" | bc)
+            SIZE="${SIZE_MB} MB"
+          else
+            SIZE="N/A"
+          fi
+          
+          # Determine type (Release/Debug)
+          TYPE="Debug"
+          if [[ "$FILENAME" == *"-release"* ]]; then
+            TYPE="Release"
+          fi
+          
+          # Extract architecture
+          ARCH="universal"
+          if [[ "$FILENAME" == *"arm64-v8a"* ]]; then ARCH="arm64-v8a"; fi
+          if [[ "$FILENAME" == *"armeabi-v7a"* ]]; then ARCH="armeabi-v7a"; fi
+          if [[ "$FILENAME" == *"x86_64"* ]]; then ARCH="x86_64"; fi
+          if [[ "$FILENAME" == *"x86"* && "$FILENAME" != *"x86_64"* ]]; then ARCH="x86"; fi
+          
+          # Generate download URL
+          DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${TAG}/${FILENAME}"
+          
+          TABLE+="| $TYPE | $ARCH | $SIZE | [Download]($DOWNLOAD_URL) | [Scan]($URL) |\n"
         done
         
-        echo "vt_results<<EOF" >> $GITHUB_OUTPUT
-        echo -e "$VT_LIST" >> $GITHUB_OUTPUT
+        echo "table<<EOF" >> $GITHUB_OUTPUT
+        echo -e "$TABLE" >> $GITHUB_OUTPUT
         echo "EOF" >> $GITHUB_OUTPUT
 
     - name: Create Release
@@ -170,19 +204,26 @@ jobs:
         body: |
           ## Build Information
           
-          *   **Version:** ${{ steps.version.outputs.version }}
-          *   **Branch:** ${{ github.ref_name }}
-          *   **Commit:** ${{ github.sha }}
+          | Property | Value |
+          |----------|-------|
+          | Version | `${{ steps.version.outputs.version }}` |
+          | Branch | `${{ github.ref_name }}` |
+          | Commit | [`${{ github.sha }}`](https://github.com/${{ github.repository }}/commit/${{ github.sha }}) |
           
-          ### Changelog
+          ---
+          
+          ## Changelog
           
           ${{ steps.changelog.outputs.changelog }}
           
-          ### Security Scan
+          ---
           
-          ${{ steps.vt_parsed.outputs.vt_results }}
+          ## Downloads and Security Scan
+          
+          ${{ steps.vt_parsed.outputs.table }}
           
           ---
+          
           Built automatically by GitHub Actions
         draft: false
         prerelease: true

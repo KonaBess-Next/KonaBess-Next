@@ -18,10 +18,6 @@ open class ChipRepository @Inject constructor(
     private val _currentChip = MutableStateFlow<ChipDefinition?>(null)
     override val currentChip: StateFlow<ChipDefinition?> = _currentChip.asStateFlow()
 
-    // Strategy instances
-    private val multiBinStrategy = com.ireddragonicy.konabessnext.core.strategy.MultiBinStrategy()
-    private val singleBinStrategy = com.ireddragonicy.konabessnext.core.strategy.SingleBinStrategy()
-
     init {
         loadDefinitions()
     }
@@ -39,10 +35,6 @@ open class ChipRepository @Inject constructor(
         return _definitions.value.find { it.id == id }
     }
 
-    override fun getArchitecture(def: ChipDefinition?): com.ireddragonicy.konabessnext.core.strategy.ChipArchitecture {
-        return if (def?.strategyType == "SINGLE_BIN") singleBinStrategy else multiBinStrategy
-    }
-
     override fun getLevelsForCurrentChip(): IntArray {
         val c = _currentChip.value ?: return IntArray(0)
         val size = c.levelCount
@@ -58,3 +50,4 @@ open class ChipRepository @Inject constructor(
         }
     }
 }
+
