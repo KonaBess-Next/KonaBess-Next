@@ -79,4 +79,61 @@ class RealDtsParsingTest {
         // Note: DtsHelper might return long.
         assertTrue("Frequency should match 1160000000 (0x45243200), got $freqVal", freqVal == 1160000000L)
     }
+    @Test
+    fun testAstEditingAndRegeneration() {
+        var file = File("src/test/Tuna0.txt")
+        if (!file.exists()) {
+            file = File("app/src/test/Tuna0.txt")
+        }
+        val content = file.readText()
+        val root = DtsTreeHelper.parse(content)
+        
+        fun findBin0(node: com.ireddragonicy.konabessnext.model.dts.DtsNode): com.ireddragonicy.konabessnext.model.dts.DtsNode? {
+             if (node.name.startsWith("qcom,gpu-pwrlevels") && node.name.endsWith("0")) return node
+             for (child in node.children) {
+                 val found = findBin0(child)
+                 if (found != null) return found
+             }
+             return null
+        }
+        
+        val bin0 = findBin0(root) ?: throw AssertionError("Could not find bin 0 in original parse")
+        
+        val level0 = bin0.children.find { it.name == "qcom,gpu-pwrlevel@0" } 
+            ?: throw AssertionError("Could not find level 0 in bin 0. Children: ${bin0.children.map { it.name }}")
+        
+        val targetKey = "qcom,gpu-freq"
+        val newValue = "999999999" // distinct value
+        
+        val originalProp = level0.getProperty(targetKey) 
+            ?: throw AssertionError("Original prop $targetKey missing in level 0. Props: ${level0.properties.map { it.name }}")
+        
+        level0.setProperty(targetKey, newValue)
+        
+        val generated = DtsTreeHelper.generate(root)
+        
+        // 4. Verify in String
+        // It should be converted to hex: 999999999 -> 0x3b9aca00
+        val expectedHex = "0x3b9aca00"
+        assertTrue("Generated string should contain new hex value", generated.contains(expectedHex))
+        
+        // 5. Parse again and verify
+        val newRoot = DtsTreeHelper.parse(generated)
+        val newBin0 = findBin0(newRoot)
+        assertTrue("Should find new bin 0", newBin0 != null)
+        
+        val newLevel0 = newBin0!!.children.find { it.name == "qcom,gpu-pwrlevel@0" }
+        val newProp = newLevel0!!.getProperty(targetKey)
+        
+        assertTrue("New prop should exist", newProp != null)
+        assertEquals("New value should be hex formatted", "<$expectedHex>", newProp!!.originalValue)
+        
+        println("AST Editing Verification Passed!")
+    }
+
+    private fun assertEquals(msg: String, expected: Any, actual: Any) {
+         if (expected != actual) {
+             throw AssertionError("$msg. Expected <$expected> but was <$actual>")
+         }
+    }
 }

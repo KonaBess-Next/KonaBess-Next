@@ -89,12 +89,12 @@ class DtsProperty(name: String?, originalValue: String?) {
                     try {
                         val value = token.toLong()
                         // Use hex format
-                        sb.append(String.format("0x%x", value))
+                        sb.append(String.format(java.util.Locale.US, "0x%x", value))
                     } catch (e: NumberFormatException) {
                         try {
                             // Try unsigned
                             val value = java.lang.Long.parseUnsignedLong(token)
-                            sb.append(String.format("0x%x", value))
+                            sb.append(String.format(java.util.Locale.US, "0x%x", value))
                         } catch (ex: Exception) {
                             sb.append(token)
                         }

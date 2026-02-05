@@ -132,64 +132,56 @@ class GpuDomainManager @Inject constructor(
      * For now, I will modify this to be robust enough without full AST source map, 
      * likely keeping a simplified line scan similar to before BUT without the complex Strategy dependency.
      */
-    fun findLevelLineRange(lines: List<String>, binIndex: Int, levelIndex: Int): Pair<Int, Int>? {
-        // Simple state machine to find the Nth bin and Mth level
-        var currentBinCount = -1
-        var currentLevelCount = -1
-        var insideTargetBin = false
+    /**
+     * Finds the DtsNode corresponding to the bin at the given index.
+     * Uses the same logic as findAllBinNodes but returns just the specific one.
+     */
+    fun findBinNode(root: DtsNode, binIndex: Int): DtsNode? {
+        val allBins = findAllBinNodes(root)
         
-        for (i in lines.indices) {
-            val line = lines[i].trim()
+        // Match by index in the list, or try to be smarter if ids are explicit?
+        // findAllBinNodes returns them in search order.
+        // The parsing logic sorts or processes them. 
+        // Logic in parseBins: 
+        // binNodes.forEachIndexed { index, node -> val suffix = ... val binId = suffix.toIntOrNull() ?: index ... }
+        
+        // We need to match the logic exactly.
+        // But for editing, we usually key off the 'binIndex' which is often the ID.
+        // Let's assume the index in the list found by findAllBinNodes IS the binIndex if we assume consistent ordering.
+        // However, parseBins does specifically logic to assign IDs.
+        
+        // Better approach: Find the node that WOULD generate the bin with id = binIndex.
+        return allBins.find { node ->
+            val suffix = node.name.substringAfterLast("-", "")
+            val determinedId = suffix.toIntOrNull()
             
-            // Detect Bin Start
-            // compatible = "qcom,gpu-pwrlevels" OR node name qcom,gpu-pwrlevels...
-            // A bit heuristic on line-based scan:
-            if ((line.contains("qcom,gpu-pwrlevels") && line.endsWith("{")) || 
-                (line.contains("compatible") && line.contains("qcom,gpu-pwrlevels"))) {
-                
-                // If it's a "compatible" line, we might be inside the node already started previous line?
-                // Actually standard DTS: 
-                // qcom,gpu-pwrlevels { 
-                //    compatible = "qcom,gpu-pwrlevels";
-                // }
-                // Just counting the node start is safer:
+            // If explicit ID exists, match it.
+            if (determinedId != null) {
+                determinedId == binIndex
+            } else {
+                // If implicit, we have to rely on order? 
+                // This is risky if we mix explicit and implicit.
+                // Fallback: Check index in list
+                allBins.indexOf(node) == binIndex
             }
-            
-            // Regex match for node start
-            if (line.matches(Regex(".*qcom,gpu-pwrlevels.*\\{.*"))) {
-                currentBinCount++
-                if (currentBinCount == binIndex) {
-                    insideTargetBin = true
-                    currentLevelCount = -1
-                } else {
-                    insideTargetBin = false
-                }
-            }
-            
-            if (insideTargetBin) {
-                if (line.contains("qcom,gpu-pwrlevel@") && line.endsWith("{")) {
-                    currentLevelCount++
-                    if (currentLevelCount == levelIndex) {
-                        // Found start line i
-                        // Scan forward for matching brace
-                        var braces = 1
-                        for (j in i + 1 until lines.size) {
-                            if (lines[j].contains("{")) braces++
-                            if (lines[j].contains("}")) braces--
-                            if (braces == 0) return Pair(i, j)
-                        }
-                    }
-                }
-                
-                // If we exit the bin
-                if (line == "};" && insideTargetBin && currentLevelCount == -1) { 
-                    // This logic is tricky with nested braces. 
-                    // Assuming indentation or just strict brace counting would be better if we tracked it from bin start.
-                    // But for this specific function, we just need to find the level if it exists.
-                }
+        } ?: allBins.getOrNull(binIndex) // Fallback to simple index
+    }
+
+    /**
+     * Finds the DtsNode corresponding to the level at the given index within a bin.
+     */
+    fun findLevelNode(binNode: DtsNode, levelIndex: Int): DtsNode? {
+        // Levels are children starting with qcom,gpu-pwrlevel@
+        return binNode.children.find { child ->
+            val name = child.name
+            if (name.startsWith("qcom,gpu-pwrlevel@")) {
+                val suffix = name.substringAfter("@")
+                val id = suffix.toIntOrNull()
+                id == levelIndex
+            } else {
+                false
             }
         }
-        return null
     }
 
     fun generateOppTableBlock(newOpps: List<Opp>): String {

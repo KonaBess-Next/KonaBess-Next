@@ -44,7 +44,9 @@ object DtsTreeHelper {
 
         // Root usually has children which are the top-level nodes of the file.
         // If root itself is "root" (our dummy), we iterate its children.
-        for (child in root.children) {
+        val startNodes = if (root.name == "root") root.children else listOf(root)
+
+        for (child in startNodes) {
             generateNode(sb, child, "")
             sb.append("\n")
         }
