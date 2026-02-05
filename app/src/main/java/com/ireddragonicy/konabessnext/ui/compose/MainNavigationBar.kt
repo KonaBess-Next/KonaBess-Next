@@ -23,8 +23,8 @@ fun MainNavigationBar(
         modifier = modifier
     ) {
         NavigationBarItem(
-            icon = { Icon(Icons.Filled.Edit, contentDescription = stringResource(R.string.edit_freq_table)) },
-            label = { Text(stringResource(R.string.edit_freq_table)) },
+            icon = { Icon(Icons.Filled.Edit, contentDescription = "Dashboard") },
+            label = { Text("Dashboard") },
             selected = selectedItem == 0,
             onClick = { onItemSelected(0) }
         )

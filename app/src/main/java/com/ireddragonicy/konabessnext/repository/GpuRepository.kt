@@ -279,4 +279,37 @@ open class GpuRepository @Inject constructor(
             updateContent(revertedState, addToHistory = false)
         }
     }
+
+    fun getGpuModelName(): String {
+        val lines = _dtsLines.value
+        val pattern = java.util.regex.Pattern.compile("""qcom,gpu-model\s*=\s*"([^"]+)";""")
+        for (line in lines) {
+            val matcher = pattern.matcher(line.trim())
+            if (matcher.find()) {
+                return matcher.group(1) ?: ""
+            }
+        }
+        return ""
+    }
+
+    fun updateGpuModelName(newName: String) {
+        val currentLines = ArrayList(_dtsLines.value)
+        val pattern = java.util.regex.Pattern.compile("""(qcom,gpu-model\s*=\s*")([^"]+)(";.*)""")
+        
+        var found = false
+        for (i in currentLines.indices) {
+            val line = currentLines[i]
+            val matcher = pattern.matcher(line)
+            if (matcher.find()) {
+                val newLine = line.replaceFirst(Regex(""""[^"]+""""), "\"$newName\"")
+                currentLines[i] = newLine
+                found = true
+                break
+            }
+        }
+        
+        if (found) {
+            updateContent(currentLines, "Renamed GPU to $newName")
+        }
+    }
 }

@@ -27,6 +27,12 @@ import com.ireddragonicy.konabessnext.viewmodel.UpdateStatus
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.Alignment
+import androidx.compose.foundation.shape.RoundedCornerShape
 
 sealed class SettingItem {
     data class Clickable(
@@ -207,29 +213,79 @@ fun SettingsScreen(
     // Update Dialog Handling
     if (updateStatus is UpdateStatus.Available) {
         val release = updateStatus.release
-        AlertDialog(
-            onDismissRequest = { onClearUpdateStatus() },
-            title = { Text(stringResource(R.string.update_available_title, release.tagName)) },
-            text = {
-                Column {
-                    Text(release.body.take(500) + if(release.body.length > 500) "..." else "")
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    onClearUpdateStatus()
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(release.htmlUrl))
-                    context.startActivity(intent)
-                }) {
-                    Text(stringResource(R.string.btn_download))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { onClearUpdateStatus() }) {
-                    Text(stringResource(R.string.btn_later))
+        val scrollState = androidx.compose.foundation.rememberScrollState()
+        
+        Dialog(onDismissRequest = { onClearUpdateStatus() }) {
+            Surface(
+                shape = RoundedCornerShape(28.dp),
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 6.dp,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 600.dp) // Limit height
+            ) {
+                Column(
+                    modifier = Modifier.padding(24.dp)
+                ) {
+                    // Header
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.SystemUpdate,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(48.dp).padding(bottom = 16.dp)
+                        )
+                        Text(
+                            text = stringResource(R.string.update_available_title, release.tagName),
+                            style = MaterialTheme.typography.headlineSmall,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+
+                    Divider(color = MaterialTheme.colorScheme.outlineVariant)
+                    
+                    // Markdown Content
+                    Box(modifier = Modifier.weight(1f).padding(vertical = 16.dp)) {
+                         Column(modifier = Modifier.verticalScroll(scrollState)) {
+                             MarkdownText(
+                                 markdown = release.body,
+                                 style = MaterialTheme.typography.bodyMedium
+                             )
+                         }
+                    }
+                    
+                    Divider(color = MaterialTheme.colorScheme.outlineVariant)
+
+                    // Actions
+                    Row(
+                         modifier = Modifier
+                             .fillMaxWidth()
+                             .padding(top = 16.dp),
+                         horizontalArrangement = Arrangement.End,
+                         verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        TextButton(
+                            onClick = { onClearUpdateStatus() }
+                        ) {
+                            Text(stringResource(R.string.btn_later))
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Button(
+                            onClick = {
+                                onClearUpdateStatus()
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(release.htmlUrl))
+                                context.startActivity(intent)
+                            }
+                        ) {
+                            Text(stringResource(R.string.btn_download))
+                        }
+                    }
                 }
             }
-        )
+        }
     }
 
     // Error Snackbar/Toast Handling

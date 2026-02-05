@@ -25,11 +25,24 @@ fun GuiEditorContent(
     
     val bins by sharedViewModel.bins.collectAsState()
     val binUiModels by sharedViewModel.binUiModels.collectAsState()
+    
+    val navigationStep by gpuFrequencyViewModel.navigationStep.collectAsState()
     val selectedBinIndex by gpuFrequencyViewModel.selectedBinIndex.collectAsState()
     val selectedLevelIndex by gpuFrequencyViewModel.selectedLevelIndex.collectAsState()
     val workbenchState by sharedViewModel.workbenchState.collectAsState()
     
     val currentChip = sharedViewModel.currentChip.collectAsState().value
+
+    // Back Handler Logic
+    androidx.activity.compose.BackHandler(enabled = navigationStep > 0 || selectedBinIndex != -1) {
+        if (selectedLevelIndex != -1) {
+            gpuFrequencyViewModel.selectedLevelIndex.value = -1
+        } else if (selectedBinIndex != -1) {
+            gpuFrequencyViewModel.selectedBinIndex.value = -1
+        } else if (navigationStep > 0) {
+            gpuFrequencyViewModel.navigationStep.value = 0
+        }
+    }
 
     var showManualSetup by remember { mutableStateOf(false) }
     var launchWithAutoScan by remember { mutableStateOf(false) }
@@ -65,50 +78,66 @@ fun GuiEditorContent(
                 )
             }
         }
-    } else if (selectedBinIndex == -1) {
-        GpuBinList(
-            state = binListState,
-            chipDef = currentChip,
-            onBinClick = { gpuFrequencyViewModel.selectedBinIndex.value = it },
-            onReload = { sharedViewModel.loadData() }
-        )
-    } else if (selectedLevelIndex == -1) {
-        val uiModels = binUiModels[selectedBinIndex]
-        if (uiModels != null) {
-            GpuLevelList(
-                uiModels = uiModels,
-                onLevelClick = { gpuFrequencyViewModel.selectedLevelIndex.value = it },
-                onAddLevelTop = { sharedViewModel.addFrequencyWrapper(selectedBinIndex, true) },
-                onAddLevelBottom = { sharedViewModel.addFrequencyWrapper(selectedBinIndex, false) },
-                onDuplicateLevel = { sharedViewModel.duplicateFrequency(selectedBinIndex, it) },
-                onDeleteLevel = { sharedViewModel.removeFrequency(selectedBinIndex, it) },
-                onReorder = { from, to -> sharedViewModel.reorderFrequency(selectedBinIndex, from, to) },
-                onBack = { gpuFrequencyViewModel.selectedBinIndex.value = -1 },
-                onOpenCurveEditor = { onOpenCurveEditor(selectedBinIndex) }
-            )
-        } else {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-        }
     } else {
-        val level = bins.getOrNull(selectedBinIndex)?.levels?.getOrNull(selectedLevelIndex)
-        if (level != null) {
-            val strings = sharedViewModel.getLevelStrings()
-            val values = sharedViewModel.getLevelValues()
-            
-            GpuParamEditor(
-                level = level,
-                levelStrings = strings,
-                levelValues = values,
-                ignoreVoltTable = currentChip?.ignoreVoltTable == true,
-                onBack = { gpuFrequencyViewModel.selectedLevelIndex.value = -1 },
-                onDeleteLevel = {
-                    sharedViewModel.removeFrequency(selectedBinIndex, selectedLevelIndex)
-                    gpuFrequencyViewModel.selectedLevelIndex.value = -1
-                },
-                onUpdateParam = { lineIdx, encoded, history ->
-                    sharedViewModel.updateParameter(selectedBinIndex, selectedLevelIndex, lineIdx, encoded, history)
+        // Main Content Area
+        androidx.compose.animation.Crossfade(targetState = navigationStep, label = "DashboardNav") { step ->
+            when (step) {
+                0 -> {
+                    GpuDashboard(
+                        sharedViewModel = sharedViewModel,
+                        onNavigateToFrequencyTable = { gpuFrequencyViewModel.navigationStep.value = 1 }
+                    )
                 }
-            )
+                1 -> {
+                    // Existing Editor Flow
+                    if (selectedBinIndex == -1) {
+                        GpuBinList(
+                            state = binListState,
+                            chipDef = currentChip,
+                            onBinClick = { gpuFrequencyViewModel.selectedBinIndex.value = it },
+                            onReload = { sharedViewModel.loadData() }
+                        )
+                    } else if (selectedLevelIndex == -1) {
+                        val uiModels = binUiModels[selectedBinIndex]
+                        if (uiModels != null) {
+                            GpuLevelList(
+                                uiModels = uiModels,
+                                onLevelClick = { gpuFrequencyViewModel.selectedLevelIndex.value = it },
+                                onAddLevelTop = { sharedViewModel.addFrequencyWrapper(selectedBinIndex, true) },
+                                onAddLevelBottom = { sharedViewModel.addFrequencyWrapper(selectedBinIndex, false) },
+                                onDuplicateLevel = { sharedViewModel.duplicateFrequency(selectedBinIndex, it) },
+                                onDeleteLevel = { sharedViewModel.removeFrequency(selectedBinIndex, it) },
+                                onReorder = { from, to -> sharedViewModel.reorderFrequency(selectedBinIndex, from, to) },
+                                onBack = { gpuFrequencyViewModel.selectedBinIndex.value = -1 },
+                                onOpenCurveEditor = { onOpenCurveEditor(selectedBinIndex) }
+                            )
+                        } else {
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+                        }
+                    } else {
+                        val level = bins.getOrNull(selectedBinIndex)?.levels?.getOrNull(selectedLevelIndex)
+                        if (level != null) {
+                            val strings = sharedViewModel.getLevelStrings()
+                            val values = sharedViewModel.getLevelValues()
+                            
+                            GpuParamEditor(
+                                level = level,
+                                levelStrings = strings,
+                                levelValues = values,
+                                ignoreVoltTable = currentChip?.ignoreVoltTable == true,
+                                onBack = { gpuFrequencyViewModel.selectedLevelIndex.value = -1 },
+                                onDeleteLevel = {
+                                    sharedViewModel.removeFrequency(selectedBinIndex, selectedLevelIndex)
+                                    gpuFrequencyViewModel.selectedLevelIndex.value = -1
+                                },
+                                onUpdateParam = { lineIdx, encoded, history ->
+                                    sharedViewModel.updateParameter(selectedBinIndex, selectedLevelIndex, lineIdx, encoded, history)
+                                }
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }

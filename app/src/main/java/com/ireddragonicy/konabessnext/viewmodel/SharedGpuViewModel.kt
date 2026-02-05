@@ -28,12 +28,29 @@ class SharedGpuViewModel @Inject constructor(
     private val _viewMode = MutableStateFlow(ViewMode.MAIN_EDITOR)
     val viewMode: StateFlow<ViewMode> = _viewMode.asStateFlow()
 
+
     // --- Search State ---
     data class SearchState(val query: String = "", val results: List<SearchResult> = emptyList(), val currentIndex: Int = -1)
     data class SearchResult(val lineIndex: Int)
     
     private val _searchState = MutableStateFlow(SearchState())
     val searchState = _searchState.asStateFlow()
+
+    @OptIn(kotlinx.coroutines.FlowPreview::class)
+    val gpuModelName: StateFlow<String> = repository.dtsLines
+        .map { repository.getGpuModelName() }
+        .distinctUntilChanged()
+        .flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.Lazily, "")
+        .map { repository.getGpuModelName() }
+        .distinctUntilChanged()
+        .flowOn(Dispatchers.Default)
+        .stateIn(viewModelScope, SharingStarted.Lazily, "")
+
+    fun updateGpuModelName(newName: String) {
+        repository.updateGpuModelName(newName)
+        // No manual update needed, flow will trigger from repository update
+    }
 
     // --- State Proxies from Repository (SSOT) ---
     
@@ -112,9 +129,11 @@ class SharedGpuViewModel @Inject constructor(
                 val lines = repository.dtsLines.value
                 if (lines.isNotEmpty()) {
                     // Wait up to 500ms for bins to be populated (Optimized)
+                    // Wait up to 500ms for bins to be populated (Optimized)
                     withTimeoutOrNull(500) {
                         repository.bins.first { it.isNotEmpty() }
                     }
+                    // _gpuModelName auto-updates now
                 }
                 
                 // Done loading

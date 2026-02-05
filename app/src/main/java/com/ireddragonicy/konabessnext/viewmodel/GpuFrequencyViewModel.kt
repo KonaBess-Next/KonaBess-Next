@@ -21,6 +21,7 @@ class GpuFrequencyViewModel @Inject constructor(
     // View State
     val selectedBinIndex = MutableStateFlow(-1)
     val selectedLevelIndex = MutableStateFlow(-1)
+    val navigationStep = MutableStateFlow(0)
 
     // Data Delegation
     val binsState = repository.bins.map { UiState.Success(it) }
