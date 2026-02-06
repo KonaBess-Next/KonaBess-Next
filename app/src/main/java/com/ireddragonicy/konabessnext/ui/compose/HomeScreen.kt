@@ -12,6 +12,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.activity.compose.BackHandler
@@ -26,10 +29,19 @@ fun HomeScreen(
     onStartRepack: () -> Unit
 ) {
     val isFilesExtracted by deviceViewModel.isFilesExtracted.collectAsState()
+    val reloadTrigger by deviceViewModel.dataReloadTrigger.collectAsState()
 
     // Load data when extracted (Preserves state across rotation/theme change)
     LaunchedEffect(isFilesExtracted) {
         if (isFilesExtracted) {
+            sharedViewModel.loadData()
+        }
+    }
+    
+    // Reload data when import triggers it (reloadTrigger > 0 means import happened)
+    LaunchedEffect(reloadTrigger) {
+        if (reloadTrigger > 0) {
+            android.util.Log.d("HomeScreen", "Reload triggered: $reloadTrigger")
             sharedViewModel.loadData()
         }
     }
@@ -147,6 +159,17 @@ fun GpuEditorMainContent(
     val detectionState by deviceViewModel.detectionState.collectAsState()
     val selectedChipset by deviceViewModel.selectedChipset.collectAsState()
     val activeDtbId by deviceViewModel.activeDtbId.collectAsState()
+    
+    val context = LocalContext.current
+    val canFlashOrRepack by deviceViewModel.canFlashOrRepack.collectAsState()
+
+    val exportDtsLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
+        if (uri != null) sharedViewModel.exportRawDts(context, uri)
+    }
+    
+    val exportImgLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
+        if (uri != null) deviceViewModel.exportBootImage(context, uri)
+    }
 
     GpuWorkbenchSheets(
         sheetType = activeSheet,
@@ -160,7 +183,8 @@ fun GpuEditorMainContent(
             activeSheet = WorkbenchSheetType.NONE
         },
         onConfigureManual = { id -> manualSetupIndex = id },
-        onAddNewDtb = { manualSetupIndex = 0 }
+        onAddNewDtb = { manualSetupIndex = 0 },
+        onImportDts = { uri -> deviceViewModel.importExternalDts(context, uri) }
     )
 
     if (activeCurveEditorBinId != -1) {
@@ -168,7 +192,10 @@ fun GpuEditorMainContent(
             binId = activeCurveEditorBinId,
             sharedViewModel = sharedViewModel,
             onBack = { activeCurveEditorBinId = -1 },
-            onRepack = onStartRepack
+            onRepack = onStartRepack,
+            onExportDts = { exportDtsLauncher.launch("gpu_config.dts") },
+            onExportImg = { exportImgLauncher.launch("boot_repack.img") },
+            canFlashOrRepack = canFlashOrRepack
         )
     } else {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -185,7 +212,10 @@ fun GpuEditorMainContent(
                 onShowHistory = { activeSheet = WorkbenchSheetType.HISTORY },
                 onViewModeChanged = { mode -> sharedViewModel.switchViewMode(mode) },
                 onChipsetClick = { activeSheet = WorkbenchSheetType.CHIPSET },
-                onFlashClick = { onStartRepack() }
+                onFlashClick = { onStartRepack() },
+                onExportDts = { exportDtsLauncher.launch("gpu_config.dts") },
+                onExportImg = { exportImgLauncher.launch("boot_repack.img") },
+                canFlashOrRepack = canFlashOrRepack
             )
     
             Crossfade(targetState = currentMode, label = "ViewModeSwitch") { mode ->

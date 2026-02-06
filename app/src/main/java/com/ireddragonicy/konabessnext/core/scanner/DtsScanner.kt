@@ -31,6 +31,12 @@ object DtsScanner {
         }
 
         val rootNode = DtsTreeHelper.parse(content)
+        
+        // DEBUG: Log tree structure info
+        android.util.Log.d("DtsScanner", "Parsed file: ${file.name}, root children: ${rootNode.children.size}")
+        rootNode.children.take(5).forEach { child ->
+            android.util.Log.d("DtsScanner", "  Child: ${child.name}, grandchildren: ${child.children.size}")
+        }
 
         // 1. Find Model
         // Look for property "model" in the root node (or the first child if root is a dummy container)
@@ -39,10 +45,15 @@ object DtsScanner {
              modelProp = rootNode.children.firstOrNull()?.getProperty("model")
         }
         val detectedModel = modelProp?.originalValue?.replace("\"", "")?.replace(";", "")?.trim()
+        android.util.Log.d("DtsScanner", "Detected model: $detectedModel")
 
         // 2. Strategy & Bin Detection
         val binNodes = mutableListOf<DtsNode>()
         findPwrLevels(rootNode, binNodes)
+        android.util.Log.d("DtsScanner", "Found ${binNodes.size} bin nodes")
+        binNodes.forEach { bin ->
+            android.util.Log.d("DtsScanner", "  Bin: ${bin.name}, levels: ${bin.children.filter { it.name.startsWith("qcom,gpu-pwrlevel@") }.size}")
+        }
 
         var strategy = "UNKNOWN"
         if (binNodes.size > 1) {
@@ -128,27 +139,24 @@ object DtsScanner {
 
     private fun findPwrLevels(node: DtsNode, result: MutableList<DtsNode>) {
         // compatible = "qcom,gpu-pwrlevels"
-        // OR name starts with "qcom,gpu-pwrlevels" (legacy)
+        // OR name starts with "qcom,gpu-pwrlevels" (legacy and modern variants)
+        // Modern SD860 uses: qcom,gpu-pwrlevels-0, qcom,gpu-pwrlevels-1
         val compatible = node.getProperty("compatible")?.originalValue
         
-        // Exclude "bins" container
-        val isCompatibleBin = compatible?.contains("qcom,gpu-pwrlevels") == true && compatible?.contains("bins") == false
-        val isNameMatch = node.name.startsWith("qcom,gpu-pwrlevels")
+        // Match patterns:
+        // 1. Name is exactly "qcom,gpu-pwrlevels" (single bin, old style)
+        // 2. Name matches "qcom,gpu-pwrlevels-N" (multi-bin style used by SD860)
+        // 3. Compatible contains "qcom,gpu-pwrlevels" but NOT "bins" (to exclude container)
+        val pwrLevelsPattern = Regex("""qcom,gpu-pwrlevels(-\d+)?$""")
+        val isNameMatch = pwrLevelsPattern.matches(node.name)
+        val isCompatibleBin = compatible?.contains("qcom,gpu-pwrlevels") == true && compatible.contains("bins") == false
 
-        if (isCompatibleBin || isNameMatch) {
+        if (isNameMatch || isCompatibleBin) {
             result.add(node)
         }
-        // Always recurse? No, strict recursion control.
-        // If it's a bin, usually we don't look inside for other bins.
-        // BUT DtsScanner logic originally just added everything it found.
-        // If I change it to "if found add, else recurse", it aligns with GpuDomainManager.
-        // The original logic was: add if match, AND recurse if children not empty.
-        // Which meant it added BOTH container and child.
-        // We want to avoid adding container.
         
-        if (node.children.isNotEmpty()) {
-             node.children.forEach { findPwrLevels(it, result) }
-        }
+        // Always recurse into children to find nested pwrlevels
+        node.children.forEach { findPwrLevels(it, result) }
     }
 
     fun toChipDefinition(result: DtsScanResult): ChipDefinition {
@@ -162,7 +170,10 @@ object DtsScanner {
             strategyType = result.recommendedStrategy,
             levelCount = 480,
             levels = mapOf(), 
-            binDescriptions = if (result.recommendedStrategy == "MULTI_BIN") mapOf(0 to "Default", 1 to "High Perf") else null,
+            // Use speed-bin based naming from DTS (qcom,gpu-pwrlevels-0, qcom,gpu-pwrlevels-1)
+            binDescriptions = if (result.recommendedStrategy == "MULTI_BIN") 
+                mapOf(0 to "Speed Bin 0", 1 to "Speed Bin 1") 
+            else null,
             models = listOf(result.detectedModel ?: "Custom")
         )
     }

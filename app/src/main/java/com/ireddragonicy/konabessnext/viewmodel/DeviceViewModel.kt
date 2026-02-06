@@ -16,7 +16,15 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
+import android.net.Uri
+import java.io.FileOutputStream
+import android.widget.Toast
 import javax.inject.Inject
 
 @HiltViewModel
@@ -40,6 +48,80 @@ class DeviceViewModel @Inject constructor(
     // New flow for active DTB
     private val _activeDtbId = MutableStateFlow(-1)
     val activeDtbId: StateFlow<Int> = _activeDtbId.asStateFlow()
+    
+    // Trigger to signal UI to reload data (increments after import)
+    private val _dataReloadTrigger = MutableStateFlow(0)
+    val dataReloadTrigger: StateFlow<Int> = _dataReloadTrigger.asStateFlow()
+
+    // Derived state: Can we flash or repack? 
+    // We assume physical DTBs have ID >= 0. IMPORTED ones have negative IDs (as per my repo change).
+    val canFlashOrRepack: StateFlow<Boolean> = _activeDtbId.map { id ->
+        id >= 0
+    }.stateIn(viewModelScope, SharingStarted.Lazily, false)
+
+    // Helper context for file operations that are "outside" repository scope (UI to Repository glue)
+    // Note: In strict architecture, UIs should handle URIs, but ViewModel creates the bridge.
+    // Since we need ContentResolver, functions accept Context.
+
+    fun importExternalDts(context: Context, uri: Uri) {
+        viewModelScope.launch {
+            try {
+                _detectionState.value = UiState.Loading
+                
+                context.contentResolver.openInputStream(uri)?.use { inputStream ->
+                    val filename = "imported.dts" // we rely on repo timestamp naming
+                    val dtb = repository.importExternalDts(inputStream, filename)
+                    
+                    // DON'T call selectChipset here! It would overwrite the dtsPath we just set
+                    // repository.importExternalDts already set: dtsPath, currentDtb, currentChip, prepared
+                    // We just need to update ViewModel state
+                    _activeDtbId.value = dtb.id
+                    _selectedChipset.value = dtb
+                    _isPrepared.value = dtb.type.strategyType.isNotEmpty()
+                    _isFilesExtracted.value = true
+                    
+                    _detectionState.value = UiState.Success(ArrayList(repository.dtbs))
+                    
+                    // Signal UI to reload data
+                    _dataReloadTrigger.value++
+                    
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "Import Successful: ${dtb.type.name}", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("KonaBessVM", "Import failed", e)
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, "Import Failed: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
+
+    fun exportBootImage(context: Context, uri: Uri) {
+        viewModelScope.launch {
+            try {
+                // 1. Repack to valid image
+                val bootImg = repository.dts2bootImage()
+                
+                // 2. Write to user URI
+                withContext(Dispatchers.IO) {
+                    context.contentResolver.openOutputStream(uri)?.use { output ->
+                        bootImg.inputStream().use { input ->
+                            input.copyTo(output)
+                        }
+                    }
+                }
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, "Export Successful", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                 withContext(Dispatchers.Main) {
+                    Toast.makeText(context, "Export Failed: ${e.message}", Toast.LENGTH_LONG).show()
+                 }
+            }
+        }
+    }
 
     fun detectChipset() {
         _detectionState.value = UiState.Loading

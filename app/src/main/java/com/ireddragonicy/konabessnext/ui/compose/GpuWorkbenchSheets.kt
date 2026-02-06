@@ -13,6 +13,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -38,7 +40,8 @@ fun GpuWorkbenchSheets(
     activeDtbId: Int,
     onChipsetSelect: (Dtb) -> Unit,
     onConfigureManual: (Int) -> Unit,
-    onAddNewDtb: () -> Unit
+    onAddNewDtb: () -> Unit,
+    onImportDts: (android.net.Uri) -> Unit
 ) {
     if (sheetType == WorkbenchSheetType.NONE) return
 
@@ -62,7 +65,8 @@ fun GpuWorkbenchSheets(
                     activeDtbId = activeDtbId,
                     onSelect = onChipsetSelect,
                     onConfigure = onConfigureManual,
-                    onAdd = onAddNewDtb
+                    onAdd = onAddNewDtb,
+                    onImport = onImportDts
                 )
             }
         }
@@ -105,8 +109,15 @@ private fun ChipsetSelectorContent(
     activeDtbId: Int,
     onSelect: (Dtb) -> Unit,
     onConfigure: (Int) -> Unit,
-    onAdd: () -> Unit
+    onAdd: () -> Unit,
+    onImport: (android.net.Uri) -> Unit
 ) {
+    val importLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) onImport(uri)
+    }
+
     Text(
         text = "Select DTS Index",
         style = MaterialTheme.typography.headlineSmall,
@@ -165,14 +176,26 @@ private fun ChipsetSelectorContent(
         }
         
         item {
-            OutlinedButton(
-                onClick = onAdd,
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Icon(Icons.Default.Settings, null)
-                Spacer(Modifier.width(8.dp))
-                Text("Add / Configure New DTB")
+             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(
+                    onClick = { importLauncher.launch(arrayOf("*/*")) },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Import DTS")
+                }
+                
+                OutlinedButton(
+                    onClick = onAdd,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Icon(Icons.Default.Settings, null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("New Config")
+                }
             }
         }
     }

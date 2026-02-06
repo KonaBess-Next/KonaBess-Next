@@ -5,6 +5,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -38,7 +39,11 @@ fun GpuEditorToolbar(
     onShowHistory: () -> Unit,
     onViewModeChanged: (SharedGpuViewModel.ViewMode) -> Unit,
     onChipsetClick: () -> Unit = {},
+
     onFlashClick: () -> Unit,
+    onExportDts: () -> Unit,
+    onExportImg: () -> Unit,
+    canFlashOrRepack: Boolean,
     applyStatusBarPadding: Boolean = true,
     modifier: Modifier = Modifier
 ) {
@@ -205,19 +210,62 @@ fun GpuEditorToolbar(
                     }
                 }
 
-                FilledTonalButton(
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        onFlashClick()
-                    },
-                    colors = ButtonDefaults.filledTonalButtonColors(
-                        containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onTertiaryContainer
-                    )
-                ) {
-                    Icon(painter = painterResource(R.drawable.ic_flash), contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text(androidx.compose.ui.res.stringResource(R.string.flash), style = MaterialTheme.typography.labelLarge)
+                // Build Menu
+                var showBuildMenu by remember { mutableStateOf(false) }
+
+                Box {
+                    FilledTonalButton(
+                        onClick = { 
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            showBuildMenu = true 
+                        },
+                        colors = ButtonDefaults.filledTonalButtonColors(
+                            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onTertiaryContainer
+                        )
+                    ) {
+                        Icon(Icons.Rounded.Build, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Build", style = MaterialTheme.typography.labelLarge)
+                    }
+
+                    DropdownMenu(
+                        expanded = showBuildMenu,
+                        onDismissRequest = { showBuildMenu = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Export .dts Source") },
+                            onClick = { 
+                                onExportDts() 
+                                showBuildMenu = false 
+                            },
+                            leadingIcon = { Icon(Icons.Rounded.Code, null) }
+                        )
+
+                        // Only show Image/Flash options if we have a valid base boot image
+                        if (canFlashOrRepack) {
+                            HorizontalDivider()
+                            
+                            DropdownMenuItem(
+                                text = { Text("Export .img File") },
+                                onClick = { 
+                                    onExportImg() 
+                                    showBuildMenu = false 
+                                },
+                                leadingIcon = { Icon(Icons.Rounded.Save, null) }
+                            )
+                            
+                            DropdownMenuItem(
+                                text = { Text("Flash to Device") },
+                                onClick = { 
+                                    onFlashClick() 
+                                    showBuildMenu = false 
+                                },
+                                leadingIcon = { Icon(Icons.Rounded.FlashOn, null) },
+                                colors = MenuDefaults.itemColors(textColor = MaterialTheme.colorScheme.primary)
+                            )
+                        }
+                    }
                 }
             }
         }

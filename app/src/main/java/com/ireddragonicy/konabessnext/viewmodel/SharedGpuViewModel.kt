@@ -14,6 +14,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import android.net.Uri
+import android.content.Context
+import androidx.lifecycle.viewModelScope
+import android.widget.Toast
 import javax.inject.Inject
 
 @HiltViewModel
@@ -87,8 +92,8 @@ class SharedGpuViewModel @Inject constructor(
 
     // --- Derived UI Models ---
     
-    val binUiModels: StateFlow<Map<Int, List<LevelUiModel>>> = combine(bins, _binOffsets, currentChip) { list, offsets, _ ->
-        mapBinsToUiModels(list, offsets)
+    val binUiModels: StateFlow<Map<Int, List<LevelUiModel>>> = combine(bins, _binOffsets, currentChip, opps) { list, offsets, _, oppList ->
+        mapBinsToUiModels(list, offsets, oppList)
     }
     .flowOn(Dispatchers.Default)
     .stateIn(viewModelScope, SharingStarted.Lazily, emptyMap())
@@ -112,9 +117,28 @@ class SharedGpuViewModel @Inject constructor(
     val parsedTree = repository.parsedTree // Auto-synced in Repo
     private val _expandedNodePaths = MutableStateFlow<Set<String>>(setOf("root"))
     
+    /**
+     * Resets all transient editor state when switching to a new device/DTS.
+     * Call this when importing a new file or switching chipsets.
+     */
+    fun resetEditorState() {
+        textScrollIndex.value = 0
+        textScrollOffset.value = 0
+        treeScrollIndex.value = 0
+        treeScrollOffset.value = 0
+        _expandedNodePaths.value = setOf("root")
+        _binOffsets.value = emptyMap()
+        _searchState.value = SearchState()
+        _viewMode.value = ViewMode.MAIN_EDITOR
+        android.util.Log.d("SharedGpuViewModel", "Editor state reset")
+    }
+
     // --- Actions ---
 
     fun loadData() {
+        // Reset transient UI state first (scroll positions, expanded nodes, etc.)
+        resetEditorState()
+        
         // Lock UI to Loading immediately
         _isLoading.value = true
         _workbenchState.value = WorkbenchState.Loading
@@ -172,6 +196,27 @@ class SharedGpuViewModel @Inject constructor(
     fun save(showToast: Boolean = true) {
         viewModelScope.launch {
             repository.saveTable()
+        }
+    }
+
+    fun exportRawDts(context: Context, uri: Uri) {
+        viewModelScope.launch {
+            try {
+                val content = dtsContent.value
+                withContext(Dispatchers.IO) {
+                    context.contentResolver.openOutputStream(uri)?.use { output ->
+                        output.write(content.toByteArray())
+                    }
+                }
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, "DTS Saved", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, "Save Failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
         }
     }
 
@@ -289,20 +334,20 @@ class SharedGpuViewModel @Inject constructor(
 
     // --- Logic Helpers ---
 
-    private fun mapBinsToUiModels(bins: List<Bin>, offsets: Map<Int, Float> = emptyMap()): Map<Int, List<LevelUiModel>> {
+    private fun mapBinsToUiModels(bins: List<Bin>, offsets: Map<Int, Float> = emptyMap(), oppList: List<Opp> = emptyList()): Map<Int, List<LevelUiModel>> {
         val context = application.applicationContext
         return bins.mapIndexed { i, bin -> 
             val offsetMhz = offsets[bin.id] ?: 0f
-            i to bin.levels.mapIndexedNotNull { j, lvl -> parseLevelToUi(j, lvl, context, offsetMhz) }
+            i to bin.levels.mapIndexedNotNull { j, lvl -> parseLevelToUi(j, lvl, context, offsetMhz, oppList) }
         }.toMap()
     }
     
     // Kept for compatibility if called without offsets, though internally we bind to the one with offsets.
     private fun mapBinsToUiModels(bins: List<Bin>): Map<Int, List<LevelUiModel>> {
-        return mapBinsToUiModels(bins, emptyMap())
+        return mapBinsToUiModels(bins, emptyMap(), emptyList())
     }
 
-    private fun parseLevelToUi(index: Int, level: Level, context: android.content.Context, offsetMhz: Float = 0f): LevelUiModel? {
+    private fun parseLevelToUi(index: Int, level: Level, context: android.content.Context, offsetMhz: Float = 0f, oppList: List<Opp> = emptyList()): LevelUiModel? {
         val freqRaw = level.frequency
         if (freqRaw <= 0) return null
         
@@ -326,16 +371,33 @@ class SharedGpuViewModel @Inject constructor(
         val bMax = level.busMax
         val bFreq = level.busFreq
         
-        val vLevel = level.voltageLevel
-        val chip = currentChip.value
-        val levelName = if (chip != null) {
-             val raw = chip.levels[vLevel - 1] ?: chip.levels[vLevel] ?: ""
-             if (raw.contains(" - ")) raw.substringAfter(" - ") else raw
-        } else {
-             ""
-        }
+        // Get voltage from Level (qcom,level or qcom,cx-level)
+        var vLevel = level.voltageLevel
+        var voltageDisplayStr = ""
         
-        val finalLevelName = if (levelName.isNotEmpty()) " - $levelName" else ""
+        // If Level doesn't have voltage, try to find it from OPP table by matching frequency
+        if (vLevel == -1 && oppList.isNotEmpty()) {
+            // Find OPP entry with matching (or closest) frequency
+            val matchingOpp = oppList.find { it.frequency == freqRaw }
+                ?: oppList.minByOrNull { kotlin.math.abs(it.frequency - freqRaw) }
+            
+            if (matchingOpp != null) {
+                // OPP voltage is in opp-microvolt format (e.g., 0x181 = 385 = RPMH level)
+                val oppVolt = matchingOpp.volt
+                voltageDisplayStr = "Volt: ${oppVolt}"
+            }
+        } else if (vLevel != -1) {
+            // Use Level's voltage level
+            val chip = currentChip.value
+            val levelName = if (chip != null) {
+                 val raw = chip.levels[vLevel - 1] ?: chip.levels[vLevel] ?: ""
+                 if (raw.contains(" - ")) raw.substringAfter(" - ") else raw
+            } else {
+                 ""
+            }
+            val finalLevelName = if (levelName.isNotEmpty()) " - $levelName" else ""
+            voltageDisplayStr = "Volt: $vLevel$finalLevelName"
+        }
         
         return LevelUiModel(
             originalIndex = index,
@@ -343,8 +405,8 @@ class SharedGpuViewModel @Inject constructor(
             busMin = if (bMin > -1) "Min: $bMin" else "",
             busMax = if (bMax > -1) "Max: $bMax" else "",
             busFreq = if (bFreq > -1) "Freq: $bFreq" else "",
-            voltageLabel = UiText.DynamicString("Volt: $vLevel"),
-            voltageVal = "Volt: $vLevel$finalLevelName",
+            voltageLabel = UiText.DynamicString(voltageDisplayStr),
+            voltageVal = voltageDisplayStr,
             isVisible = true
         )
     }

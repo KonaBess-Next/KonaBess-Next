@@ -306,14 +306,65 @@ open class GpuRepository @Inject constructor(
 
     fun getGpuModelName(): String {
         val lines = _dtsLines.value
-        val pattern = java.util.regex.Pattern.compile("""qcom,gpu-model\s*=\s*"([^"]+)";""")
+        
+        // Try 1: Look for qcom,gpu-model property
+        val modelPattern = java.util.regex.Pattern.compile("""qcom,gpu-model\s*=\s*"([^"]+)";""")
         for (line in lines) {
-            val matcher = pattern.matcher(line.trim())
+            val matcher = modelPattern.matcher(line.trim())
             if (matcher.find()) {
                 return matcher.group(1) ?: ""
             }
         }
+        
+        // Try 2: Extract from qcom,chipid and map to Adreno GPU name
+        val chipidPattern = java.util.regex.Pattern.compile("""qcom,chipid\s*=\s*<(0x[0-9a-fA-F]+)>;""")
+        for (line in lines) {
+            val matcher = chipidPattern.matcher(line.trim())
+            if (matcher.find()) {
+                val chipidHex = matcher.group(1) ?: ""
+                val chipid = chipidHex.removePrefix("0x").toLongOrNull(16) ?: 0L
+                return mapChipIdToGpuName(chipid)
+            }
+        }
+        
+        // Try 3: Extract from label property in kgsl node
+        val labelPattern = java.util.regex.Pattern.compile("""label\s*=\s*"([^"]+)";""")
+        for (line in lines) {
+            val matcher = labelPattern.matcher(line.trim())
+            if (matcher.find()) {
+                val label = matcher.group(1) ?: ""
+                if (label.contains("kgsl")) {
+                    return label.uppercase()
+                }
+            }
+        }
+        
         return ""
+    }
+    
+    // Map Qualcomm GPU chip IDs to human-readable Adreno names
+    private fun mapChipIdToGpuName(chipid: Long): String {
+        // Format: Major.Minor.Patch encoded in hex
+        // e.g., 0x6040001 = Adreno 640, 0x6080001 = Adreno 680
+        val major = ((chipid shr 24) and 0xFF).toInt()
+        val minor = ((chipid shr 16) and 0xFF).toInt()
+        
+        return when {
+            major == 6 && minor == 4 -> "Adreno 640"
+            major == 6 && minor == 5 -> "Adreno 650"
+            major == 6 && minor == 6 -> "Adreno 660"
+            major == 6 && minor == 8 -> "Adreno 680"
+            major == 6 && minor == 9 -> "Adreno 690"
+            major == 7 && minor == 3 -> "Adreno 730"
+            major == 7 && minor == 4 -> "Adreno 740"
+            major == 7 && minor == 5 -> "Adreno 750"
+            major == 5 && minor == 12 -> "Adreno 512"
+            major == 5 && minor == 40 -> "Adreno 540"
+            major == 6 && minor == 19 -> "Adreno 619"
+            major == 6 && minor == 18 -> "Adreno 618"
+            major == 6 && minor == 12 -> "Adreno 612"
+            else -> "Adreno ${major}${minor}0"
+        }
     }
 
     fun updateGpuModelName(newName: String) {

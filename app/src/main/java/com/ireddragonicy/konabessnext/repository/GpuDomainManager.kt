@@ -85,7 +85,11 @@ class GpuDomainManager @Inject constructor(
 
     fun parseOpps(lines: List<String>): List<Opp> {
         if (lines.isEmpty()) return emptyList()
-        val pattern = chipRepository.currentChip.value?.voltTablePattern ?: return emptyList()
+        val pattern = chipRepository.currentChip.value?.voltTablePattern
+        
+        if (pattern == null) {
+            return emptyList()
+        }
         
         // 1. Parse AST
         val fullText = lines.joinToString("\n")
@@ -93,7 +97,9 @@ class GpuDomainManager @Inject constructor(
         val opps = ArrayList<Opp>()
         
         // 2. Find Voltage Table Node
-        val tableNode = findNodeByNameOrCompatible(root, pattern) ?: return emptyList()
+        val tableNode = findNodeByNameOrCompatible(root, pattern)
+        
+        if (tableNode == null) return emptyList()
         
         // 3. Iterate Children (opp nodes)
         tableNode.children.forEach { child ->

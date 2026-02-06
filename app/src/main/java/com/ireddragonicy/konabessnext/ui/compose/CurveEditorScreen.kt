@@ -41,7 +41,10 @@ fun CurveEditorScreen(
     binId: Int,
     sharedViewModel: SharedGpuViewModel,
     onBack: () -> Unit,
-    onRepack: () -> Unit
+    onRepack: () -> Unit,
+    onExportDts: () -> Unit,
+    onExportImg: () -> Unit,
+    canFlashOrRepack: Boolean
 ) {
     // State
     // We maintain a local selectedBinId to allow switching bins inside the editor
@@ -110,7 +113,8 @@ fun CurveEditorScreen(
         activeDtbId = -1,
         onChipsetSelect = {},
         onConfigureManual = {},
-        onAddNewDtb = {}
+        onAddNewDtb = {},
+        onImportDts = {}
     )
 
     if (showBinDialog) {
@@ -193,6 +197,9 @@ fun CurveEditorScreen(
                     onBack() // Navigate back to main screen to show the new mode
                 },
                 onFlashClick = onRepack,
+                onExportDts = onExportDts,
+                onExportImg = onExportImg,
+                canFlashOrRepack = canFlashOrRepack,
                 applyStatusBarPadding = true
             )
         }

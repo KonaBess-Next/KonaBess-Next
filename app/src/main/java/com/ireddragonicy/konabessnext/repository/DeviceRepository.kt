@@ -7,6 +7,8 @@ import com.ireddragonicy.konabessnext.core.processor.BootImageProcessor
 import com.ireddragonicy.konabessnext.model.ChipDefinition
 import com.ireddragonicy.konabessnext.model.Dtb
 import com.ireddragonicy.konabessnext.model.DtbType
+import com.ireddragonicy.konabessnext.core.scanner.DtsScanner
+import java.io.InputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -91,6 +93,7 @@ open class DeviceRepository @Inject constructor(
              .apply()
     }
 
+
     fun tryLoadCustomDefinition(id: String): ChipDefinition? {
         if (!id.startsWith("custom")) return null
         val strategy = prefs.getString("custom_def_strategy", "MULTI_BIN") ?: "MULTI_BIN"
@@ -112,6 +115,51 @@ open class DeviceRepository @Inject constructor(
             needsCaTargetOffset = false,
             models = listOf("Custom")
         )
+    }
+
+    suspend fun importExternalDts(inputStream: InputStream, filename: String): Dtb {
+        val importedFile = File(filesDir, "imported_${System.currentTimeMillis()}.dts")
+        withContext(Dispatchers.IO) {
+            FileOutputStream(importedFile).use { output ->
+                inputStream.copyTo(output)
+            }
+        }
+
+        // Use a virtual index for imported files, e.g., negative or high number
+        // However, keeping it simple, let's just use a hash or a high offset.
+        // We'll use a negative ID to distinguish from physical DTBs (0..n)
+        val virtualId = -1 * (System.currentTimeMillis() % 10000).toInt() // Simple unique ID
+        
+        val content = withContext(Dispatchers.IO) { importedFile.readText() }
+        
+        // Use DtsScanner to analyze
+        val scanResult = DtsScanner.scan(importedFile, virtualId)
+        android.util.Log.d("DeviceRepository", "Scan result: isValid=${scanResult.isValid}, levels=${scanResult.levelCount}, strategy=${scanResult.recommendedStrategy}")
+        
+        // If scan is valid (found power levels), use the scan result to create a proper ChipDefinition
+        // Otherwise fall back to a generic placeholder
+        val def = if (scanResult.isValid && scanResult.levelCount > 0) {
+            // Use the scan results to create a valid ChipDefinition with detected levels
+            DtsScanner.toChipDefinition(scanResult)
+        } else {
+            createGenericPlaceholder(virtualId, content, scanResult.detectedModel ?: "Imported (Unknown)")
+        }
+
+        val dtb = Dtb(virtualId, def)
+        dtbs.add(dtb)
+        
+        // CRITICAL: Set dtsPath BEFORE chooseTarget, since imported files don't follow the {id}.dts naming convention
+        // chooseTarget would set path to "-1234.dts" which doesn't exist
+        _dtsPath = importedFile.absolutePath
+        android.util.Log.d("DeviceRepository", "Set dtsPath to imported file: $_dtsPath")
+        
+        // Now select (this will set currentDtb and chip, but won't override our dtsPath since we set it first)
+        chipRepository.setCurrentChip(def)
+        currentDtb = dtb
+        prepared = (def.strategyType.isNotEmpty())
+        saveLastChipset(virtualId, def.id)
+        
+        return dtb
     }
 
     fun getDtsFile(index: Int): File = File(filesDir, "$index.dts")
@@ -262,20 +310,18 @@ open class DeviceRepository @Inject constructor(
                 if (activeDtbId == -1) {
                     if (runningCompatibles.intersect(dtsCompatibles.toSet()).isNotEmpty()) {
                         activeDtbId = i
-                        Log.i(TAG, "MATCH: DTB #$i via Compatible")
                     } else if (runningModel.isNotEmpty() && dtsModel.isNotEmpty() && (dtsModel.contains(runningModel, true) || runningModel.contains(dtsModel, true))) {
                         activeDtbId = i
-                        Log.i(TAG, "MATCH: DTB #$i via Model")
                     }
                 }
                 
                 val chipId = detectChipType(content)
                 val def = chipRepository.getChipById(chipId ?: "") ?: createGenericPlaceholder(i, content, dtsModel)
                 dtbs.add(Dtb(i, def))
-            } catch (e: Exception) { Log.e(TAG, "Error checking DTB $i: ${e.message}") }
+            } catch (e: Exception) { /* Log.e(TAG, "Error checking DTB $i: ${e.message}") */ }
         }
         if (activeDtbId == -1 && count == 1) activeDtbId = 0
-        Log.i(TAG, "Final Active ID: $activeDtbId")
+        /* Log.i(TAG, "Final Active ID: $activeDtbId") */
     }
 
     private fun createGenericPlaceholder(index: Int, content: String, modelName: String): ChipDefinition {
@@ -283,7 +329,7 @@ open class DeviceRepository @Inject constructor(
         return ChipDefinition(
             id = "unsupported_$index",
             name = "$displayModel (DTB $index)",
-            maxTableLevels = 0,
+            maxTableLevels = 15,
             ignoreVoltTable = true,
             minLevelOffset = 1,
             voltTablePattern = null,
@@ -321,8 +367,9 @@ open class DeviceRepository @Inject constructor(
         dtbNum = bootImageProcessor.splitAndConvertDtbs(filesDir, dtbType!!)
     }
     
-    suspend fun dts2bootImage() = withContext(Dispatchers.IO) {
+    suspend fun dts2bootImage(): File = withContext(Dispatchers.IO) {
         bootImageProcessor.repackBootImage(filesDir, dtbNum, dtbType)
+        File(filesDir, "boot_new.img")
     }
 
     private fun saveLastChipset(dtbId: Int, chipType: String) {
