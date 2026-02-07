@@ -61,8 +61,27 @@ android {
             }
         }
         
+        // Optimized debug build - smaller APK (~10-15MB instead of 67MB)
+        // Trade-off: Slower incremental builds, but much smaller APKs
         debug {
+            // Enable minification for smaller debug APKs
+            minifyEnabled = true
+            shrinkResources = true
+            
+            // Use same proguard rules as release
+            proguardFiles(getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro')
+            
+            // CRITICAL: Keep debuggable for debugging support
+            debuggable = true
+        }
+        
+        // Fast iteration build - no optimization, for active development
+        // Use this when you need fast incremental builds
+        dev {
+            initWith debug
             minifyEnabled = false
+            shrinkResources = false
+            debuggable = true
         }
     }
     

@@ -8,6 +8,10 @@
 -allowaccessmodification
 -repackageclasses ''
 
+# Debug Build: Keep source file and line numbers for stack traces
+-keepattributes SourceFile,LineNumberTable
+-renamesourcefileattribute SourceFile
+
 # Standard Android Keeps
 -keep public class * extends android.app.Activity
 -keep public class * extends android.app.Application
