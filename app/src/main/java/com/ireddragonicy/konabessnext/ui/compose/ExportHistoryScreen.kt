@@ -41,6 +41,7 @@ fun ExportHistoryScreen(
 ) {
     val history by viewModel.history.collectAsState(initial = emptyList())
     val context = LocalContext.current
+    @Suppress("DEPRECATION")
     val clipboardManager = LocalClipboardManager.current
     
     var showDeleteDialog by remember { mutableStateOf<ExportHistoryItem?>(null) }
@@ -178,6 +179,7 @@ fun HistoryItemCardModern(
     onShare: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
+    @Suppress("DEPRECATION")
     clipboardManager: androidx.compose.ui.platform.ClipboardManager
 ) {
     Card(

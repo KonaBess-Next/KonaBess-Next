@@ -75,7 +75,8 @@ class DeviceViewModel @Inject constructor(
                     // DON'T call selectChipset here! It would overwrite the dtsPath we just set
                     // repository.importExternalDts already set: dtsPath, currentDtb, currentChip, prepared
                     // We just need to update ViewModel state
-                    _activeDtbId.value = dtb.id
+                    // NOTE: Do NOT set _activeDtbId here - "active" means the slot currently
+                    // running on the device. An imported DTS is not the active device slot.
                     _selectedChipset.value = dtb
                     _isPrepared.value = dtb.type.strategyType.isNotEmpty()
                     _isFilesExtracted.value = true

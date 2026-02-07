@@ -246,7 +246,7 @@ fun SettingsScreen(
                         )
                     }
 
-                    Divider(color = MaterialTheme.colorScheme.outlineVariant)
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     
                     // Markdown Content
                     Box(modifier = Modifier.weight(1f).padding(vertical = 16.dp)) {
@@ -258,7 +258,7 @@ fun SettingsScreen(
                          }
                     }
                     
-                    Divider(color = MaterialTheme.colorScheme.outlineVariant)
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
                     // Actions
                     Row(

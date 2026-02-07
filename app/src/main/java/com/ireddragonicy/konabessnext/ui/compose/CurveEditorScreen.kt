@@ -7,7 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Remove
 import androidx.compose.foundation.clickable
@@ -74,12 +74,12 @@ fun CurveEditorScreen(
     val context = androidx.compose.ui.platform.LocalContext.current
     val currentBinName = remember(bin, context, currentChip) {
         if (bin == null) return@remember "Bin $currentBinId"
-        val speedBinLine = bin?.header?.find { it.contains("qcom,speed-bin") }
+        val speedBinLine = bin.header.find { it.contains("qcom,speed-bin") }
         val realBinId = if (speedBinLine != null) {
             val extracted = com.ireddragonicy.konabessnext.utils.DtsHelper.extractLongValue(speedBinLine)
-            if (extracted != -1L) extracted.toInt() else bin?.id ?: currentBinId
+            if (extracted != -1L) extracted.toInt() else bin.id
         } else {
-            bin?.id ?: currentBinId
+            bin.id
         }
         try {
             com.ireddragonicy.konabessnext.utils.ChipStringHelper.convertBins(realBinId, context, currentChip)
@@ -232,7 +232,7 @@ fun CurveEditorScreen(
                                 contentColor = MaterialTheme.colorScheme.onSecondaryContainer
                             )
                         ) {
-                            Icon(Icons.Rounded.ArrowBack, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(8.dp))
                             Text("Back")
                         }

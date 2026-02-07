@@ -69,7 +69,7 @@ class GpuDomainManager @Inject constructor(
             val compatible = node.getProperty("compatible")?.originalValue
             
             // Standard check or legacy name check, BUT exclude "bins" container if it matches compatible
-            val isCompatibleBin = compatible?.contains("qcom,gpu-pwrlevels") == true && compatible?.contains("bins") == false
+            val isCompatibleBin = compatible?.contains("qcom,gpu-pwrlevels") == true && !compatible.contains("bins")
             val isNameMatch = node.name.startsWith("qcom,gpu-pwrlevels")
             
             if (isCompatibleBin || isNameMatch) {

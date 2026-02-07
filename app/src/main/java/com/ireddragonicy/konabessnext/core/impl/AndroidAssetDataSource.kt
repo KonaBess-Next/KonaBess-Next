@@ -9,7 +9,7 @@ import javax.inject.Singleton
 
 @Singleton
 class AndroidAssetDataSource @Inject constructor(
-    @ApplicationContext private val context: Context
+    @param:ApplicationContext private val context: Context
 ) : AssetDataSource {
     override fun open(fileName: String): InputStream {
         return context.assets.open(fileName)

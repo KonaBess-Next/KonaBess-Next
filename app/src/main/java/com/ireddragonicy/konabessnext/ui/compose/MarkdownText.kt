@@ -76,7 +76,7 @@ fun MarkdownText(
             
             // 4. Horizontal Rule
             if (line.trim() == "---" || line.trim() == "***") {
-                 Divider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant)
+                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = MaterialTheme.colorScheme.outlineVariant)
                  i++
                  continue
             }
@@ -84,6 +84,7 @@ fun MarkdownText(
             // 5. Normal Text (with inline formatting)
             if (line.isNotBlank()) {
                 val annotatedString = parseInlineMarkdown(line, color)
+                @Suppress("DEPRECATION")
                 ClickableText(
                     text = annotatedString,
                     style = style.copy(color = color),
@@ -168,7 +169,7 @@ fun MarkdownTable(lines: List<String>) {
             
             // Data Rows
             rows.forEachIndexed { rowIndex, rowItems ->
-                Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()

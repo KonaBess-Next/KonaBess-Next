@@ -20,6 +20,7 @@ fun VisualTreeContent(sharedViewModel: SharedGpuViewModel) {
     val rootNode by sharedViewModel.parsedTree.collectAsState()
     val searchState by sharedViewModel.searchState.collectAsState()
     val dtsContent by sharedViewModel.dtsContent.collectAsState()
+    @Suppress("DEPRECATION")
     val clipboardManager = LocalClipboardManager.current
     
     // Persistent Scroll State from VM

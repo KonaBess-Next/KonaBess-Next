@@ -135,13 +135,29 @@ fun GpuEditorMainContent(
     var activeSheet by remember { mutableStateOf(WorkbenchSheetType.NONE) }
     var manualSetupIndex by remember { mutableIntStateOf(-1) }
 
+    // Sheets
+    val detectionState by deviceViewModel.detectionState.collectAsState()
+    val selectedChipset by deviceViewModel.selectedChipset.collectAsState()
+    val activeDtbId by deviceViewModel.activeDtbId.collectAsState()
+    
+    val context = LocalContext.current
+    val canFlashOrRepack by deviceViewModel.canFlashOrRepack.collectAsState()
+
     // Dialogs
     if (manualSetupIndex != -1) {
+        // Determine if this DTB has an official/known definition
+        val dtbsList = (detectionState as? UiState.Success)?.data ?: emptyList()
+        val targetDtb = dtbsList.find { it.id == manualSetupIndex }
+        val isOfficial = targetDtb != null &&
+            !targetDtb.type.id.startsWith("custom") &&
+            !targetDtb.type.id.startsWith("unsupported")
+
         Dialog(onDismissRequest = { manualSetupIndex = -1 }) {
             Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surface) {
                 ManualChipsetSetupScreen(
                     dtbIndex = manualSetupIndex,
-                    autoStartScan = true,
+                    autoStartScan = !isOfficial,
+                    existingDefinition = targetDtb?.type,
                     onDeepScan = { deviceViewModel.performManualScan(manualSetupIndex) },
                     onSave = { def ->
                         deviceViewModel.saveManualDefinition(def, manualSetupIndex)
@@ -154,14 +170,6 @@ fun GpuEditorMainContent(
             }
         }
     }
-
-    // Sheets
-    val detectionState by deviceViewModel.detectionState.collectAsState()
-    val selectedChipset by deviceViewModel.selectedChipset.collectAsState()
-    val activeDtbId by deviceViewModel.activeDtbId.collectAsState()
-    
-    val context = LocalContext.current
-    val canFlashOrRepack by deviceViewModel.canFlashOrRepack.collectAsState()
 
     val exportDtsLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
         if (uri != null) sharedViewModel.exportRawDts(context, uri)

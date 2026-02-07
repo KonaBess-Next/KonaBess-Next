@@ -12,6 +12,7 @@ import androidx.compose.ui.text.AnnotatedString
 fun UnifiedDtsEditorScreen(sharedViewModel: SharedGpuViewModel) {
     val dtsContent by sharedViewModel.dtsContent.collectAsState()
     val searchState by sharedViewModel.searchState.collectAsState()
+    @Suppress("DEPRECATION")
     val clipboardManager = LocalClipboardManager.current
     
     // Persistent States

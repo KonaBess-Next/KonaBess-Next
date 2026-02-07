@@ -10,7 +10,7 @@ import javax.inject.Singleton
 
 @Singleton
 class AndroidFileDataSource @Inject constructor(
-    @ApplicationContext private val context: Context
+    @param:ApplicationContext private val context: Context
 ) : FileDataSource {
     override fun getFilesDir(): File {
         return context.filesDir

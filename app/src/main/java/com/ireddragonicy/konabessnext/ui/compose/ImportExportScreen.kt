@@ -450,6 +450,7 @@ fun ImportExportScreen(
                             Text(stringResource(R.string.close))
                         }
                     } else {
+                        @Suppress("DEPRECATION")
                         val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
                         
                         OutlinedTextField(

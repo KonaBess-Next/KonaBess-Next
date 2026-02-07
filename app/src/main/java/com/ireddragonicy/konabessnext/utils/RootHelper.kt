@@ -13,6 +13,7 @@ object RootHelper {
     init {
         Shell.enableVerboseLogging = false
         try {
+            @Suppress("DEPRECATION")
             Shell.setDefaultBuilder(
                 Shell.Builder.create()
                     .setFlags(Shell.FLAG_REDIRECT_STDERR)

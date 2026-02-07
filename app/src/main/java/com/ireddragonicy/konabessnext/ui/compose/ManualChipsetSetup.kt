@@ -25,15 +25,17 @@ import kotlinx.coroutines.delay
 fun ManualChipsetSetupScreen(
     dtbIndex: Int,
     autoStartScan: Boolean = false, // New Flag
+    existingDefinition: ChipDefinition? = null, // Pre-populate from known definition
     onDeepScan: suspend () -> DtsScanResult,
     onSave: (ChipDefinition) -> Unit,
     onCancel: () -> Unit
 ) {
-    var chipName by remember { mutableStateOf("Custom Snapdragon Device") }
-    var strategy by remember { mutableStateOf("MULTI_BIN") }
-    var maxLevels by remember { mutableStateOf("15") }
-    var voltagePattern by remember { mutableStateOf("") }
-    var ignoreVoltTable by remember { mutableStateOf(false) }
+    // Initialize form fields from existing definition if available, otherwise use defaults
+    var chipName by remember { mutableStateOf(existingDefinition?.name ?: "Custom Snapdragon Device") }
+    var strategy by remember { mutableStateOf(existingDefinition?.strategyType ?: "MULTI_BIN") }
+    var maxLevels by remember { mutableStateOf((existingDefinition?.maxTableLevels ?: 15).toString()) }
+    var voltagePattern by remember { mutableStateOf(existingDefinition?.voltTablePattern ?: "") }
+    var ignoreVoltTable by remember { mutableStateOf(existingDefinition?.ignoreVoltTable ?: false) }
     
     var isScanning by remember { mutableStateOf(false) }
     var scanResult by remember { mutableStateOf<DtsScanResult?>(null) }
@@ -224,16 +226,18 @@ fun ManualChipsetSetupScreen(
             Button(
                 onClick = {
                     val def = ChipDefinition(
-                        id = "custom_${System.currentTimeMillis()}",
+                        id = existingDefinition?.id ?: "custom_${System.currentTimeMillis()}",
                         name = chipName,
                         maxTableLevels = maxLevels.toIntOrNull() ?: 11,
                         ignoreVoltTable = ignoreVoltTable,
-                        minLevelOffset = 1,
+                        minLevelOffset = existingDefinition?.minLevelOffset ?: 1,
                         voltTablePattern = if (voltagePattern.isBlank()) null else voltagePattern,
                         strategyType = strategy,
-                        levelCount = 480,
-                        levels = mapOf(),
-                        models = listOf("Custom")
+                        levelCount = existingDefinition?.levelCount ?: 480,
+                        levels = existingDefinition?.levels ?: mapOf(),
+                        binDescriptions = existingDefinition?.binDescriptions,
+                        needsCaTargetOffset = existingDefinition?.needsCaTargetOffset ?: false,
+                        models = existingDefinition?.models ?: listOf("Custom")
                     )
                     onSave(def)
                 }

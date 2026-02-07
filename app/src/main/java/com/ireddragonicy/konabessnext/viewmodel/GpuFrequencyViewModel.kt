@@ -40,6 +40,7 @@ class GpuFrequencyViewModel @Inject constructor(
     fun save(showToast: Boolean) {
         // Call repository save
         // Toast logic handled in UI layer observing states
+        @OptIn(kotlinx.coroutines.DelicateCoroutinesApi::class)
         kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             repository.saveTable()
         }

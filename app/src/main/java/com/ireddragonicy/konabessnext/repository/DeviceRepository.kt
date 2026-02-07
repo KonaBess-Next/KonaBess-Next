@@ -62,6 +62,8 @@ open class DeviceRepository @Inject constructor(
     var activeDtbId: Int = -1
         private set
 
+    private var importCounter: Int = 0
+
     private var dtbNum: Int = 0
     private var dtbType: DtbType? = null
 
@@ -125,10 +127,9 @@ open class DeviceRepository @Inject constructor(
             }
         }
 
-        // Use a virtual index for imported files, e.g., negative or high number
-        // However, keeping it simple, let's just use a hash or a high offset.
-        // We'll use a negative ID to distinguish from physical DTBs (0..n)
-        val virtualId = -1 * (System.currentTimeMillis() % 10000).toInt() // Simple unique ID
+        // Use sequential negative IDs to distinguish from physical DTBs (0..n)
+        importCounter++
+        val virtualId = -importCounter
         
         val content = withContext(Dispatchers.IO) { importedFile.readText() }
         
@@ -176,6 +177,7 @@ open class DeviceRepository @Inject constructor(
         bootName = null
         currentDtb = null
         activeDtbId = -1
+        importCounter = 0
     }
 
     suspend fun setupEnv() = withContext(Dispatchers.IO) {
