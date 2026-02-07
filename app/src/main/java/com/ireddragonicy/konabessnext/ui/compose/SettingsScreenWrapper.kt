@@ -171,8 +171,10 @@ fun SettingsScreenWrapper(
         
         // Updater
         updateChannel = uiState.updateChannel,
+        isAutoCheckUpdate = uiState.isAutoCheckUpdate,
         updateStatus = uiState.updateStatus,
         onUpdateChannelChange = { channel -> settingsViewModel.setUpdateChannel(channel) },
+        onAutoCheckUpdateToggle = { settingsViewModel.toggleAutoCheckUpdate() },
         onCheckForUpdates = { settingsViewModel.checkForUpdates(isManual = true) },
         onClearUpdateStatus = { settingsViewModel.clearUpdateStatus() }
     )

@@ -398,4 +398,7 @@
     <string name="btn_later">Later</string>
     <string name="toast_no_updates">No updates available</string>
     <string name="toast_update_error">Update check failed: %1$s</string>
+    
+    <string name="auto_check_updates">Auto-check for Updates</string>
+    <string name="auto_check_updates_desc">Check for updates when app starts</string>
 </resources>

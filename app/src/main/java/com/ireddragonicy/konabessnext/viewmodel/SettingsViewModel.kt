@@ -25,6 +25,7 @@ data class SettingsUiState(
     val isDynamicColor: Boolean = true,
     val isAmoledMode: Boolean = false,
     val updateChannel: String = "stable",
+    val isAutoCheckUpdate: Boolean = true,
     val updateStatus: UpdateStatus = UpdateStatus.Idle
 )
 
@@ -73,7 +74,10 @@ class SettingsViewModel @Inject constructor(
 
     init {
         loadSettings()
-        checkForUpdates()
+        // Only check for updates on startup if setting is enabled
+        if (repository.isAutoCheckUpdate()) {
+            checkForUpdates()
+        }
     }
 
     private fun loadSettings() {
@@ -103,7 +107,11 @@ class SettingsViewModel @Inject constructor(
         val amoledMode = repository.isAmoledMode()
         val paletteInt = repository.getColorPalette()
         val paletteName = getPaletteName(paletteInt)
+        // Update Channel
         val updateChannel = repository.getUpdateChannel()
+        
+        // Auto Check Update
+        val autoCheckUpdate = repository.isAutoCheckUpdate()
 
         _uiState.update {
             it.copy(
@@ -114,7 +122,8 @@ class SettingsViewModel @Inject constructor(
                 isDynamicColor = dynamicColor,
                 isAmoledMode = amoledMode,
                 colorPalette = paletteName,
-                updateChannel = updateChannel
+                updateChannel = updateChannel,
+                isAutoCheckUpdate = autoCheckUpdate
             )
         }
     }
@@ -169,6 +178,12 @@ class SettingsViewModel @Inject constructor(
     fun setUpdateChannel(channel: String) {
         repository.setUpdateChannel(channel)
         _uiState.update { it.copy(updateChannel = channel) }
+    }
+    
+    fun toggleAutoCheckUpdate() {
+        val newState = !_uiState.value.isAutoCheckUpdate
+        repository.setAutoCheckUpdate(newState)
+        _uiState.update { it.copy(isAutoCheckUpdate = newState) }
     }
 
     fun setLanguage(languageCode: String) {

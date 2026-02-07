@@ -126,6 +126,33 @@ class GpuDomainManager @Inject constructor(
         }
         return null
     }
+    
+    /**
+     * Updates the opp-microvolt for an OPP entry matching the given frequency.
+     * Uses AST manipulation to modify the tree.
+     * 
+     * @param root The root DtsNode of the parsed DTS file
+     * @param frequency The frequency (in Hz) to match
+     * @param newVolt The new voltage value to set
+     * @return true if update was successful, false otherwise
+     */
+    fun updateOppVoltage(root: DtsNode, frequency: Long, newVolt: Long): Boolean {
+        val pattern = chipRepository.currentChip.value?.voltTablePattern ?: return false
+        
+        // Find OPP table node
+        val tableNode = findNodeByNameOrCompatible(root, pattern) ?: return false
+        
+        // Find OPP child node with matching frequency
+        val oppNode = tableNode.children.find { child ->
+            val freq = child.getLongValue("opp-hz")
+            freq == frequency
+        } ?: return false
+        
+        // Update the opp-microvolt property
+        oppNode.setProperty("opp-microvolt", newVolt.toString())
+        
+        return true
+    }
 
     /**
      * Legacy helper used by GpuRepository to find line ranges for text replacement.

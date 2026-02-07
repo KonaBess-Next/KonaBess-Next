@@ -39,4 +39,7 @@ class SettingsRepository @Inject constructor(
 
     fun getUpdateChannel(): String = prefs.getString("update_channel", "stable") ?: "stable"
     fun setUpdateChannel(channel: String) = prefs.edit().putString("update_channel", channel).apply()
+    
+    fun isAutoCheckUpdate(): Boolean = prefs.getBoolean("auto_check_update", true)
+    fun setAutoCheckUpdate(enabled: Boolean) = prefs.edit().putBoolean("auto_check_update", enabled).apply()
 }

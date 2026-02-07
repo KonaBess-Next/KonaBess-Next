@@ -5,6 +5,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Edit
@@ -18,7 +20,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.ireddragonicy.konabessnext.R
 import com.ireddragonicy.konabessnext.model.Level
@@ -32,8 +36,11 @@ fun GpuParamEditor(
     levelStrings: Array<String>,
     levelValues: IntArray,
     ignoreVoltTable: Boolean,
+    oppVoltage: Long? = null, // OPP-derived voltage for devices without qcom,level
+    levelFrequency: Long = 0L, // The frequency of this level (for OPP matching)
     onBack: () -> Unit,
     onUpdateParam: (lineIndex: Int, encodedLine: String, historyMsg: String) -> Unit,
+    onUpdateOppVoltage: ((newVolt: Long) -> Unit)? = null, // Callback for OPP voltage updates
     onDeleteLevel: () -> Unit
 ) {
     val context = LocalContext.current
@@ -165,6 +172,21 @@ fun GpuParamEditor(
                 modifier = Modifier.fillMaxSize(),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
+                // Show OPP voltage editor if available and no built-in voltage property exists
+                val hasBuiltInVoltage = params.any { it.rawName == "qcom,level" || it.rawName == "qcom,cx-level" }
+                if (!hasBuiltInVoltage && oppVoltage != null && oppVoltage > 0) {
+                    item {
+                        OppVoltageEditableCard(
+                            oppVoltage = oppVoltage,
+                            levelStrings = levelStrings,
+                            levelValues = levelValues,
+                            onUpdateVoltage = { newVolt ->
+                                onUpdateOppVoltage?.invoke(newVolt)
+                            }
+                        )
+                    }
+                }
+                
                 itemsIndexed(otherParams) { _, item ->
                     ParamCard(
                         item = item,
@@ -247,9 +269,9 @@ fun VoltageSelector(param: ParamItem, onSave: (String, String) -> Unit, levels: 
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable(
-                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                        indication = null
+                    .selectable(
+                        selected = isSelected,
+                        role = Role.RadioButton
                     ) {
                          selectedIndex = index
                          // Auto-save on selection of preset
@@ -277,9 +299,9 @@ fun VoltageSelector(param: ParamItem, onSave: (String, String) -> Unit, levels: 
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable(
-                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                            indication = null
+                        .selectable(
+                            selected = isCustom,
+                            role = Role.RadioButton
                         ) { selectedIndex = -1 }
                         .padding(vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -577,5 +599,227 @@ fun HeaderParamBox(
                 maxLines = 1
             )
         }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun OppVoltageEditableCard(
+    oppVoltage: Long,
+    levelStrings: Array<String>,
+    levelValues: IntArray,
+    onUpdateVoltage: (Long) -> Unit
+) {
+    var showSheet by remember { mutableStateOf(false) }
+    
+    // Find the current voltage level name
+    val currentLevelName = remember(oppVoltage, levelValues, levelStrings) {
+        val idx = levelValues.indexOfFirst { it.toLong() == oppVoltage }
+        if (idx >= 0 && idx < levelStrings.size) levelStrings[idx] else "Custom"
+    }
+    
+    Card(
+        onClick = { showSheet = true },
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+        ),
+        shape = MaterialTheme.shapes.medium
+    ) {
+        Row(
+            modifier = Modifier
+                .padding(16.dp)
+                .fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.ic_voltage),
+                contentDescription = null,
+                modifier = Modifier.size(24.dp),
+                tint = androidx.compose.ui.graphics.Color(0xFFE91E63) // Pink
+            )
+            Spacer(Modifier.width(16.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Voltage (OPP Table)",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
+                )
+                Text(
+                    text = "$currentLevelName ($oppVoltage)",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                )
+                Text(
+                    text = "Tap to edit",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+            Icon(
+                imageVector = Icons.Filled.Edit,
+                contentDescription = "Edit voltage",
+                modifier = Modifier.size(20.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
+        }
+    }
+    
+    // Voltage selection bottom sheet
+    if (showSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showSheet = false },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        ) {
+            OppVoltageSelectorContent(
+                currentVolt = oppVoltage,
+                levelStrings = levelStrings,
+                levelValues = levelValues,
+                onSave = { newVolt ->
+                    onUpdateVoltage(newVolt)
+                    showSheet = false
+                },
+                onCancel = { showSheet = false }
+            )
+        }
+    }
+}
+
+@Composable
+fun OppVoltageSelectorContent(
+    currentVolt: Long,
+    levelStrings: Array<String>,
+    levelValues: IntArray,
+    onSave: (Long) -> Unit,
+    onCancel: () -> Unit
+) {
+    // Find current selection index
+    val matchIndex = remember(currentVolt, levelValues) {
+        levelValues.indexOfFirst { it.toLong() == currentVolt }
+    }
+    
+    var selectedIndex by remember { mutableStateOf(matchIndex) }
+    var customText by remember { mutableStateOf(if (matchIndex == -1) currentVolt.toString() else "") }
+    val isCustom = selectedIndex == -1
+    
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+    ) {
+        Text(
+            text = "Select Voltage Level",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+        
+        Text(
+            text = "This changes the opp-microvolt value in the OPP table.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 16.dp)
+        )
+        
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 400.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            // Standard Presets
+            itemsIndexed(levelStrings.toList()) { index, label ->
+                val value = if (index < levelValues.size) levelValues[index] else 0
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .selectable(
+                            selected = selectedIndex == index,
+                            onClick = {
+                                selectedIndex = index
+                                customText = ""
+                                // Auto-save on selection
+                                onSave(value.toLong())
+                            },
+                            role = Role.RadioButton
+                        )
+                        .padding(vertical = 8.dp, horizontal = 4.dp)
+                ) {
+                    RadioButton(
+                        selected = selectedIndex == index,
+                        onClick = {
+                            selectedIndex = index
+                            customText = ""
+                            onSave(value.toLong())
+                        }
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = "$label ($value)",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+            }
+            
+            // Custom Option
+            item {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .selectable(
+                            selected = isCustom,
+                            onClick = { selectedIndex = -1 },
+                            role = Role.RadioButton
+                        )
+                        .padding(vertical = 8.dp, horizontal = 4.dp)
+                ) {
+                    RadioButton(
+                        selected = isCustom,
+                        onClick = { selectedIndex = -1 }
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = "Custom",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+                
+                if (isCustom) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 48.dp, top = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedTextField(
+                            value = customText,
+                            onValueChange = { customText = it },
+                            label = { Text("Raw Value") },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.weight(1f)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Button(
+                            onClick = {
+                                val value = customText.toLongOrNull()
+                                if (value != null) {
+                                    onSave(value)
+                                }
+                            },
+                            enabled = customText.isNotBlank()
+                        ) {
+                            Text("Save")
+                        }
+                    }
+                }
+            }
+        }
+        
+        Spacer(Modifier.height(16.dp))
     }
 }

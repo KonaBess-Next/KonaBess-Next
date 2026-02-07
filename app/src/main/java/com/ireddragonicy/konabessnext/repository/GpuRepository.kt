@@ -160,6 +160,26 @@ open class GpuRepository @Inject constructor(
         // but verify consistency first.
         updateContent(newLines, desc)
     }
+    
+    /**
+     * Updates the voltage (opp-microvolt) for an OPP entry matching the given frequency.
+     * This is used for devices where voltage is stored in a separate OPP table rather than
+     * inline qcom,level properties.
+     */
+    fun updateOppVoltage(frequency: Long, newVolt: Long, historyDesc: String? = null) {
+        val root = _parsedTree.value ?: return
+        
+        // Use GpuDomainManager to update the OPP voltage in the AST
+        val success = gpuDomainManager.updateOppVoltage(root, frequency, newVolt)
+        if (!success) return
+        
+        // Regenerate DTS from modified tree
+        val newText = DtsTreeHelper.generate(root)
+        val newLines = newText.split("\n")
+        
+        val desc = historyDesc ?: "Updated OPP voltage for ${frequency / 1_000_000}MHz to $newVolt"
+        updateContent(newLines, desc)
+    }
 
     fun batchUpdateParameters(updates: List<ParameterUpdate>, description: String = "Batch Update") {
         val root = _parsedTree.value ?: return

@@ -95,6 +95,7 @@ fun GuiEditorContent(
                             state = binListState,
                             chipDef = currentChip,
                             onBinClick = { gpuFrequencyViewModel.selectedBinIndex.value = it },
+                            onBack = { gpuFrequencyViewModel.navigationStep.value = 0 },
                             onReload = { sharedViewModel.loadData() }
                         )
                     } else if (selectedLevelIndex == -1) {
@@ -120,11 +121,21 @@ fun GuiEditorContent(
                             val strings = sharedViewModel.getLevelStrings()
                             val values = sharedViewModel.getLevelValues()
                             
+                            // Get OPP voltage by matching frequency
+                            val opps by sharedViewModel.opps.collectAsState()
+                            val oppVoltage = remember(level, opps) {
+                                val freq = level.frequency
+                                opps.find { it.frequency == freq }?.volt
+                                    ?: opps.minByOrNull { kotlin.math.abs(it.frequency - freq) }?.volt
+                            }
+                            
                             GpuParamEditor(
                                 level = level,
                                 levelStrings = strings,
                                 levelValues = values,
                                 ignoreVoltTable = currentChip?.ignoreVoltTable == true,
+                                oppVoltage = oppVoltage,
+                                levelFrequency = level.frequency,
                                 onBack = { gpuFrequencyViewModel.selectedLevelIndex.value = -1 },
                                 onDeleteLevel = {
                                     sharedViewModel.removeFrequency(selectedBinIndex, selectedLevelIndex)
@@ -132,6 +143,9 @@ fun GuiEditorContent(
                                 },
                                 onUpdateParam = { lineIdx, encoded, history ->
                                     sharedViewModel.updateParameter(selectedBinIndex, selectedLevelIndex, lineIdx, encoded, history)
+                                },
+                                onUpdateOppVoltage = { newVolt ->
+                                    sharedViewModel.updateOppVoltage(level.frequency, newVolt)
                                 }
                             )
                         }

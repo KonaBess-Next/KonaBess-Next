@@ -18,6 +18,8 @@ import com.ireddragonicy.konabessnext.utils.DtsHelper
 import com.ireddragonicy.konabessnext.model.Bin
 
 import androidx.compose.animation.Crossfade
+import androidx.compose.foundation.background
+import androidx.compose.ui.zIndex
 import com.ireddragonicy.konabessnext.viewmodel.UiState
 
 @Composable
@@ -25,80 +27,115 @@ fun GpuBinList(
     state: UiState<List<Bin>>,
     chipDef: com.ireddragonicy.konabessnext.model.ChipDefinition?,
     onBinClick: (Int) -> Unit,
+    onBack: () -> Unit,
     onReload: () -> Unit = {}
 ) {
     val context = LocalContext.current
+    
+    // Icons
+    val iconBack = painterResource(R.drawable.ic_arrow_back)
 
-    Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
-        contentWindowInsets = WindowInsets(0, 0, 0, 0) // Fix double padding
-    ) { paddingValues ->
-        Box(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
-            Crossfade(targetState = state, label = "GpuBinListState") { uiState ->
-                when (uiState) {
-                    is UiState.Loading -> {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
+        // Header with Back button (like GpuLevelList)
+        Surface(
+            tonalElevation = 3.dp,
+            shadowElevation = 3.dp,
+            modifier = Modifier.zIndex(1f)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Button(
+                    onClick = onBack,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.medium,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                ) {
+                    Icon(iconBack, null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.btn_back))
+                }
+            }
+        }
+
+        // Content
+        Crossfade(targetState = state, label = "GpuBinListState") { uiState ->
+            when (uiState) {
+                is UiState.Loading -> {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator()
+                    }
+                }
+                is UiState.Error -> {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(32.dp)) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_search),
+                                contentDescription = null,
+                                modifier = Modifier.size(48.dp).padding(bottom = 16.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = uiState.message.asString(),
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Button(onClick = onReload) {
+                                Text(stringResource(R.string.reload_data))
+                            }
+                        }
+                    }
+                }
+                is UiState.Success -> {
+                    val bins = uiState.data
+                    if (bins.isEmpty()) {
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator()
+                            Text(stringResource(R.string.no_gpu_tables_found))
                         }
-                    }
-                    is UiState.Error -> {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 16.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            contentPadding = PaddingValues(top = 8.dp, bottom = 88.dp)
                         ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(32.dp)) {
-                                Icon(
-                                    painter = painterResource(R.drawable.ic_search),
-                                    contentDescription = null,
-                                    modifier = Modifier.size(48.dp).padding(bottom = 16.dp),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Text(
-                                    text = uiState.message.asString(),
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Spacer(modifier = Modifier.height(16.dp))
-                                Button(onClick = onReload) {
-                                    Text(stringResource(R.string.reload_data))
+                            itemsIndexed(bins) { index, bin ->
+                                // Try to extract the real speed-bin ID from the header
+                                val speedBinLine = bin.header.find { it.contains("qcom,speed-bin") }
+                                val realBinId = if (speedBinLine != null) {
+                                    val extracted = DtsHelper.extractLongValue(speedBinLine)
+                                    if (extracted != -1L) extracted.toInt() else bin.id
+                                } else {
+                                    bin.id
                                 }
-                            }
-                        }
-                    }
-                    is UiState.Success -> {
-                        val bins = uiState.data
-                        if (bins.isEmpty()) {
-                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Text(stringResource(R.string.no_gpu_tables_found))
-                            }
-                        } else {
-                            LazyColumn(
-                                modifier = Modifier.fillMaxSize().padding(16.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                itemsIndexed(bins) { index, bin ->
-                                    // Try to extract the real speed-bin ID from the header
-                                    val speedBinLine = bin.header.find { it.contains("qcom,speed-bin") }
-                                    val realBinId = if (speedBinLine != null) {
-                                        val extracted = DtsHelper.extractLongValue(speedBinLine)
-                                        if (extracted != -1L) extracted.toInt() else bin.id
-                                    } else {
-                                        bin.id
-                                    }
 
-                                    val binName = remember(realBinId, context, chipDef) {
-                                        try {
-                                            ChipStringHelper.convertBins(realBinId, context, chipDef)
-                                        } catch (e: Exception) {
-                                            context.getString(R.string.unknown_table) + realBinId
-                                        }
+                                val binName = remember(realBinId, context, chipDef) {
+                                    try {
+                                        ChipStringHelper.convertBins(realBinId, context, chipDef)
+                                    } catch (e: Exception) {
+                                        context.getString(R.string.unknown_table) + realBinId
                                     }
-
-                                    BinItemCard(
-                                        name = binName,
-                                        onClick = { onBinClick(index) }
-                                    )
                                 }
+
+                                BinItemCard(
+                                    name = binName,
+                                    onClick = { onBinClick(index) }
+                                )
                             }
                         }
                     }

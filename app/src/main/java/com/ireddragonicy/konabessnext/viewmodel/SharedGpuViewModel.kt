@@ -189,6 +189,13 @@ class SharedGpuViewModel @Inject constructor(
             repository.updateParameterInBin(binIndex, levelIndex, key, value)
         }
     }
+    
+    /**
+     * Updates OPP table voltage for devices where voltage is stored separately (e.g., SD860).
+     */
+    fun updateOppVoltage(frequency: Long, newVolt: Long) {
+        repository.updateOppVoltage(frequency, newVolt)
+    }
 
     fun undo() = repository.undo()
     fun redo() = repository.redo()

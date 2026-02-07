@@ -75,8 +75,10 @@ fun SettingsScreen(
     onAmoledModeToggle: () -> Unit,
     // Updater Params
     updateChannel: String,
+    isAutoCheckUpdate: Boolean,
     updateStatus: UpdateStatus,
     onUpdateChannelChange: (String) -> Unit,
+    onAutoCheckUpdateToggle: () -> Unit,
     onCheckForUpdates: () -> Unit,
     onClearUpdateStatus: () -> Unit,
     modifier: Modifier = Modifier
@@ -109,10 +111,12 @@ fun SettingsScreen(
     val channelDesc = if (updateChannel == "prerelease") stringResource(R.string.channel_desc_prerelease) else stringResource(R.string.channel_desc_stable)
     val checkUpdatesTitle = stringResource(R.string.check_updates)
     val checkUpdatesDesc = if (updateStatus is UpdateStatus.Checking) stringResource(R.string.checking_updates) else stringResource(R.string.check_updates_desc)
+    val autoCheckUpdateTitle = stringResource(R.string.auto_check_updates)
+    val autoCheckUpdateDesc = stringResource(R.string.auto_check_updates_desc)
 
     val context = LocalContext.current
 
-    val settingsItems = remember(currentTheme, isDynamicColor, currentColorPalette, currentLanguage, currentFreqUnit, isAutoSave, isAmoledMode, themeTitle, updateChannel, updateStatus) {
+    val settingsItems = remember(currentTheme, isDynamicColor, currentColorPalette, currentLanguage, currentFreqUnit, isAutoSave, isAmoledMode, themeTitle, updateChannel, isAutoCheckUpdate, updateStatus) {
         buildList {
             // Appearance section
             add(SettingsListItem.Header(headerAppearance))
@@ -137,6 +141,7 @@ fun SettingsScreen(
             // About section
             add(SettingsListItem.Header(headerAbout))
             add(SettingsListItem.Setting(SettingItem.Clickable(Icons.Rounded.SystemUpdate, channelTitle, channelDesc, if (updateChannel == "prerelease") channelPrerelease else channelStable)))
+            add(SettingsListItem.Setting(SettingItem.Toggle(Icons.Rounded.SystemUpdate, autoCheckUpdateTitle, autoCheckUpdateDesc, isAutoCheckUpdate)))
             add(SettingsListItem.Setting(SettingItem.Clickable(Icons.Rounded.SystemUpdate, checkUpdatesTitle, checkUpdatesDesc, "")))
             add(SettingsListItem.Setting(SettingItem.Clickable(Icons.Rounded.Info, helpTitle, versionTitle, "")))
         }
@@ -191,6 +196,7 @@ fun SettingsScreen(
                                             dynamicColorTitle -> onDynamicColorToggle()
                                             autoSaveTitle -> onAutoSaveToggle()
                                             amoledTitle -> onAmoledModeToggle()
+                                            autoCheckUpdateTitle -> onAutoCheckUpdateToggle()
                                         }
                                     }
                                 )
