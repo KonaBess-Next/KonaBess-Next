@@ -360,7 +360,7 @@ fun FrequencyEditor(param: ParamItem, onSave: (String, String) -> Unit) {
     
     // Output Preview
     val hzValue = remember(text, unitIndex) {
-        com.ireddragonicy.konabessnext.core.editor.FrequencyDialogHelper.parseFrequencyToHz(text, unitIndex)
+        parseFrequencyToHz(text, unitIndex)
     }
     
     // Localized format for preview
@@ -821,5 +821,26 @@ fun OppVoltageSelectorContent(
         }
         
         Spacer(Modifier.height(16.dp))
+    }
+}
+
+/**
+ * Parse a frequency string to Hz based on the selected unit.
+ * @param value The input string value
+ * @param unitIndex 0=Hz, 1=MHz, 2=GHz
+ * @return The frequency in Hz, or -1 if parsing fails
+ */
+private fun parseFrequencyToHz(value: String, unitIndex: Int): Long {
+    return try {
+        if (value.isBlank()) return -1
+        val inputValue = value.trim().toDouble()
+        when (unitIndex) {
+            0 -> inputValue.toLong() // Hz
+            1 -> (inputValue * 1_000_000).toLong() // MHz
+            2 -> (inputValue * 1_000_000_000).toLong() // GHz
+            else -> inputValue.toLong()
+        }
+    } catch (e: NumberFormatException) {
+        -1
     }
 }
