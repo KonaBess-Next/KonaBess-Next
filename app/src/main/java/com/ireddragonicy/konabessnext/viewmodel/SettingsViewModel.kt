@@ -103,10 +103,10 @@ class SettingsViewModel @Inject constructor(
         val autoSave = repository.isAutoSave()
         
         // Customization
-        val dynamicColor = repository.isDynamicColor()
         val amoledMode = repository.isAmoledMode()
         val paletteInt = repository.getColorPalette()
         val paletteName = getPaletteName(paletteInt)
+        val dynamicColor = paletteInt == PALETTE_DYNAMIC
         // Update Channel
         val updateChannel = repository.getUpdateChannel()
         
@@ -146,12 +146,6 @@ class SettingsViewModel @Inject constructor(
         _uiState.update { it.copy(themeMode = nextMode) }
     }
 
-    fun toggleDynamicColor() {
-        val newState = !_uiState.value.isDynamicColor
-        repository.setDynamicColor(newState)
-        _uiState.update { it.copy(isDynamicColor = newState) }
-    }
-    
     fun toggleAutoSave() {
         val newState = !_uiState.value.autoSave
         repository.setAutoSave(newState)
@@ -192,8 +186,15 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun setColorPalette(paletteInt: Int) {
+        val isDynamic = paletteInt == PALETTE_DYNAMIC
         repository.setColorPalette(paletteInt)
-        _uiState.update { it.copy(colorPalette = getPaletteName(paletteInt)) }
+        repository.setDynamicColor(isDynamic)
+        _uiState.update {
+            it.copy(
+                colorPalette = getPaletteName(paletteInt),
+                isDynamicColor = isDynamic
+            )
+        }
     }
 
     private fun getPaletteName(paletteInt: Int): String {

@@ -58,13 +58,11 @@ sealed class SettingsListItem {
 @Composable
 fun SettingsScreen(
     currentTheme: String,
-    isDynamicColor: Boolean,
     currentColorPalette: String,
     currentLanguage: String,
     currentFreqUnit: String,
     isAutoSave: Boolean,
     onThemeClick: () -> Unit,
-    onDynamicColorToggle: () -> Unit,
     onColorPaletteClick: () -> Unit,
     onLanguageClick: () -> Unit,
     onFreqUnitClick: () -> Unit,
@@ -85,8 +83,6 @@ fun SettingsScreen(
 ) {
     val themeTitle = androidx.compose.ui.res.stringResource(R.string.settings_theme)
     val themeDesc = androidx.compose.ui.res.stringResource(R.string.settings_theme_desc)
-    val dynamicColorTitle = androidx.compose.ui.res.stringResource(R.string.settings_dynamic_color)
-    val dynamicColorDesc = androidx.compose.ui.res.stringResource(R.string.settings_dynamic_color_desc)
     val paletteTitle = androidx.compose.ui.res.stringResource(R.string.settings_color_palette)
     val paletteDesc = androidx.compose.ui.res.stringResource(R.string.settings_color_palette_desc)
     val langTitle = androidx.compose.ui.res.stringResource(R.string.settings_language)
@@ -116,7 +112,7 @@ fun SettingsScreen(
 
     val context = LocalContext.current
 
-    val settingsItems = remember(currentTheme, isDynamicColor, currentColorPalette, currentLanguage, currentFreqUnit, isAutoSave, isAmoledMode, themeTitle, updateChannel, isAutoCheckUpdate, updateStatus) {
+    val settingsItems = remember(currentTheme, currentColorPalette, currentLanguage, currentFreqUnit, isAutoSave, isAmoledMode, themeTitle, updateChannel, isAutoCheckUpdate, updateStatus) {
         buildList {
             // Appearance section
             add(SettingsListItem.Header(headerAppearance))
@@ -193,9 +189,8 @@ fun SettingsScreen(
                                     isChecked = item.isChecked,
                                     onToggle = {
                                         when (item.title) {
-                                            dynamicColorTitle -> onDynamicColorToggle()
-                                            autoSaveTitle -> onAutoSaveToggle()
                                             amoledTitle -> onAmoledModeToggle()
+                                            autoSaveTitle -> onAutoSaveToggle()
                                             autoCheckUpdateTitle -> onAutoCheckUpdateToggle()
                                         }
                                     }

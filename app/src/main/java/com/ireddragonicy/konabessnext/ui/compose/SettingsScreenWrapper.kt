@@ -153,7 +153,6 @@ fun SettingsScreenWrapper(
 
     SettingsScreen(
         currentTheme = uiState.themeMode.name,
-        isDynamicColor = uiState.isDynamicColor,
         currentColorPalette = uiState.colorPalette,
         currentLanguage = uiState.language,
         currentFreqUnit = uiState.frequencyUnit,
@@ -161,7 +160,6 @@ fun SettingsScreenWrapper(
         isAmoledMode = uiState.isAmoledMode,
         // Actions
         onThemeClick = { settingsViewModel.cycleThemeMode() },
-        onDynamicColorToggle = { settingsViewModel.toggleDynamicColor() },
         onColorPaletteClick = { showPaletteDialog = true },
         onLanguageClick = { showLanguageDialog = true },
         onFreqUnitClick = { settingsViewModel.toggleFrequencyUnit() },
