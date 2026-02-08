@@ -16,6 +16,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.ireddragonicy.konabessnext.R
+import com.ireddragonicy.konabessnext.viewmodel.DtsFileInfo
 
 data class ActionItem(
     val iconRes: Int,
@@ -43,6 +44,12 @@ fun ImportExportScreen(
     onImportFromClipboard: (String) -> Unit,
     onExportToClipboard: (String) -> Unit,
     onExportRawDts: () -> Unit,
+    onExportSingleDts: (DtsFileInfo) -> Unit,
+    onExportAllDts: () -> Unit,
+    onExportAllDtsAsZip: () -> Unit,
+    dtsFiles: List<DtsFileInfo>,
+    deviceModel: String,
+    deviceBrand: String,
     onBackupBootImage: () -> Unit,
     onBatchDtbToDts: () -> Unit,
     onDismissResult: () -> Unit,
@@ -57,6 +64,7 @@ fun ImportExportScreen(
     var sheetType by remember { mutableStateOf(BottomSheetType.NONE) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var textInput by remember { mutableStateOf("") }
+    var showDtsExportSheet by remember { mutableStateOf(false) }
 
     if (importPreview != null) {
         val expandedStates = remember(importPreview) { mutableStateMapOf<Int, Boolean>() }
@@ -512,6 +520,28 @@ fun ImportExportScreen(
         }
     }
 
+    // ─── DTS Export Sheet ─────────────────────────────────────
+    if (showDtsExportSheet) {
+        ExportRawDtsSheet(
+            dtsFiles = dtsFiles,
+            deviceModel = deviceModel,
+            deviceBrand = deviceBrand,
+            onExportSingle = { dtsInfo ->
+                showDtsExportSheet = false
+                onExportSingleDts(dtsInfo)
+            },
+            onExportAll = {
+                showDtsExportSheet = false
+                onExportAllDts()
+            },
+            onExportAllAsZip = {
+                showDtsExportSheet = false
+                onExportAllDtsAsZip()
+            },
+            onDismiss = { showDtsExportSheet = false }
+        )
+    }
+
     Surface(
         modifier = modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background
@@ -552,7 +582,7 @@ fun ImportExportScreen(
                                         textInput = ""
                                         showSheet = true
                                     }
-                                    5 -> onExportRawDts()
+                                    5 -> showDtsExportSheet = true
                                     6 -> onBackupBootImage()
                                     7 -> onBatchDtbToDts()
                                 }

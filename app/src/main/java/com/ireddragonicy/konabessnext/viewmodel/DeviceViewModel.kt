@@ -240,6 +240,9 @@ class DeviceViewModel @Inject constructor(
         viewModelScope.launch { try { repository.reboot() } catch (e: Exception) {} }
     }
 
+    fun getDeviceModel(): String = repository.getCurrent("model")
+    fun getDeviceBrand(): String = repository.getCurrent("brand")
+
     fun clearRepackState() {
         _repackState.value = null
     }

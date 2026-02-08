@@ -7,8 +7,12 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
 import com.ireddragonicy.konabessnext.viewmodel.DeviceViewModel
+import com.ireddragonicy.konabessnext.viewmodel.DtsFileInfo
 import com.ireddragonicy.konabessnext.viewmodel.ImportExportViewModel
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @Composable
 fun ImportExportScreenWrapper(
@@ -54,11 +58,39 @@ fun ImportExportScreenWrapper(
         uri?.let { importExportViewModel.exportConfigToUri(context, it, "Exported Config") }
     }
 
-    // Export Raw DTS (Assuming .dts or .txt is fine, keeps text/plain)
+    // Export Raw DTS — single file (legacy, kept for reference but now uses new flow)
     val exportRawDtsLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("text/plain")
     ) { uri ->
         uri?.let { importExportViewModel.exportRawDtsToUri(context, it) }
+    }
+
+    // ── New: Export single DTS file via CreateDocument ──
+    var pendingDtsExport by remember { mutableStateOf<DtsFileInfo?>(null) }
+    
+    val exportSingleDtsLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("text/plain")
+    ) { uri ->
+        uri?.let { selectedUri ->
+            pendingDtsExport?.let { dtsInfo ->
+                importExportViewModel.exportDtsFileToUri(context, selectedUri, dtsInfo)
+                pendingDtsExport = null
+            }
+        }
+    }
+
+    // ── New: Export all DTS files to a folder ──
+    val exportAllDtsFolderLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { uri ->
+        uri?.let { importExportViewModel.exportAllDtsFilesToFolder(context, it) }
+    }
+
+    // ── New: Export all DTS files as a single ZIP ──
+    val exportAllDtsZipLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/zip")
+    ) { uri ->
+        uri?.let { importExportViewModel.exportAllDtsAsZipToUri(context, it) }
     }
 
     // Backup Boot Image
@@ -88,7 +120,14 @@ fun ImportExportScreenWrapper(
     ) { uri ->
         uri?.let { importExportViewModel.exportConfigToUri(context, it, pendingExportDesc) }
     }
-    
+
+    // ── Retrieve DTS files list & device info for the export sheet ──
+    val dtsFiles = remember(isPrepared) {
+        if (isPrepared) importExportViewModel.getAllDtsFiles() else emptyList()
+    }
+    val deviceModel = remember { deviceViewModel.getDeviceModel() }
+    val deviceBrand = remember { deviceViewModel.getDeviceBrand() }
+
     ImportExportScreen(
         isPrepared = isPrepared,
         onExportHistory = onNavigateToExportHistory, 
@@ -111,7 +150,23 @@ fun ImportExportScreenWrapper(
                  }
              }
         },
-        onExportRawDts = { exportRawDtsLauncher.launch("raw_dts_dump.dts") },
+        onExportRawDts = { /* Now handled by the sheet mechanism inside ImportExportScreen */ },
+        onExportSingleDts = { dtsInfo: DtsFileInfo ->
+            pendingDtsExport = dtsInfo
+            val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+            val safeName = "konabess_dts_dtb${dtsInfo.index}_$timestamp.dts"
+            exportSingleDtsLauncher.launch(safeName)
+        },
+        onExportAllDts = {
+            exportAllDtsFolderLauncher.launch(null)
+        },
+        onExportAllDtsAsZip = {
+            val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+            exportAllDtsZipLauncher.launch("konabess_dts_$timestamp.zip")
+        },
+        dtsFiles = dtsFiles,
+        deviceModel = deviceModel,
+        deviceBrand = deviceBrand,
         onBackupBootImage = { backupBootLauncher.launch("boot_modified.img") },
         onBatchDtbToDts = { batchDtbLauncher.launch(arrayOf("*/*")) },
         onDismissResult = { importExportViewModel.clearExportResult() },

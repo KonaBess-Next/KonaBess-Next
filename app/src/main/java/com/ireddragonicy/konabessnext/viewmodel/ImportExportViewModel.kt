@@ -30,6 +30,26 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import com.ireddragonicy.konabessnext.utils.RootHelper
 import com.ireddragonicy.konabessnext.utils.UriPathHelper
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
+
+/**
+ * Represents a single DTS file available for export with metadata.
+ */
+data class DtsFileInfo(
+    val index: Int,
+    val file: File,
+    val fileName: String,
+    val chipName: String,
+    val fileSizeBytes: Long,
+    val isActive: Boolean,
+    val isCurrentlySelected: Boolean,
+    val lineCount: Int,
+    val modelName: String
+)
 
 @HiltViewModel
 class ImportExportViewModel @Inject constructor(
@@ -351,6 +371,225 @@ class ImportExportViewModel @Inject constructor(
              } catch (e: Exception) {
                  _errorEvent.emit("Export Raw DTS failed: ${e.message}")
              }
+        }
+    }
+
+    /**
+     * Retrieves all DTS files currently available (extracted from boot image).
+     * Each file is returned with metadata for display in the UI cards.
+     */
+    fun getAllDtsFiles(): List<DtsFileInfo> {
+        val dtbs = deviceRepository.dtbs
+        val activeDtbId = deviceRepository.activeDtbId
+        val currentDtb = deviceRepository.currentDtb
+        val modelPattern = java.util.regex.Pattern.compile("model\\s*=\\s*\"([^\"]+)\"")
+        
+        return dtbs.mapNotNull { dtb ->
+            try {
+                val file = if (dtb.id < 0) {
+                    // Imported file - use getDtsFile() from interface which handles dtsPath
+                    deviceRepository.getDtsFile()
+                } else {
+                    deviceRepository.getDtsFile(dtb.id)
+                }
+                
+                if (!file.exists()) return@mapNotNull null
+                
+                // Extract model name from first few lines
+                val firstLines = file.bufferedReader().use { reader ->
+                    val sb = StringBuilder()
+                    var count = 0
+                    reader.forEachLine { line ->
+                        if (count < 30) { sb.appendLine(line); count++ }
+                    }
+                    sb.toString()
+                }
+                val modelMatcher = modelPattern.matcher(firstLines)
+                val modelName = if (modelMatcher.find()) modelMatcher.group(1) ?: "" else ""
+                
+                // Count lines efficiently
+                val lineCount = file.bufferedReader().use { reader ->
+                    var lines = 0
+                    while (reader.readLine() != null) lines++
+                    lines
+                }
+                
+                DtsFileInfo(
+                    index = dtb.id,
+                    file = file,
+                    fileName = file.name,
+                    chipName = dtb.type.name,
+                    fileSizeBytes = file.length(),
+                    isActive = dtb.id == activeDtbId,
+                    isCurrentlySelected = dtb.id == currentDtb?.id,
+                    lineCount = lineCount,
+                    modelName = modelName
+                )
+            } catch (e: Exception) {
+                null
+            }
+        }
+    }
+
+    /**
+     * Export a specific DTS file by index to a user-chosen URI.
+     */
+    fun exportDtsFileToUri(context: Context, uri: Uri, dtsFileInfo: DtsFileInfo) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val file = dtsFileInfo.file
+                if (!file.exists()) {
+                    _errorEvent.emit("DTS file not found: ${file.name}")
+                    return@launch
+                }
+                
+                val outputStream = context.contentResolver.openOutputStream(uri)
+                if (outputStream != null) {
+                    file.inputStream().use { input ->
+                        outputStream.use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                }
+                
+                val filename = "dts_${dtsFileInfo.index}_${System.currentTimeMillis()}.dts"
+                addToHistory(filename, "Raw DTS Export (DTB ${dtsFileInfo.index})", uri.toString())
+                _messageEvent.emit("Exported: ${dtsFileInfo.chipName}")
+            } catch (e: Exception) {
+                _errorEvent.emit("Export failed: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * Export a specific DTS file to a folder (DocumentFile), preserving individual file names.
+     */
+    fun exportDtsFileToFolder(context: Context, folderUri: Uri, dtsFileInfo: DtsFileInfo) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val file = dtsFileInfo.file
+                if (!file.exists()) {
+                    _errorEvent.emit("DTS file not found: ${file.name}")
+                    return@launch
+                }
+                
+                val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+                val deviceModel = deviceRepository.getCurrent("model").replace(" ", "_")
+                val exportName = "konabess_dts_${deviceModel}_dtb${dtsFileInfo.index}_$timestamp.dts"
+                
+                val folder = DocumentFile.fromTreeUri(context, folderUri)
+                val newFile = folder?.createFile("text/plain", exportName)
+                
+                if (newFile?.uri != null) {
+                    val outputStream = context.contentResolver.openOutputStream(newFile.uri)
+                    if (outputStream != null) {
+                        file.inputStream().use { input ->
+                            outputStream.use { output ->
+                                input.copyTo(output)
+                            }
+                        }
+                    }
+                    addToHistory(exportName, "Raw DTS Export (DTB ${dtsFileInfo.index})", newFile.uri.toString())
+                    _messageEvent.emit("Exported: $exportName")
+                } else {
+                    _errorEvent.emit("Failed to create file in selected folder")
+                }
+            } catch (e: Exception) {
+                _errorEvent.emit("Export failed: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * Export ALL DTS files to a folder at once.
+     */
+    fun exportAllDtsFilesToFolder(context: Context, folderUri: Uri) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val allFiles = getAllDtsFiles()
+                if (allFiles.isEmpty()) {
+                    _errorEvent.emit("No DTS files available to export")
+                    return@launch
+                }
+                
+                val folder = DocumentFile.fromTreeUri(context, folderUri)
+                val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+                val deviceModel = deviceRepository.getCurrent("model").replace(" ", "_")
+                var exported = 0
+                
+                for (info in allFiles) {
+                    try {
+                        val exportName = "konabess_dts_${deviceModel}_dtb${info.index}_$timestamp.dts"
+                        val newFile = folder?.createFile("text/plain", exportName)
+                        
+                        if (newFile?.uri != null) {
+                            val outputStream = context.contentResolver.openOutputStream(newFile.uri)
+                            if (outputStream != null) {
+                                info.file.inputStream().use { input ->
+                                    outputStream.use { output ->
+                                        input.copyTo(output)
+                                    }
+                                }
+                            }
+                            addToHistory(exportName, "Raw DTS Export (DTB ${info.index})", newFile.uri.toString())
+                            exported++
+                        }
+                    } catch (e: Exception) {
+                        _errorEvent.emit("Failed to export DTB ${info.index}: ${e.message}")
+                    }
+                }
+                
+                _messageEvent.emit("Exported $exported/${allFiles.size} DTS files")
+            } catch (e: Exception) {
+                _errorEvent.emit("Export all failed: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * Export ALL DTS files as a single ZIP archive to a user-chosen URI.
+     */
+    fun exportAllDtsAsZipToUri(context: Context, uri: Uri) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val allFiles = getAllDtsFiles()
+                if (allFiles.isEmpty()) {
+                    _errorEvent.emit("No DTS files available to export")
+                    return@launch
+                }
+
+                val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+                val deviceModel = deviceRepository.getCurrent("model").replace(" ", "_")
+
+                val outputStream = context.contentResolver.openOutputStream(uri)
+                if (outputStream == null) {
+                    _errorEvent.emit("Failed to open output stream")
+                    return@launch
+                }
+
+                ZipOutputStream(outputStream).use { zipOut ->
+                    for (info in allFiles) {
+                        try {
+                            if (!info.file.exists()) continue
+                            val entryName = "konabess_dts_${deviceModel}_dtb${info.index}_$timestamp.dts"
+                            val zipEntry = ZipEntry(entryName)
+                            zipOut.putNextEntry(zipEntry)
+                            info.file.inputStream().use { input ->
+                                input.copyTo(zipOut)
+                            }
+                            zipOut.closeEntry()
+                        } catch (e: Exception) {
+                            _errorEvent.emit("Failed to add DTB ${info.index} to ZIP: ${e.message}")
+                        }
+                    }
+                }
+
+                val zipName = "konabess_dts_${deviceModel}_$timestamp.zip"
+                addToHistory(zipName, "Raw DTS Export (ZIP, ${allFiles.size} files)", uri.toString())
+                _messageEvent.emit("Exported ${allFiles.size} DTS files as ZIP")
+            } catch (e: Exception) {
+                _errorEvent.emit("ZIP export failed: ${e.message}")
+            }
         }
     }
 
