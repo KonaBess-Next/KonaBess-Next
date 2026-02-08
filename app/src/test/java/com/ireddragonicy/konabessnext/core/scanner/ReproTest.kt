@@ -52,8 +52,15 @@ class ReproTest {
         // Debug print
         println("Root children: " + root.children.map { it.name })
         
-        val soc = root.children.find { it.name == "soc" }
-        assert(soc != null)
+        // The parser creates a virtual "root" node which contains the DTS root node "/"
+        // The "soc" node is a child of "/", not of the virtual root
+        val dtsRoot = root.children.find { it.name == "/" }
+        assert(dtsRoot != null) { "Expected to find '/' node as a child of virtual root" }
+        
+        println("DTS root (/) children: " + dtsRoot!!.children.map { it.name })
+        
+        val soc = dtsRoot.children.find { it.name == "soc" }
+        assert(soc != null) { "Expected to find 'soc' node as a child of '/'" }
         
         println("SoC children: " + soc!!.children.map { it.name })
         

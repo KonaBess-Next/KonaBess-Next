@@ -113,8 +113,8 @@ class RealDtsParsingTest {
         val generated = DtsTreeHelper.generate(root)
         
         // 4. Verify in String
-        // It should be converted to hex: 999999999 -> 0x3b9aca00
-        val expectedHex = "0x3b9aca00"
+        // It should be converted to hex: 999999999 -> 0x3b9ac9ff
+        val expectedHex = "0x3b9ac9ff"
         assertTrue("Generated string should contain new hex value", generated.contains(expectedHex))
         
         // 5. Parse again and verify

@@ -1,7 +1,7 @@
 # ProGuard Rules for KonaBess Next (Optimized)
 
 # Setup
--optimizationpasses 5
+-optimizationpasses 20
 -dontusemixedcaseclassnames
 -dontskipnonpubliclibraryclasses
 -verbose
