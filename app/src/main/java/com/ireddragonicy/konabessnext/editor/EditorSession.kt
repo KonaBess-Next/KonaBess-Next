@@ -4,6 +4,7 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.ui.text.AnnotatedString
 import com.ireddragonicy.konabessnext.editor.highlight.ComposeHighlighter
 import kotlinx.coroutines.*
+import com.ireddragonicy.konabessnext.utils.DtsEditorDebug
 
 /**
  * EditorSession manages syntax highlight caching for the DTS editor.
@@ -23,81 +24,111 @@ object EditorSession {
     // Previous line count for detecting structural changes
     private var previousLineCount = 0
     
+    // Viewport range for memoized highlighting — only visible + buffer lines are prioritized.
+    // Written from UI thread (composable), read from background (Dispatchers.Default).
+    @Volatile
+    var visibleRange: IntRange = 0..30
+    
+    // Stored lines for on-demand viewport highlighting (set by update, read by onViewportChanged)
+    @Volatile private var currentLines: List<String> = emptyList()
+    @Volatile private var currentSearchQuery: String = ""
+    
     // Job to cancel previous work
     private var job: Job? = null
+    private var scrollJob: Job? = null
 
     /**
-     * Full update - used when loading a new file or after major structural change.
-     * Only rehighlights lines that differ from cached version.
+     * Viewport-aware update (TRUE LAZY MEMOIZATION).
+     *
+     * ONLY highlights visible lines + buffer. No background processing of all 24K lines.
+     * When user scrolls, onViewportChanged() highlights the new viewport on-demand.
+     *
+     * Combined with debounce in ViewModel:
+     * - Typing: only 1 line re-highlighted via updateLine(), instant
+     * - Debounce fires: visible + buffer re-validated (< 5ms with cache hits)
+     * - Scrolling: onViewportChanged() highlights new viewport on-demand
      */
     fun update(lines: List<String>, searchQuery: String, scope: CoroutineScope) {
         job?.cancel()
+        currentLines = lines
+        currentSearchQuery = searchQuery
+        
+        DtsEditorDebug.logEditorSessionUpdate(lines.size, searchQuery)
         
         job = scope.launch(Dispatchers.Default) {
             val newSize = lines.size
             val oldSize = previousLineCount
             
-            // Handle size changes (structural edits)
-            when {
-                newSize > oldSize -> {
-                    // Lines were inserted - we need to shift cache down
-                    // But we don't know WHERE, so we'll just revalidate
-                    // The signature check will catch changed lines
-                }
-                newSize < oldSize -> {
-                    // Lines were deleted - trim cache and signatures
-                    withContext(Dispatchers.Main) {
-                        for (i in newSize until oldSize) {
-                            highlightCache.remove(i)
-                            cacheContentSignature.remove(i)
-                        }
+            // Handle size shrink — trim stale cache entries
+            if (newSize < oldSize) {
+                withContext(Dispatchers.Main) {
+                    for (i in newSize until oldSize) {
+                        highlightCache.remove(i)
+                        cacheContentSignature.remove(i)
                     }
                 }
             }
             previousLineCount = newSize
             
-            // Incremental update with batched UI dispatch — reduces main thread context switches
-            val chunk = 100
-            var processed = 0
-            val pendingUpdates = ArrayList<Triple<Int, AnnotatedString, String>>(chunk)
+            // ONLY visible + buffer — no full-file background processing
+            highlightVisibleRange(lines, searchQuery)
+        }
+    }
+    
+    /**
+     * Called on scroll — highlights new viewport lines on-demand.
+     * Cancels previous scroll job to avoid wasted work during fast scrolling.
+     * Cache hits (already-highlighted lines) are O(1) per line.
+     */
+    fun onViewportChanged(range: IntRange, scope: CoroutineScope) {
+        visibleRange = range
+        val lines = currentLines
+        val query = currentSearchQuery
+        if (lines.isEmpty()) return
+        
+        scrollJob?.cancel()
+        scrollJob = scope.launch(Dispatchers.Default) {
+            highlightVisibleRange(lines, query)
+        }
+    }
+    
+    /**
+     * Shared highlight logic — processes ONLY visible + buffer lines.
+     * Lines already in cache (matching signature) are skipped in O(1).
+     * Typical cost: < 5ms for ~60 visible lines with most being cache hits.
+     */
+    private suspend fun highlightVisibleRange(lines: List<String>, searchQuery: String) {
+        val startTime = System.nanoTime()
+        val visible = visibleRange
+        val bufferSize = 50
+        val priorityStart = (visible.first - bufferSize).coerceAtLeast(0)
+        val priorityEnd = (visible.last + bufferSize).coerceAtMost(lines.size - 1)
+        
+        val pendingUpdates = ArrayList<Triple<Int, AnnotatedString, String>>(64)
+        var linesHighlighted = 0
+        
+        for (i in priorityStart..priorityEnd) {
+            val line = lines.getOrNull(i) ?: continue
+            val signature = "$line||$searchQuery"
+            if (cacheContentSignature[i] == signature) continue
             
-            for (i in lines.indices) {
-                if (!isActive) break
-                
-                val line = lines[i]
-                val signature = "$line||$searchQuery"
-                
-                if (cacheContentSignature[i] == signature) continue
-                
-                val result = ComposeHighlighter.highlight(line, searchQuery)
-                pendingUpdates.add(Triple(i, result, signature))
-                
-                processed++
-                if (processed >= chunk) {
-                    // Flush batch to main thread in single dispatch
-                    val batch = ArrayList(pendingUpdates)
-                    pendingUpdates.clear()
-                    withContext(Dispatchers.Main) {
-                        for ((idx, hl, sig) in batch) {
-                            highlightCache[idx] = hl
-                            cacheContentSignature[idx] = sig
-                        }
-                    }
-                    processed = 0
-                    yield()
-                }
-            }
-            
-            // Flush remaining batch
-            if (pendingUpdates.isNotEmpty()) {
-                withContext(Dispatchers.Main) {
-                    for ((idx, hl, sig) in pendingUpdates) {
-                        highlightCache[idx] = hl
-                        cacheContentSignature[idx] = sig
-                    }
+            val result = ComposeHighlighter.highlight(line, searchQuery)
+            pendingUpdates.add(Triple(i, result, signature))
+            linesHighlighted++
+        }
+        
+        if (pendingUpdates.isNotEmpty()) {
+            DtsEditorDebug.logEditorSessionHighlightBatch(pendingUpdates.size, linesHighlighted, lines.size)
+            withContext(Dispatchers.Main) {
+                for ((idx, hl, sig) in pendingUpdates) {
+                    highlightCache[idx] = hl
+                    cacheContentSignature[idx] = sig
                 }
             }
         }
+        
+        val durationMs = (System.nanoTime() - startTime) / 1_000_000
+        DtsEditorDebug.logEditorSessionComplete(linesHighlighted, lines.size, durationMs)
     }
     
     /**
@@ -164,8 +195,11 @@ object EditorSession {
     
     fun clear() {
         job?.cancel()
+        scrollJob?.cancel()
         highlightCache.clear()
         cacheContentSignature.clear()
         previousLineCount = 0
+        currentLines = emptyList()
+        currentSearchQuery = ""
     }
 }

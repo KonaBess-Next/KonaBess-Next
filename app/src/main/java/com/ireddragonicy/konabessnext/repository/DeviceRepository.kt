@@ -64,6 +64,10 @@ open class DeviceRepository @Inject constructor(
 
     private var importCounter: Int = 0
 
+    // Maps imported DTB IDs (negative) to their actual file paths.
+    // chooseTarget uses this to resolve the correct path for re-selected imports.
+    private val importedDtsPaths = HashMap<Int, String>()
+
     private var dtbNum: Int = 0
     private var dtbType: DtbType? = null
 
@@ -152,6 +156,7 @@ open class DeviceRepository @Inject constructor(
         // CRITICAL: Set dtsPath BEFORE chooseTarget, since imported files don't follow the {id}.dts naming convention
         // chooseTarget would set path to "-1234.dts" which doesn't exist
         _dtsPath = importedFile.absolutePath
+        importedDtsPaths[virtualId] = importedFile.absolutePath
         android.util.Log.d("DeviceRepository", "Set dtsPath to imported file: $_dtsPath")
         
         // Now select (this will set currentDtb and chip, but won't override our dtsPath since we set it first)
@@ -178,6 +183,7 @@ open class DeviceRepository @Inject constructor(
         currentDtb = null
         activeDtbId = -1
         importCounter = 0
+        importedDtsPaths.clear()
     }
 
     suspend fun setupEnv() = withContext(Dispatchers.IO) {
@@ -233,7 +239,10 @@ open class DeviceRepository @Inject constructor(
     }
 
     fun chooseTarget(dtb: Dtb) {
-        _dtsPath = "$filesDir/${dtb.id}.dts"
+        // Imported DTBs have negative IDs and their files are NOT at {id}.dts.
+        // Look up the actual path from the import registry.
+        val importedPath = importedDtsPaths[dtb.id]
+        _dtsPath = importedPath ?: "$filesDir/${dtb.id}.dts"
         chipRepository.setCurrentChip(dtb.type)
         currentDtb = dtb
         prepared = (dtb.type.strategyType.isNotEmpty())

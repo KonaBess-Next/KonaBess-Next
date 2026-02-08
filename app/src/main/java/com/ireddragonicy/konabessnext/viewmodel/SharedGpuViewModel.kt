@@ -8,9 +8,18 @@ import com.ireddragonicy.konabessnext.model.Level
 import com.ireddragonicy.konabessnext.model.LevelUiModel
 import com.ireddragonicy.konabessnext.model.Opp
 import com.ireddragonicy.konabessnext.model.UiText
+import com.ireddragonicy.konabessnext.model.dts.DtsError
+import com.ireddragonicy.konabessnext.model.dts.Severity
 import com.ireddragonicy.konabessnext.repository.GpuRepository
+import com.ireddragonicy.konabessnext.utils.DtsFormatter
+import com.ireddragonicy.konabessnext.utils.DtsLexer
+import com.ireddragonicy.konabessnext.utils.DtsParser
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.snapshots.SnapshotStateMap
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.launch
@@ -19,6 +28,7 @@ import android.net.Uri
 import android.content.Context
 import android.widget.Toast
 import javax.inject.Inject
+import com.ireddragonicy.konabessnext.utils.DtsEditorDebug
 
 @HiltViewModel
 class SharedGpuViewModel @Inject constructor(
@@ -40,8 +50,17 @@ class SharedGpuViewModel @Inject constructor(
     private val _searchState = MutableStateFlow(SearchState())
     val searchState = _searchState.asStateFlow()
 
+    // --- Lint State ---
+    // SnapshotStateMap for granular per-line Compose invalidation.
+    // Only lines whose error list actually changes will recompose.
+    val lintErrorsByLine: SnapshotStateMap<Int, List<DtsError>> = mutableStateMapOf()
+    private val _lintErrorCount = MutableStateFlow(0)
+    val lintErrorCount: StateFlow<Int> = _lintErrorCount.asStateFlow()
+    private var lintJob: Job? = null
+
     @OptIn(kotlinx.coroutines.FlowPreview::class)
     val gpuModelName: StateFlow<String> = repository.dtsLines
+        .debounce(2000) // PERF: GPU model name rarely changes during typing
         .map { repository.getGpuModelName() }
         .distinctUntilChanged()
         .flowOn(Dispatchers.Default)
@@ -54,8 +73,8 @@ class SharedGpuViewModel @Inject constructor(
 
     // --- State Proxies from Repository (SSOT) ---
     
-    // Content flows directly from Repo state
-    val dtsContent = repository.dtsLines.map { it.joinToString("\n") }.stateIn(viewModelScope, SharingStarted.Lazily, "")
+    // PERF: flowOn(Default) prevents 600KB string construction from blocking main thread
+    val dtsContent = repository.dtsLines.map { it.joinToString("\n") }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.Lazily, "")
     val bins: StateFlow<List<Bin>> = repository.bins
     val opps: StateFlow<List<Opp>> = repository.opps
 
@@ -93,16 +112,22 @@ class SharedGpuViewModel @Inject constructor(
     .flowOn(Dispatchers.Default)
     .stateIn(viewModelScope, SharingStarted.Lazily, emptyMap())
 
-    init {
-        // Automatically start highlighting whenever DTS content changes
+    @OptIn(kotlinx.coroutines.FlowPreview::class)
+    private fun startHighlightSession() {
         viewModelScope.launch {
-            // Monitor both content and search query
+            // PERF: debounce(300) prevents re-highlighting all 24K lines on every keystroke
+            // EditorSession.visibleRange ensures only visible lines are prioritized
             combine(repository.dtsLines, _searchState) { lines, search ->
                 lines to search.query
-            }.collect { (lines, query) ->
-                 com.ireddragonicy.konabessnext.editor.EditorSession.update(lines, query, viewModelScope)
+            }.debounce(300).collect { (lines, query) ->
+                DtsEditorDebug.logEditorSessionUpdate(lines.size, query)
+                com.ireddragonicy.konabessnext.editor.EditorSession.update(lines, query, viewModelScope)
             }
         }
+    }
+
+    init {
+        startHighlightSession()
     }
     val textScrollIndex = MutableStateFlow(0)
     val textScrollOffset = MutableStateFlow(0)
@@ -117,6 +142,8 @@ class SharedGpuViewModel @Inject constructor(
      * Call this when importing a new file or switching chipsets.
      */
     fun resetEditorState() {
+        DtsEditorDebug.dumpCounters()
+        DtsEditorDebug.resetCounters()
         textScrollIndex.value = 0
         textScrollOffset.value = 0
         treeScrollIndex.value = 0
@@ -124,6 +151,9 @@ class SharedGpuViewModel @Inject constructor(
         _expandedNodePaths.value = setOf("root")
         _binOffsets.value = emptyMap()
         _searchState.value = SearchState()
+        lintErrorsByLine.clear()
+        _lintErrorCount.value = 0
+        lintJob?.cancel()
         _viewMode.value = ViewMode.MAIN_EDITOR
     }
 
@@ -142,16 +172,15 @@ class SharedGpuViewModel @Inject constructor(
                 repository.loadTable()
                 
                 // DATA SYNCHRONIZATION BARRIER
-                // If we loaded text, we MUST wait for the background parser to emit bins.
-                // Otherwise, the UI sees "Success" + "Empty Bins" -> Error Flash.
+                // loadTable() emits _structuralChange which triggers immediate bins re-parse.
+                // We must wait for the NEW bins (not stale ones from previous DTS).
+                // drop(1) skips the current (possibly stale) value and waits for the
+                // next emission from the _structuralChange-triggered re-parse.
                 val lines = repository.dtsLines.value
                 if (lines.isNotEmpty()) {
-                    // Wait up to 500ms for bins to be populated (Optimized)
-                    // Wait up to 500ms for bins to be populated (Optimized)
-                    withTimeoutOrNull(500) {
-                        repository.bins.first { it.isNotEmpty() }
+                    withTimeoutOrNull(3000) {
+                        repository.bins.drop(1).first()
                     }
-                    // _gpuModelName auto-updates now
                 }
                 
                 // Done loading
@@ -168,7 +197,69 @@ class SharedGpuViewModel @Inject constructor(
     // Text Editor -> Repository
     fun updateFromText(content: String, description: String) {
         val lines = content.split("\n")
+        DtsEditorDebug.logUpdateFromText(content.length, lines.size)
         repository.updateContent(lines, description)
+
+        // Debounced lint — cancel previous and schedule new after 600ms idle
+        lintJob?.let {
+            it.cancel()
+            DtsEditorDebug.logLintJobCancel()
+        }
+        DtsEditorDebug.logLintJobStart()
+        lintJob = viewModelScope.launch {
+            delay(600)
+            val startTime = System.nanoTime()
+            val grouped = withContext(Dispatchers.Default) {
+                try {
+                    val lexer = DtsLexer(content)
+                    val tokens = lexer.tokenize()
+                    val parser = DtsParser(tokens)
+                    parser.parse()
+                    parser.getLintResult().errors.groupBy { it.line }
+                } catch (_: Exception) {
+                    emptyMap()
+                }
+            }
+            val durationMs = (System.nanoTime() - startTime) / 1_000_000
+            // Diff-update the SnapshotStateMap so only changed lines recompose
+            val oldKeys = lintErrorsByLine.keys.toSet()
+            val newKeys = grouped.keys
+            // Remove lines that no longer have errors
+            for (key in oldKeys - newKeys) {
+                lintErrorsByLine.remove(key)
+            }
+            // Add/update lines with errors
+            for ((key, value) in grouped) {
+                val existing = lintErrorsByLine[key]
+                if (existing != value) {
+                    lintErrorsByLine[key] = value
+                }
+            }
+            _lintErrorCount.value = grouped.values.sumOf { it.size }
+            DtsEditorDebug.logLintJobComplete(grouped.values.sumOf { it.size }, durationMs)
+        }
+    }
+
+    /**
+     * Reformats the current DTS text using the auto-formatter.
+     * Parses current text -> AST -> regenerates with consistent style.
+     */
+    fun reformatCode() {
+        viewModelScope.launch {
+            val current = dtsContent.value
+            if (current.isBlank()) return@launch
+
+            val startTime = System.nanoTime()
+            val formatted = withContext(Dispatchers.Default) {
+                DtsFormatter.format(current)
+            }
+            val durationMs = (System.nanoTime() - startTime) / 1_000_000
+            DtsEditorDebug.logReformat(current.length, formatted.length, durationMs)
+            if (formatted != current) {
+                val lines = formatted.split("\n")
+                repository.updateContent(lines, "Reformat code")
+            }
+        }
     }
 
     // GUI -> Repository
@@ -437,10 +528,16 @@ class SharedGpuViewModel @Inject constructor(
     fun getLevelStrings() = chipRepository.getLevelStringsForCurrentChip()
     fun getLevelValues() = chipRepository.getLevelsForCurrentChip()
     
-    // Stub implementation for complex operations that need full regen logic (add/remove level)
-    // In a full implementation, these would manipulate _dtsLines directly or via Strategy.
-    fun addFrequencyWrapper(binIndex: Int, toTop: Boolean) {}
-    fun duplicateFrequency(binIndex: Int, index: Int) {}
+    // --- Level Manipulation (add/remove/duplicate) ---
+    // These delegate to GpuRepository's text-level operations which manipulate DTS lines directly.
+    
+    fun addFrequencyWrapper(binIndex: Int, toTop: Boolean) {
+        repository.addLevel(binIndex, toTop)
+    }
+    
+    fun duplicateFrequency(binIndex: Int, index: Int) {
+        repository.duplicateLevelAt(binIndex, index)
+    }
     
     fun removeFrequency(binIndex: Int, index: Int) {
         repository.deleteLevel(binIndex, index)

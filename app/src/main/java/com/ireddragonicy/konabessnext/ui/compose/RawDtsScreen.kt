@@ -93,6 +93,7 @@ fun RawDtsScreen(viewModel: SharedGpuViewModel) {
                 searchQuery = searchState.query,
                 searchResultIndex = searchState.currentIndex,
                 searchResults = emptyList(),
+                lintErrorsByLine = viewModel.lintErrorsByLine,
                 listState = textListState
             )
         }

@@ -188,6 +188,9 @@ fun GpuEditorMainContent(
         activeDtbId = activeDtbId,
         onChipsetSelect = { dtb ->
             deviceViewModel.selectChipset(dtb)
+            gpuFrequencyViewModel.selectedBinIndex.value = -1
+            gpuFrequencyViewModel.selectedLevelIndex.value = -1
+            sharedViewModel.loadData()
             activeSheet = WorkbenchSheetType.NONE
         },
         onConfigureManual = { id -> manualSetupIndex = id },

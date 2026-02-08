@@ -19,30 +19,27 @@ object DtsHelper {
         val end = line.indexOf('>', start + 1)
         if (start == -1 || end == -1) return -1L
 
-        // Find the start of the last value (handle lists like <0x0 1234>)
-        var valEnd = end
-        while (valEnd > start + 1 && line[valEnd - 1] <= ' ') {
-            valEnd-- // Trim trailing whitespace
-        }
-        
-        if (valEnd <= start + 1) return -1L
+        val inner = line.substring(start + 1, end).trim()
+        if (inner.isEmpty()) return -1L
 
-        var valStart = valEnd - 1
-        while (valStart > start + 1 && line[valStart - 1] > ' ') {
-            valStart-- // Find start of the last token
-        }
-
-        // Now line.substring(valStart, valEnd) is the value
-        // We still need to substring to parse, but we avoided intermediate 'inner' and 'trim' allocations
-        val valueStr = line.substring(valStart, valEnd)
-
+        val parts = inner.split(Regex("\\s+"))
         return try {
-            if (valueStr.startsWith("0x") || valueStr.startsWith("0X")) {
-                // Remove 0x for explicit hex parsing if needed, usually decode handles it
-                // Long.decode handles 0x
-                java.lang.Long.decode(valueStr)
+            if (parts.size == 1) {
+                // Single cell: <0x23c34600>
+                val v = parts[0]
+                if (v.startsWith("0x", ignoreCase = true)) java.lang.Long.decode(v)
+                else v.toLong()
             } else {
-                valueStr.toLong()
+                // Multi-cell: <0x0 0x23c34600> → combine big-endian 32-bit cells
+                var result = 0L
+                for (part in parts) {
+                    val cellVal = if (part.startsWith("0x", ignoreCase = true))
+                        java.lang.Long.decode(part)
+                    else
+                        part.toLong()
+                    result = (result shl 32) or (cellVal and 0xFFFFFFFFL)
+                }
+                result
             }
         } catch (e: Exception) { -1L }
     }

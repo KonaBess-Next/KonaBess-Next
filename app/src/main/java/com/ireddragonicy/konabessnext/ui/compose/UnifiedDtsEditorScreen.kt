@@ -12,6 +12,7 @@ import androidx.compose.ui.text.AnnotatedString
 fun UnifiedDtsEditorScreen(sharedViewModel: SharedGpuViewModel) {
     val dtsContent by sharedViewModel.dtsContent.collectAsState()
     val searchState by sharedViewModel.searchState.collectAsState()
+    val lintErrorCount by sharedViewModel.lintErrorCount.collectAsState()
     @Suppress("DEPRECATION")
     val clipboardManager = LocalClipboardManager.current
     
@@ -42,7 +43,9 @@ fun UnifiedDtsEditorScreen(sharedViewModel: SharedGpuViewModel) {
             onQueryChange = { sharedViewModel.search(it) },
             onNext = { sharedViewModel.nextSearchResult() },
             onPrev = { sharedViewModel.previousSearchResult() },
-            onCopyAll = { clipboardManager.setText(AnnotatedString(dtsContent)) }
+            onCopyAll = { clipboardManager.setText(AnnotatedString(dtsContent)) },
+            onReformat = { sharedViewModel.reformatCode() },
+            lintErrorCount = lintErrorCount
         )
 
         DtsEditor(
@@ -51,6 +54,7 @@ fun UnifiedDtsEditorScreen(sharedViewModel: SharedGpuViewModel) {
             searchQuery = searchState.query,
             searchResultIndex = searchState.currentIndex,
             searchResults = searchState.results.map { LineSearchResult(it.lineIndex) },
+            lintErrorsByLine = sharedViewModel.lintErrorsByLine,
             listState = listState
         )
     }

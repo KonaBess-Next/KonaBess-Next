@@ -5,7 +5,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -17,17 +20,23 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.ireddragonicy.konabessnext.R
 import com.ireddragonicy.konabessnext.model.Level
 import com.ireddragonicy.konabessnext.utils.ChipStringHelper
 import com.ireddragonicy.konabessnext.utils.DtsHelper
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -248,96 +257,280 @@ fun EditParamSheetContent(
 
 @Composable
 fun VoltageSelector(param: ParamItem, onSave: (String, String) -> Unit, levels: Array<String>, values: IntArray) {
-    // Voltage Logic
-    
-    val currentLong = try { 
-        if (param.rawValue.startsWith("0x")) java.lang.Long.decode(param.rawValue) else param.rawValue.toLong() 
+    val coroutineScope = rememberCoroutineScope()
+    val focusManager = LocalFocusManager.current
+
+    val currentLong = try {
+        if (param.rawValue.startsWith("0x")) java.lang.Long.decode(param.rawValue) else param.rawValue.toLong()
     } catch (e: Exception) { -1L }
-    
-    // Check if it matches a preset
+
     val matchIndex = values.indexOfFirst { it.toLong() == currentLong }
-    
-    var customText by remember { mutableStateOf(if (matchIndex == -1) param.rawValue else "") }
-    var selectedIndex by remember { mutableStateOf(matchIndex) } // -1 means custom
-    
-    LazyColumn(
-        modifier = Modifier.heightIn(max = 400.dp)
+
+    var selectedIndex by remember { mutableIntStateOf(matchIndex) }
+    var textFieldValue by remember {
+        mutableStateOf(
+            if (matchIndex >= 0 && matchIndex < values.size) values[matchIndex].toString()
+            else currentLong.toString()
+        )
+    }
+
+    // Slider state
+    val sliderRange = remember(values) {
+        if (values.size > 1) 0f..((values.size - 1).toFloat())
+        else 0f..1f
+    }
+    var sliderPosition by remember {
+        mutableFloatStateOf(if (matchIndex >= 0) matchIndex.toFloat() else 0f)
+    }
+
+    // List state
+    val listState = rememberLazyListState(
+        initialFirstVisibleItemIndex = matchIndex.coerceAtLeast(0)
+    )
+
+    // Sync: when selectedIndex changes, update text + scroll list
+    LaunchedEffect(selectedIndex) {
+        if (selectedIndex in values.indices) {
+            textFieldValue = values[selectedIndex].toString()
+            sliderPosition = selectedIndex.toFloat()
+            listState.animateScrollToItem(selectedIndex.coerceAtLeast(0))
+        }
+    }
+
+    // ── Current Value Display ──
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.primaryContainer,
+        tonalElevation = 2.dp
     ) {
-        // Standard Presets
-        itemsIndexed(levels) { index, label ->
-            val isSelected = index == selectedIndex
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .selectable(
-                        selected = isSelected,
-                        role = Role.RadioButton
-                    ) {
-                         selectedIndex = index
-                         // Auto-save on selection of preset
-                         val value = if (index >= 0 && index < values.size) values[index] else 0
-                         val encoded = DtsHelper.encodeIntOrHexLine(param.rawName, value.toString())
-                         onSave(encoded, "Updated Voltage to $label")
-                    }
-                    .padding(vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                RadioButton(selected = isSelected, onClick = null)
-                Spacer(Modifier.width(16.dp))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column {
                 Text(
-                    text = label,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurface
+                    text = "Current",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                )
+                Text(
+                    text = if (selectedIndex in levels.indices) levels[selectedIndex] else "Custom",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            }
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = MaterialTheme.colorScheme.primary
+            ) {
+                Text(
+                    text = textFieldValue,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onPrimary,
+                    fontWeight = FontWeight.SemiBold
                 )
             }
         }
-        
-        // Custom Option
-        item {
-            val isCustom = selectedIndex == -1
-            Column {
-                Row(
+    }
+
+    Spacer(Modifier.height(16.dp))
+
+    // ── Slider ──
+    if (values.size > 1) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = if (levels.isNotEmpty()) levels.first() else "",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = if (levels.isNotEmpty()) levels.last() else "",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Slider(
+                value = sliderPosition,
+                onValueChange = { newPos ->
+                    sliderPosition = newPos
+                    val idx = newPos.toInt().coerceIn(values.indices)
+                    if (idx != selectedIndex) {
+                        selectedIndex = idx
+                    }
+                },
+                onValueChangeFinished = {
+                    val idx = sliderPosition.toInt().coerceIn(values.indices)
+                    selectedIndex = idx
+                },
+                valueRange = sliderRange,
+                steps = (values.size - 2).coerceAtLeast(0),
+                modifier = Modifier.fillMaxWidth(),
+                colors = SliderDefaults.colors(
+                    thumbColor = MaterialTheme.colorScheme.primary,
+                    activeTrackColor = MaterialTheme.colorScheme.primary,
+                    inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant
+                )
+            )
+        }
+        Spacer(Modifier.height(8.dp))
+    }
+
+    // ── Direct Input Row ──
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        OutlinedTextField(
+            value = textFieldValue,
+            onValueChange = { newVal ->
+                textFieldValue = newVal
+                val parsed = newVal.toLongOrNull()
+                if (parsed != null) {
+                    val idx = values.indexOfFirst { it.toLong() == parsed }
+                    selectedIndex = idx
+                } else {
+                    selectedIndex = -1
+                }
+            },
+            label = { Text(stringResource(R.string.raw_value_hint)) },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Number,
+                imeAction = ImeAction.Done
+            ),
+            keyboardActions = KeyboardActions(
+                onDone = {
+                    focusManager.clearFocus()
+                    val encoded = DtsHelper.encodeIntOrHexLine(param.rawName, textFieldValue)
+                    onSave(encoded, "Updated Voltage to $textFieldValue")
+                }
+            ),
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.weight(1f)
+        )
+
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            FilledTonalIconButton(
+                onClick = {
+                    val nextIdx = (selectedIndex + 1).coerceAtMost(values.size - 1)
+                    if (nextIdx in values.indices) selectedIndex = nextIdx
+                },
+                modifier = Modifier.size(36.dp),
+                enabled = selectedIndex < values.size - 1
+            ) {
+                Icon(Icons.Filled.KeyboardArrowUp, contentDescription = "Increase", modifier = Modifier.size(18.dp))
+            }
+            FilledTonalIconButton(
+                onClick = {
+                    val prevIdx = (selectedIndex - 1).coerceAtLeast(0)
+                    if (prevIdx in values.indices) selectedIndex = prevIdx
+                },
+                modifier = Modifier.size(36.dp),
+                enabled = selectedIndex > 0
+            ) {
+                Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Decrease", modifier = Modifier.size(18.dp))
+            }
+        }
+    }
+
+    Spacer(Modifier.height(12.dp))
+
+    // ── Preset List ──
+    Text(
+        text = "Presets",
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(bottom = 6.dp)
+    )
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(max = 220.dp),
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        tonalElevation = 1.dp
+    ) {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(vertical = 4.dp)
+        ) {
+            itemsIndexed(levels.toList()) { index, label ->
+                val value = if (index < values.size) values[index] else 0
+                val isSelected = selectedIndex == index
+
+                Surface(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .selectable(
-                            selected = isCustom,
-                            role = Role.RadioButton
-                        ) { selectedIndex = -1 }
-                        .padding(vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .padding(horizontal = 4.dp, vertical = 2.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable {
+                            selectedIndex = index
+                            textFieldValue = value.toString()
+                            sliderPosition = index.toFloat()
+                            val encoded = DtsHelper.encodeIntOrHexLine(param.rawName, value.toString())
+                            onSave(encoded, "Updated Voltage to $label")
+                        },
+                    color = if (isSelected)
+                        MaterialTheme.colorScheme.secondaryContainer
+                    else
+                        MaterialTheme.colorScheme.surfaceContainerLow,
+                    shape = RoundedCornerShape(10.dp)
                 ) {
-                    RadioButton(selected = isCustom, onClick = null)
-                    Spacer(Modifier.width(16.dp))
-                    Text(
-                        text = stringResource(R.string.custom_value),
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-                
-                if (isCustom) {
                     Row(
-                        modifier = Modifier.fillMaxWidth().padding(start = 48.dp, bottom = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        OutlinedTextField(
-                            value = customText,
-                            onValueChange = { customText = it },
-                            label = { Text(stringResource(R.string.raw_value_hint)) },
-                            modifier = Modifier.weight(1f),
-                            singleLine = true
+                        Text(
+                            text = label,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                            color = if (isSelected)
+                                MaterialTheme.colorScheme.onSecondaryContainer
+                            else
+                                MaterialTheme.colorScheme.onSurface
                         )
-                        Spacer(Modifier.width(8.dp))
-                        Button(onClick = {
-                            val encoded = DtsHelper.encodeIntOrHexLine(param.rawName, customText)
-                            onSave(encoded, "Updated Voltage to Custom: $customText")
-                        }) {
-                            Text(stringResource(R.string.save))
-                        }
+                        Text(
+                            text = value.toString(),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (isSelected)
+                                MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f)
+                            else
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             }
         }
+    }
+
+    Spacer(Modifier.height(16.dp))
+
+    // ── Apply Button ──
+    Button(
+        onClick = {
+            val encoded = DtsHelper.encodeIntOrHexLine(param.rawName, textFieldValue)
+            onSave(encoded, "Updated Voltage to $textFieldValue")
+        },
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        enabled = textFieldValue.isNotBlank()
+    ) {
+        Text(stringResource(R.string.save))
     }
 }
 
@@ -695,132 +888,332 @@ fun OppVoltageSelectorContent(
     onSave: (Long) -> Unit,
     onCancel: () -> Unit
 ) {
+    val coroutineScope = rememberCoroutineScope()
+    val focusManager = LocalFocusManager.current
+
     // Find current selection index
     val matchIndex = remember(currentVolt, levelValues) {
         levelValues.indexOfFirst { it.toLong() == currentVolt }
     }
-    
-    var selectedIndex by remember { mutableStateOf(matchIndex) }
-    var customText by remember { mutableStateOf(if (matchIndex == -1) currentVolt.toString() else "") }
-    val isCustom = selectedIndex == -1
-    
+
+    var selectedIndex by remember { mutableIntStateOf(matchIndex) }
+    var textFieldValue by remember {
+        mutableStateOf(
+            if (matchIndex >= 0 && matchIndex < levelValues.size) levelValues[matchIndex].toString()
+            else currentVolt.toString()
+        )
+    }
+
+    // Slider state — map index in levelValues to slider position
+    val sliderRange = remember(levelValues) {
+        if (levelValues.size > 1) 0f..((levelValues.size - 1).toFloat())
+        else 0f..1f
+    }
+    var sliderPosition by remember {
+        mutableFloatStateOf(
+            if (matchIndex >= 0) matchIndex.toFloat() else 0f
+        )
+    }
+
+    // List state for scroll-sync
+    val listState = rememberLazyListState(
+        initialFirstVisibleItemIndex = (matchIndex.coerceAtLeast(0))
+    )
+
+    // Sync: when selectedIndex changes, update text + scroll list
+    LaunchedEffect(selectedIndex) {
+        if (selectedIndex in levelValues.indices) {
+            textFieldValue = levelValues[selectedIndex].toString()
+            sliderPosition = selectedIndex.toFloat()
+            // Scroll to make currently selected visible
+            listState.animateScrollToItem(selectedIndex.coerceAtLeast(0))
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .padding(horizontal = 20.dp, vertical = 12.dp)
     ) {
+        // ── Header ──
         Text(
-            text = "Select Voltage Level",
-            style = MaterialTheme.typography.titleLarge,
+            text = "Voltage Level",
+            style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(bottom = 8.dp)
+            color = MaterialTheme.colorScheme.onSurface
         )
-        
+        Spacer(Modifier.height(4.dp))
         Text(
-            text = "This changes the opp-microvolt value in the OPP table.",
+            text = "Set the opp-microvolt value. Use the slider, list, or type directly.",
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = 16.dp)
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(max = 400.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+
+        Spacer(Modifier.height(16.dp))
+
+        // ── Current Value Display ──
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.primaryContainer,
+            tonalElevation = 2.dp
         ) {
-            // Standard Presets
-            itemsIndexed(levelStrings.toList()) { index, label ->
-                val value = if (index < levelValues.size) levelValues[index] else 0
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .selectable(
-                            selected = selectedIndex == index,
-                            onClick = {
-                                selectedIndex = index
-                                customText = ""
-                                // Auto-save on selection
-                                onSave(value.toLong())
-                            },
-                            role = Role.RadioButton
-                        )
-                        .padding(vertical = 8.dp, horizontal = 4.dp)
-                ) {
-                    RadioButton(
-                        selected = selectedIndex == index,
-                        onClick = {
-                            selectedIndex = index
-                            customText = ""
-                            onSave(value.toLong())
-                        }
-                    )
-                    Spacer(Modifier.width(8.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column {
                     Text(
-                        text = "$label ($value)",
-                        style = MaterialTheme.typography.bodyMedium
+                        text = "Current",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                    )
+                    Text(
+                        text = if (selectedIndex in levelStrings.indices) levelStrings[selectedIndex] else "Custom",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
+                // Raw value chip
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = MaterialTheme.colorScheme.primary
+                ) {
+                    Text(
+                        text = textFieldValue,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        fontWeight = FontWeight.SemiBold
                     )
                 }
             }
-            
-            // Custom Option
-            item {
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        // ── Slider ──
+        if (levelValues.size > 1) {
+            Column(modifier = Modifier.fillMaxWidth()) {
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .selectable(
-                            selected = isCustom,
-                            onClick = { selectedIndex = -1 },
-                            role = Role.RadioButton
-                        )
-                        .padding(vertical = 8.dp, horizontal = 4.dp)
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    RadioButton(
-                        selected = isCustom,
-                        onClick = { selectedIndex = -1 }
-                    )
-                    Spacer(Modifier.width(8.dp))
                     Text(
-                        text = "Custom",
-                        style = MaterialTheme.typography.bodyMedium
+                        text = if (levelStrings.isNotEmpty()) levelStrings.first() else "",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = if (levelStrings.isNotEmpty()) levelStrings.last() else "",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                
-                if (isCustom) {
-                    Row(
+                Slider(
+                    value = sliderPosition,
+                    onValueChange = { newPos ->
+                        sliderPosition = newPos
+                        val idx = newPos.toInt().coerceIn(levelValues.indices)
+                        if (idx != selectedIndex) {
+                            selectedIndex = idx
+                        }
+                    },
+                    onValueChangeFinished = {
+                        val idx = sliderPosition.toInt().coerceIn(levelValues.indices)
+                        selectedIndex = idx
+                    },
+                    valueRange = sliderRange,
+                    steps = (levelValues.size - 2).coerceAtLeast(0),
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = SliderDefaults.colors(
+                        thumbColor = MaterialTheme.colorScheme.primary,
+                        activeTrackColor = MaterialTheme.colorScheme.primary,
+                        inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+        }
+
+        // ── Direct Input Row ──
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            OutlinedTextField(
+                value = textFieldValue,
+                onValueChange = { newVal ->
+                    textFieldValue = newVal
+                    // Try to match to a preset
+                    val parsed = newVal.toLongOrNull()
+                    if (parsed != null) {
+                        val idx = levelValues.indexOfFirst { it.toLong() == parsed }
+                        selectedIndex = idx // -1 if custom
+                    } else {
+                        selectedIndex = -1
+                    }
+                },
+                label = { Text("Raw value") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Number,
+                    imeAction = ImeAction.Done
+                ),
+                keyboardActions = KeyboardActions(
+                    onDone = {
+                        focusManager.clearFocus()
+                        val parsed = textFieldValue.toLongOrNull()
+                        if (parsed != null) onSave(parsed)
+                    }
+                ),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.weight(1f)
+            )
+
+            // Increment / Decrement buttons
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                FilledTonalIconButton(
+                    onClick = {
+                        val nextIdx = (selectedIndex + 1).coerceAtMost(levelValues.size - 1)
+                        if (nextIdx in levelValues.indices) {
+                            selectedIndex = nextIdx
+                        }
+                    },
+                    modifier = Modifier.size(36.dp),
+                    enabled = selectedIndex < levelValues.size - 1
+                ) {
+                    Icon(
+                        Icons.Filled.KeyboardArrowUp,
+                        contentDescription = "Increase",
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+                FilledTonalIconButton(
+                    onClick = {
+                        val prevIdx = (selectedIndex - 1).coerceAtLeast(0)
+                        if (prevIdx in levelValues.indices) {
+                            selectedIndex = prevIdx
+                        }
+                    },
+                    modifier = Modifier.size(36.dp),
+                    enabled = selectedIndex > 0
+                ) {
+                    Icon(
+                        Icons.Filled.KeyboardArrowDown,
+                        contentDescription = "Decrease",
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        // ── Preset List ──
+        Text(
+            text = "Presets",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 6.dp)
+        )
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 220.dp),
+            shape = RoundedCornerShape(12.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+            tonalElevation = 1.dp
+        ) {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxWidth(),
+                contentPadding = PaddingValues(vertical = 4.dp)
+            ) {
+                itemsIndexed(levelStrings.toList()) { index, label ->
+                    val value = if (index < levelValues.size) levelValues[index] else 0
+                    val isSelected = selectedIndex == index
+
+                    Surface(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(start = 48.dp, top = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        OutlinedTextField(
-                            value = customText,
-                            onValueChange = { customText = it },
-                            label = { Text("Raw Value") },
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            modifier = Modifier.weight(1f)
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Button(
-                            onClick = {
-                                val value = customText.toLongOrNull()
-                                if (value != null) {
-                                    onSave(value)
-                                }
+                            .padding(horizontal = 4.dp, vertical = 2.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .clickable {
+                                selectedIndex = index
+                                textFieldValue = value.toString()
+                                sliderPosition = index.toFloat()
+                                onSave(value.toLong())
                             },
-                            enabled = customText.isNotBlank()
+                        color = if (isSelected)
+                            MaterialTheme.colorScheme.secondaryContainer
+                        else
+                            MaterialTheme.colorScheme.surfaceContainerLow,
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Text("Save")
+                            Text(
+                                text = label,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                color = if (isSelected)
+                                    MaterialTheme.colorScheme.onSecondaryContainer
+                                else
+                                    MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = value.toString(),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (isSelected)
+                                    MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f)
+                                else
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                     }
                 }
             }
         }
-        
+
         Spacer(Modifier.height(16.dp))
+
+        // ── Action Buttons ──
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            OutlinedButton(
+                onClick = onCancel,
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text("Cancel")
+            }
+            Button(
+                onClick = {
+                    val parsed = textFieldValue.toLongOrNull()
+                    if (parsed != null) onSave(parsed)
+                },
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(12.dp),
+                enabled = textFieldValue.toLongOrNull() != null
+            ) {
+                Text("Apply")
+            }
+        }
+
+        Spacer(Modifier.height(8.dp))
     }
 }
 

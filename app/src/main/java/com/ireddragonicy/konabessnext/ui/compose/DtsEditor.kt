@@ -1,19 +1,28 @@
 package com.ireddragonicy.konabessnext.ui.compose
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ErrorOutline
+import androidx.compose.material.icons.rounded.Warning
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
@@ -25,9 +34,13 @@ import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Popup
 import com.ireddragonicy.konabessnext.editor.highlight.ComposeHighlighter
+import com.ireddragonicy.konabessnext.model.dts.DtsError
+import com.ireddragonicy.konabessnext.model.dts.Severity
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.Key
@@ -35,6 +48,8 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.TextRange
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
+import com.ireddragonicy.konabessnext.utils.DtsEditorDebug
 
 data class LineSearchResult(val lineIndex: Int)
 
@@ -53,6 +68,7 @@ fun DtsEditor(
     searchQuery: String = "",
     searchResultIndex: Int = -1,
     searchResults: List<LineSearchResult> = emptyList(),
+    lintErrorsByLine: SnapshotStateMap<Int, List<DtsError>> = remember { mutableStateMapOf() },
     listState: androidx.compose.foundation.lazy.LazyListState = rememberLazyListState(),
     modifier: Modifier = Modifier
 ) {
@@ -78,12 +94,48 @@ fun DtsEditor(
     var pendingContent by remember { mutableStateOf<String?>(null) }
     var lastCommittedContent by remember { mutableStateOf(content) }
     
-    // Debounced save effect - only commits after 500ms of idle time
+    // Flag-based save: avoids building the full 24K-line string on every keystroke.
+    // The actual joinToString only happens once after the 500ms debounce fires.
+    var saveNeeded by remember { mutableStateOf(false) }
+    
+    fun buildContent(): String {
+        val start = System.nanoTime()
+        val sb = StringBuilder(stableLines.size * 40) // pre-allocate estimate
+        for (i in stableLines.indices) {
+            if (i > 0) sb.append('\n')
+            sb.append(stableLines[i].content)
+        }
+        val result = sb.toString()
+        DtsEditorDebug.logBuildContent(stableLines.size, (System.nanoTime() - start) / 1_000_000, result.length)
+        return result
+    }
+    
+    fun requestSave() {
+        DtsEditorDebug.logRequestSave()
+        saveNeeded = true
+        pendingContent = "dirty" // trigger the LaunchedEffect debounce
+    }
+    
+    fun requestImmediateSave() {
+        val newContent = buildContent()
+        if (newContent != lastCommittedContent) {
+            DtsEditorDebug.logOnContentChanged(newContent.length)
+            lastCommittedContent = newContent
+            pendingContent = null
+            saveNeeded = false
+            onContentChanged(newContent)
+        }
+    }
+    
+    // Debounced save effect - only builds the full content string after 500ms idle
     LaunchedEffect(pendingContent) {
-        pendingContent?.let { newContent ->
+        if (saveNeeded) {
             delay(500) // Wait for typing to stop
+            val newContent = buildContent()
             if (newContent != lastCommittedContent) {
+                DtsEditorDebug.logOnContentChanged(newContent.length)
                 lastCommittedContent = newContent
+                saveNeeded = false
                 onContentChanged(newContent)
             }
         }
@@ -91,36 +143,38 @@ fun DtsEditor(
     
     // External Change Sync (undo/redo/load)
     LaunchedEffect(content) {
-        if (content == lastCommittedContent) return@LaunchedEffect
+        val willRebuild = content != lastCommittedContent
+        DtsEditorDebug.logExternalSync(content.length, willRebuild)
+        if (!willRebuild) return@LaunchedEffect
         
         // External change — rebuild stable lines with fresh IDs
+        DtsEditorDebug.logStableLines(stableLines.size, "CLEARING for external sync")
         stableLines.clear()
         val newLines = if (content.isNotEmpty()) content.split("\n") else listOf("")
         newLines.forEach { stableLines.add(StableLine(idGen.next(), it)) }
         lastCommittedContent = content
         pendingContent = null
+        DtsEditorDebug.logStableLines(stableLines.size, "REBUILT from external sync")
+        DtsEditorDebug.logMemory("after external sync rebuild")
     }
     
-    fun requestSave() {
-        val newContent = stableLines.joinToString("\n") { it.content }
-        if (newContent != lastCommittedContent) {
-            pendingContent = newContent
-        }
-    }
-    
-    fun requestImmediateSave() {
-        val newContent = stableLines.joinToString("\n") { it.content }
-        if (newContent != lastCommittedContent) {
-            lastCommittedContent = newContent
-            pendingContent = null
-            onContentChanged(newContent)
-        }
-    }
 
     LaunchedEffect(searchResultIndex) {
         if (searchResultIndex >= 0 && searchResultIndex < searchResults.size) {
             val result = searchResults[searchResultIndex]
             listState.animateScrollToItem(result.lineIndex)
+        }
+    }
+
+    // MEMOIZATION: Track visible viewport and highlight on-demand during scroll
+    // distinctUntilChanged avoids redundant calls when range hasn't moved (same frame)
+    val highlightScope = rememberCoroutineScope()
+    LaunchedEffect(listState) {
+        snapshotFlow {
+            val items = listState.layoutInfo.visibleItemsInfo
+            if (items.isNotEmpty()) items.first().index..items.last().index else 0..0
+        }.distinctUntilChanged().collect { range ->
+            com.ireddragonicy.konabessnext.editor.EditorSession.onViewportChanged(range, highlightScope)
         }
     }
 
@@ -139,6 +193,8 @@ fun DtsEditor(
                 contentType = { _, _ -> "editor_line" }
             ) { index, stableLine ->
                 val cachedHighlight = highlightCache[index]
+                // Granular snapshot read: only THIS line recomposes when its errors change
+                val errorsForLine = lintErrorsByLine[index]
                 
                 EditorLineRow(
                     index = index,
@@ -146,6 +202,7 @@ fun DtsEditor(
                     isActive = index == activeLineIndex,
                     searchQuery = searchQuery,
                     cachedHighlight = cachedHighlight,
+                    errors = errorsForLine,
                     onFocusRequest = { activeLineIndex = index },
                     onValueChange = { newValue ->
                         stableLine.content = newValue
@@ -177,7 +234,10 @@ fun DtsEditor(
  * - No IntrinsicSize.Min (avoids expensive double-measurement pass)
  * - Active line uses synchronous single-line highlight (< 1ms for typical DTS)
  * - Inactive lines use pre-computed cache from EditorSession
+ * - Lines with lint errors show gutter indicators and underlined text
+ * - Lightweight Popup instead of heavy TooltipBox to avoid lag
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun EditorLineRow(
     index: Int,
@@ -185,19 +245,38 @@ private fun EditorLineRow(
     isActive: Boolean,
     searchQuery: String,
     cachedHighlight: AnnotatedString?,
+    errors: List<DtsError>?,
     onFocusRequest: () -> Unit,
     onValueChange: (String) -> Unit,
     onNewLine: () -> Unit,
     onBackspaceAtStart: () -> Unit
 ) {
-    val textStyle = TextStyle(
-        fontFamily = FontFamily.Monospace,
-        fontSize = 13.sp,
-        lineHeight = 20.sp,
-        color = Color(0xFFE0E2E7)
-    )
+    val hasError = errors?.any { it.severity == Severity.ERROR } == true
+    val hasWarning = !hasError && errors?.any { it.severity == Severity.WARNING } == true
+    val hasIssue = hasError || hasWarning
+
+    // Cache TextStyle — only the textDecoration differs between error/non-error
+    val baseTextColor = Color(0xFFE0E2E7)
+    val textStyle = remember(hasError) {
+        TextStyle(
+            fontFamily = FontFamily.Monospace,
+            fontSize = 13.sp,
+            lineHeight = 20.sp,
+            color = baseTextColor,
+            textDecoration = if (hasError) TextDecoration.Underline else TextDecoration.None
+        )
+    }
 
     val activeBackground = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f)
+    val errorGutterBg = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f)
+    val warningGutterBg = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f)
+    val normalGutterBg = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+
+    val gutterBackground = when {
+        hasError -> errorGutterBg
+        hasWarning -> warningGutterBg
+        else -> normalGutterBg
+    }
 
     Row(
         modifier = Modifier
@@ -209,24 +288,83 @@ private fun EditorLineRow(
                 indication = null
             ) { onFocusRequest() }
     ) {
-        // Line Number Gutter — Material 3 surface variant
+        // Line Number Gutter — with lightweight lint error indicator
         Box(
             modifier = Modifier
                 .width(48.dp)
                 .defaultMinSize(minHeight = 24.dp)
-                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
-                .padding(horizontal = 8.dp, vertical = 2.dp),
+                .background(gutterBackground)
+                .padding(horizontal = 4.dp, vertical = 2.dp),
             contentAlignment = Alignment.CenterEnd
         ) {
-            Text(
-                text = (index + 1).toString(),
-                color = if (isActive) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                fontFamily = FontFamily.Monospace,
-                fontSize = 11.sp,
-                lineHeight = 20.sp,
-                maxLines = 1
-            )
+            if (hasIssue) {
+                // Lightweight long-press popup instead of heavy TooltipBox
+                var showPopup by remember { mutableStateOf(false) }
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.End,
+                    modifier = Modifier.combinedClickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = { onFocusRequest() },
+                        onLongClick = { showPopup = true }
+                    )
+                ) {
+                    Icon(
+                        imageVector = if (hasError) Icons.Rounded.ErrorOutline else Icons.Rounded.Warning,
+                        contentDescription = if (hasError) "Error" else "Warning",
+                        tint = if (hasError) MaterialTheme.colorScheme.error
+                               else MaterialTheme.colorScheme.tertiary,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Text(
+                        text = (index + 1).toString(),
+                        color = if (hasError) MaterialTheme.colorScheme.error
+                                else MaterialTheme.colorScheme.tertiary,
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 11.sp,
+                        lineHeight = 20.sp,
+                        maxLines = 1,
+                        modifier = Modifier.padding(start = 2.dp)
+                    )
+                }
+
+                // Lightweight error popup — only composed when visible
+                if (showPopup && errors != null) {
+                    Popup(
+                        onDismissRequest = { showPopup = false },
+                        alignment = Alignment.TopStart
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.inverseSurface,
+                            shadowElevation = 4.dp,
+                            modifier = Modifier
+                                .widthIn(max = 280.dp)
+                                .padding(4.dp)
+                        ) {
+                            Text(
+                                text = errors.joinToString("\n") { it.message },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.inverseOnSurface,
+                                modifier = Modifier.padding(8.dp)
+                            )
+                        }
+                    }
+                }
+            } else {
+                // Normal gutter — no error
+                Text(
+                    text = (index + 1).toString(),
+                    color = if (isActive) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 11.sp,
+                    lineHeight = 20.sp,
+                    maxLines = 1
+                )
+            }
         }
 
         // Content Area

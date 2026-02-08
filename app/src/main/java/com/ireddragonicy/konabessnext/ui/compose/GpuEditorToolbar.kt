@@ -285,6 +285,8 @@ fun SearchAndToolsBar(
     onNext: () -> Unit,
     onPrev: () -> Unit,
     onCopyAll: () -> Unit,
+    onReformat: (() -> Unit)? = null,
+    lintErrorCount: Int = 0,
     modifier: Modifier = Modifier
 ) {
     Surface(
@@ -342,6 +344,30 @@ fun SearchAndToolsBar(
             // Copy All
             IconButton(onClick = onCopyAll) {
                 Icon(painter = painterResource(R.drawable.ic_content_copy), contentDescription = "Copy All")
+            }
+
+            // Reformat Code
+            if (onReformat != null) {
+                IconButton(onClick = onReformat) {
+                    Icon(
+                        imageVector = Icons.Default.Build,
+                        contentDescription = "Reformat Code",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+
+            // Lint Error Badge
+            if (lintErrorCount > 0) {
+                Badge(
+                    containerColor = MaterialTheme.colorScheme.error,
+                    contentColor = MaterialTheme.colorScheme.onError
+                ) {
+                    Text(
+                        text = lintErrorCount.toString(),
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                }
             }
         }
     }
