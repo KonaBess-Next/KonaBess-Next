@@ -239,4 +239,8 @@ class DeviceViewModel @Inject constructor(
     fun reboot() {
         viewModelScope.launch { try { repository.reboot() } catch (e: Exception) {} }
     }
+
+    fun clearRepackState() {
+        _repackState.value = null
+    }
 }

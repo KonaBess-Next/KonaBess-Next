@@ -122,16 +122,19 @@ class MainActivity : ComponentActivity() {
             }
             is UiState.Success -> {
                 AlertDialog(
-                    onDismissRequest = { /* Prevent dismiss? or allow? */ },
+                    onDismissRequest = { deviceViewModel.clearRepackState() },
                     title = { Text(stringResource(R.string.success)) },
                     text = { Text((repackState as UiState.Success).data.asString()) },
                     confirmButton = {
-                        TextButton(onClick = { deviceViewModel.reboot() }) {
+                        TextButton(onClick = {
+                            deviceViewModel.reboot()
+                            deviceViewModel.clearRepackState()
+                        }) {
                             Text(stringResource(R.string.reboot))
                         }
                     },
                     dismissButton = {
-                        TextButton(onClick = { /* Dismiss logic needed in VM or ignore */ }) {
+                        TextButton(onClick = { deviceViewModel.clearRepackState() }) {
                             Text(stringResource(R.string.ok))
                         }
                     }
@@ -139,11 +142,11 @@ class MainActivity : ComponentActivity() {
             }
             is UiState.Error -> {
                 AlertDialog(
-                    onDismissRequest = { /* Dismiss logic needed */ },
+                    onDismissRequest = { deviceViewModel.clearRepackState() },
                     title = { Text(stringResource(R.string.error)) },
                     text = { Text((repackState as UiState.Error).message.asString()) },
                     confirmButton = {
-                        TextButton(onClick = { /* Dismiss */ }) {
+                        TextButton(onClick = { deviceViewModel.clearRepackState() }) {
                             Text(stringResource(R.string.ok))
                         }
                     }
