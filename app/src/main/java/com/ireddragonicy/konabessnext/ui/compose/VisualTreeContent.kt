@@ -42,6 +42,15 @@ fun VisualTreeContent(sharedViewModel: SharedGpuViewModel) {
             }
     }
 
+    // Tree-local search navigation — separate from ViewModel's line-based results
+    var treeMatchCount by remember { mutableIntStateOf(0) }
+    var treeCurrentIndex by remember { mutableIntStateOf(-1) }
+
+    // Reset tree search index when query changes
+    LaunchedEffect(searchState.query) {
+        treeCurrentIndex = if (searchState.query.isNotEmpty()) 0 else -1
+    }
+
     if (rootNode == null) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             CircularProgressIndicator()
@@ -50,20 +59,36 @@ fun VisualTreeContent(sharedViewModel: SharedGpuViewModel) {
         Column {
              SearchAndToolsBar(
                 query = searchState.query,
-                matchCount = searchState.results.size,
-                currentMatchIndex = searchState.currentIndex,
+                matchCount = treeMatchCount,
+                currentMatchIndex = treeCurrentIndex,
                 onQueryChange = { sharedViewModel.search(it) },
-                onNext = { sharedViewModel.nextSearchResult() },
-                onPrev = { sharedViewModel.previousSearchResult() },
+                onNext = {
+                    if (treeMatchCount > 0) {
+                        treeCurrentIndex = (treeCurrentIndex + 1) % treeMatchCount
+                    }
+                },
+                onPrev = {
+                    if (treeMatchCount > 0) {
+                        treeCurrentIndex = if (treeCurrentIndex - 1 < 0) treeMatchCount - 1 else treeCurrentIndex - 1
+                    }
+                },
                 onCopyAll = { clipboardManager.setText(AnnotatedString(dtsContent)) }
             )
 
             DtsTreeScreen(
                 rootNode = rootNode!!,
                 listState = listState,
+                searchQuery = searchState.query,
+                searchMatchIndex = treeCurrentIndex,
                 onNodeToggle = { path, expanded ->
-                    // Update expansion state in VM to persist across re-parses
                     sharedViewModel.toggleNodeExpansion(path, expanded)
+                },
+                onSearchMatchesChanged = { count ->
+                    treeMatchCount = count
+                    // Clamp current index if matches shrunk
+                    if (treeCurrentIndex >= count) {
+                        treeCurrentIndex = if (count > 0) 0 else -1
+                    }
                 }
             )
         }

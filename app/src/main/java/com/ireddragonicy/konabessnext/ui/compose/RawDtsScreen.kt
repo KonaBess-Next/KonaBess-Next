@@ -54,6 +54,14 @@ fun RawDtsScreen(viewModel: SharedGpuViewModel) {
             }
     }
 
+    // Tree-local search navigation for visual mode
+    var treeMatchCount by remember { mutableIntStateOf(0) }
+    var treeCurrentIndex by remember { mutableIntStateOf(-1) }
+    
+    LaunchedEffect(searchState.query) {
+        treeCurrentIndex = if (searchState.query.isNotEmpty()) 0 else -1
+    }
+
     Column(modifier = Modifier.fillMaxSize()) {
         // Mode Switcher
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
@@ -63,12 +71,19 @@ fun RawDtsScreen(viewModel: SharedGpuViewModel) {
         }
         
         if (isVisualMode) {
-            // Use VM parsed tree if available
             DtsTreeScreen(
                 rootNode = parsedTree,
                 listState = treeListState,
+                searchQuery = searchState.query,
+                searchMatchIndex = treeCurrentIndex,
                 onNodeToggle = { path, expanded -> 
                     viewModel.toggleNodeExpansion(path, expanded) 
+                },
+                onSearchMatchesChanged = { count ->
+                    treeMatchCount = count
+                    if (treeCurrentIndex >= count) {
+                        treeCurrentIndex = if (count > 0) 0 else -1
+                    }
                 }
             )
         } else {

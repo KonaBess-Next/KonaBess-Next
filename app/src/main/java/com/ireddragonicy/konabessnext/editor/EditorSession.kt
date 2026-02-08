@@ -56,9 +56,10 @@ object EditorSession {
             }
             previousLineCount = newSize
             
-            // Incremental update: only process lines that changed
-            val chunk = 100  // Process 100 lines before yielding
+            // Incremental update with batched UI dispatch — reduces main thread context switches
+            val chunk = 100
             var processed = 0
+            val pendingUpdates = ArrayList<Triple<Int, AnnotatedString, String>>(chunk)
             
             for (i in lines.indices) {
                 if (!isActive) break
@@ -66,23 +67,34 @@ object EditorSession {
                 val line = lines[i]
                 val signature = "$line||$searchQuery"
                 
-                // Skip if signature matches (line hasn't changed)
-                if (cacheContentSignature[i] == signature) {
-                    continue
-                }
+                if (cacheContentSignature[i] == signature) continue
                 
-                // Line changed - rehighlight
                 val result = ComposeHighlighter.highlight(line, searchQuery)
-                
-                withContext(Dispatchers.Main) {
-                    highlightCache[i] = result
-                    cacheContentSignature[i] = signature
-                }
+                pendingUpdates.add(Triple(i, result, signature))
                 
                 processed++
                 if (processed >= chunk) {
+                    // Flush batch to main thread in single dispatch
+                    val batch = ArrayList(pendingUpdates)
+                    pendingUpdates.clear()
+                    withContext(Dispatchers.Main) {
+                        for ((idx, hl, sig) in batch) {
+                            highlightCache[idx] = hl
+                            cacheContentSignature[idx] = sig
+                        }
+                    }
                     processed = 0
-                    yield() // Give other coroutines a chance
+                    yield()
+                }
+            }
+            
+            // Flush remaining batch
+            if (pendingUpdates.isNotEmpty()) {
+                withContext(Dispatchers.Main) {
+                    for ((idx, hl, sig) in pendingUpdates) {
+                        highlightCache[idx] = hl
+                        cacheContentSignature[idx] = sig
+                    }
                 }
             }
         }

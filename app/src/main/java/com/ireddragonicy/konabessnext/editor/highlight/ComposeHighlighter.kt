@@ -42,61 +42,68 @@ internal object ComposeHighlighter {
                 "linux,cma-default|qcom,.*?)\\b"
     )
 
+    // Pre-allocated SpanStyle singletons — eliminates per-call object allocation & GC pressure
+    private val STYLE_COMMENT = SpanStyle(color = COLOR_COMMENT)
+    private val STYLE_PREPROCESSOR = SpanStyle(color = COLOR_PREPROCESSOR)
+    private val STYLE_STRING = SpanStyle(color = COLOR_STRING)
+    private val STYLE_NUMBER = SpanStyle(color = COLOR_NUMBER)
+    private val STYLE_KEYWORD = SpanStyle(color = COLOR_KEYWORD)
+    private val STYLE_NODE = SpanStyle(color = COLOR_NODE)
+    private val STYLE_PROPERTY = SpanStyle(color = COLOR_PROPERTY)
+    private val STYLE_PHANDLE = SpanStyle(color = COLOR_PHANDLE)
+    private val STYLE_BRACKET = SpanStyle(color = COLOR_BRACKET)
+    private val STYLE_SEARCH = SpanStyle(background = Color(0xFF624C23), color = Color.White)
+
     fun highlight(text: String, searchQuery: String = ""): AnnotatedString {
+        if (text.isEmpty()) return AnnotatedString("")
+
         return buildAnnotatedString {
             append(text)
 
-            // Helper to apply style to matches
-            fun apply(pattern: Pattern, color: Color, group: Int = 0) {
+            // Apply pre-allocated style to all regex matches
+            fun apply(pattern: Pattern, style: SpanStyle, group: Int = 0) {
                 val matcher = pattern.matcher(text)
                 while (matcher.find()) {
                     val start = matcher.start(group)
                     val end = matcher.end(group)
                     if (start in 0 until length && end <= length) {
-                         addStyle(SpanStyle(color = color), start, end)
+                         addStyle(style, start, end)
                     }
                 }
             }
 
-            // Syntax Highlighting
-            
-            // 0. Punctuation (Base layer for symbols)
-            apply(PATTERN_BRACKET, COLOR_BRACKET)
-            
-            // 1. Base tokens
-            apply(PATTERN_HEX, COLOR_NUMBER)
-            // ... (rest is same)
-            apply(PATTERN_DECIMAL, COLOR_NUMBER)
-            apply(PATTERN_KEYWORDS, COLOR_KEYWORD)
-            
-            // 2. Structural
-            apply(PATTERN_NODE, COLOR_NODE, 1) // group 1 is name
-            apply(PATTERN_PROPERTY, COLOR_PROPERTY, 1) // group 1 is name
-            apply(PATTERN_PHANDLE, COLOR_PHANDLE)
-            apply(PATTERN_LABEL_REF, COLOR_PHANDLE)
-            
-            // 3. Strings & Preprocessor
-            apply(PATTERN_STRING, COLOR_STRING)
-            apply(PATTERN_PREPROCESSOR, COLOR_PREPROCESSOR)
+            // Syntax Highlighting (layered — later styles override earlier ones)
 
-            // 4. Comments (Highest priority, should overlay others)
-            apply(PATTERN_COMMENT_LINE, COLOR_COMMENT)
-            // Block comments require tracking state across lines which is hard for "per line" highlighter.
-            // For now, simple inline block comments:
+            // 0. Punctuation (base layer)
+            apply(PATTERN_BRACKET, STYLE_BRACKET)
+
+            // 1. Numeric literals
+            apply(PATTERN_HEX, STYLE_NUMBER)
+            apply(PATTERN_DECIMAL, STYLE_NUMBER)
+            apply(PATTERN_KEYWORDS, STYLE_KEYWORD)
+
+            // 2. Structural elements
+            apply(PATTERN_NODE, STYLE_NODE, 1)
+            apply(PATTERN_PROPERTY, STYLE_PROPERTY, 1)
+            apply(PATTERN_PHANDLE, STYLE_PHANDLE)
+            apply(PATTERN_LABEL_REF, STYLE_PHANDLE)
+
+            // 3. Strings & preprocessor directives
+            apply(PATTERN_STRING, STYLE_STRING)
+            apply(PATTERN_PREPROCESSOR, STYLE_PREPROCESSOR)
+
+            // 4. Comments (highest priority — overlays all other styles)
+            apply(PATTERN_COMMENT_LINE, STYLE_COMMENT)
             val blockMatcher = PATTERN_COMMENT_BLOCK.matcher(text)
             while(blockMatcher.find()) {
-                addStyle(SpanStyle(color = COLOR_COMMENT), blockMatcher.start(), blockMatcher.end())
+                addStyle(STYLE_COMMENT, blockMatcher.start(), blockMatcher.end())
             }
-            
-            // Search Highlighting
+
+            // Search highlighting (topmost layer)
             if (searchQuery.isNotEmpty()) {
                 var idx = text.indexOf(searchQuery, ignoreCase = true)
                 while (idx != -1) {
-                    addStyle(
-                        SpanStyle(background = Color(0xFF624C23), color = Color.White), 
-                        idx, 
-                        idx + searchQuery.length
-                    )
+                    addStyle(STYLE_SEARCH, idx, idx + searchQuery.length)
                     idx = text.indexOf(searchQuery, idx + 1, ignoreCase = true)
                 }
             }

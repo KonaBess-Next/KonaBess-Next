@@ -46,10 +46,6 @@ class SharedGpuViewModel @Inject constructor(
         .distinctUntilChanged()
         .flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.Lazily, "")
-        .map { repository.getGpuModelName() }
-        .distinctUntilChanged()
-        .flowOn(Dispatchers.Default)
-        .stateIn(viewModelScope, SharingStarted.Lazily, "")
 
     fun updateGpuModelName(newName: String) {
         repository.updateGpuModelName(newName)

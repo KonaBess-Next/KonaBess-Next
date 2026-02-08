@@ -8,11 +8,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -21,8 +21,6 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.TransformedText
@@ -36,12 +34,17 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.TextRange
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.withContext
 
 data class LineSearchResult(val lineIndex: Int)
+
+/**
+ * A line with a stable identity for LazyColumn keying.
+ * Stable IDs survive insert/delete operations, preventing full-list recomposition.
+ */
+private class StableLine(val id: Long, initialContent: String) {
+    var content by mutableStateOf(initialContent)
+}
 
 @Composable
 fun DtsEditor(
@@ -53,13 +56,14 @@ fun DtsEditor(
     listState: androidx.compose.foundation.lazy.LazyListState = rememberLazyListState(),
     modifier: Modifier = Modifier
 ) {
-    val lines = remember { 
-        val list = mutableStateListOf<String>()
-        if (content.isNotEmpty()) {
-            list.addAll(content.split("\n"))
-        } else {
-            list.add("")
-        }
+    // Stable Line ID Generator — avoids compose state overhead for counter
+    val idGen = remember { object { var nextId = 0L; fun next() = nextId++ } }
+    
+    // Stable Line Model — stable IDs prevent full LazyColumn invalidation on insert/delete
+    val stableLines = remember {
+        val list = mutableStateListOf<StableLine>()
+        val initial = if (content.isNotEmpty()) content.split("\n") else listOf("")
+        initial.forEach { list.add(StableLine(idGen.next(), it)) }
         list
     }
     
@@ -85,44 +89,30 @@ fun DtsEditor(
         }
     }
     
-    // Initial Load & External Change Sync (undo/redo/load)
-    // CRITICAL: Only sync if this is an EXTERNAL change, not our own commit bouncing back
+    // External Change Sync (undo/redo/load)
     LaunchedEffect(content) {
-        // If incoming content matches what we last committed, it's just our change
-        // bouncing back from ViewModel. Ignore it to preserve user's continued typing.
-        if (content == lastCommittedContent) {
-            return@LaunchedEffect
-        }
+        if (content == lastCommittedContent) return@LaunchedEffect
         
-        // This is an external change (initial load, undo, redo, etc.)
-        // Sync lines to match the external content
-        lines.clear()
-        if (content.isNotEmpty()) {
-            lines.addAll(content.split("\n"))
-        } else {
-            lines.add("")
-        }
+        // External change — rebuild stable lines with fresh IDs
+        stableLines.clear()
+        val newLines = if (content.isNotEmpty()) content.split("\n") else listOf("")
+        newLines.forEach { stableLines.add(StableLine(idGen.next(), it)) }
         lastCommittedContent = content
-        pendingContent = null // Cancel any pending debounced save
+        pendingContent = null
     }
     
-    // EditorSession handles highlighting externally. DtsEditor is just a viewer/editor.
-    
     fun requestSave() {
-        // Instead of immediately calling onContentChanged, we set pendingContent
-        // This triggers the debounced LaunchedEffect above
-        val newContent = lines.joinToString("\n")
+        val newContent = stableLines.joinToString("\n") { it.content }
         if (newContent != lastCommittedContent) {
             pendingContent = newContent
         }
     }
     
-    // Force immediate save (for structural changes like new line, delete line)
     fun requestImmediateSave() {
-        val newContent = lines.joinToString("\n")
+        val newContent = stableLines.joinToString("\n") { it.content }
         if (newContent != lastCommittedContent) {
             lastCommittedContent = newContent
-            pendingContent = null // Cancel any pending debounced save
+            pendingContent = null
             onContentChanged(newContent)
         }
     }
@@ -134,48 +124,46 @@ fun DtsEditor(
         }
     }
 
-    Row(modifier = modifier
-        .fillMaxSize()
-        .background(MaterialTheme.colorScheme.surface)) {
-        
+    Surface(
+        modifier = modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.surface
+    ) {
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(bottom = 300.dp)
         ) {
             itemsIndexed(
-                items = lines, 
-                key = { index, _ -> index } 
-            ) { index, lineContent ->
-                // Check Global Cache
+                items = stableLines,
+                key = { _, line -> line.id },
+                contentType = { _, _ -> "editor_line" }
+            ) { index, stableLine ->
                 val cachedHighlight = highlightCache[index]
                 
-                EditorLine(
+                EditorLineRow(
                     index = index,
-                    content = lineContent,
+                    content = stableLine.content,
                     isActive = index == activeLineIndex,
                     searchQuery = searchQuery,
                     cachedHighlight = cachedHighlight,
                     onFocusRequest = { activeLineIndex = index },
                     onValueChange = { newValue ->
-                        lines[index] = newValue
+                        stableLine.content = newValue
                         requestSave()
                     },
                     onNewLine = {
-                        if (index + 1 <= lines.size) {
-                            lines.add(index + 1, "")
+                        if (index + 1 <= stableLines.size) {
+                            stableLines.add(index + 1, StableLine(idGen.next(), ""))
                             activeLineIndex = index + 1
-                            requestImmediateSave() // Structural change - immediate commit
+                            requestImmediateSave()
                         }
                     },
                     onBackspaceAtStart = {
                         if (index > 0) {
-                            val prevLine = lines[index - 1]
-                            val currentLine = lines[index]
-                            lines[index - 1] = prevLine + currentLine
-                            lines.removeAt(index)
+                            stableLines[index - 1].content += stableLine.content
+                            stableLines.removeAt(index)
                             activeLineIndex = index - 1
-                            requestImmediateSave() // Structural change - immediate commit
+                            requestImmediateSave()
                         }
                     }
                 )
@@ -184,8 +172,14 @@ fun DtsEditor(
     }
 }
 
+/**
+ * Single editor line — Material 3 styled with performance optimizations.
+ * - No IntrinsicSize.Min (avoids expensive double-measurement pass)
+ * - Active line uses synchronous single-line highlight (< 1ms for typical DTS)
+ * - Inactive lines use pre-computed cache from EditorSession
+ */
 @Composable
-fun EditorLine(
+private fun EditorLineRow(
     index: Int,
     content: String,
     isActive: Boolean,
@@ -198,127 +192,139 @@ fun EditorLine(
 ) {
     val textStyle = TextStyle(
         fontFamily = FontFamily.Monospace,
-        fontSize = 12.sp,
-        lineHeight = 16.sp,
+        fontSize = 13.sp,
+        lineHeight = 20.sp,
         color = Color(0xFFE0E2E7)
     )
+
+    val activeBackground = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f)
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(IntrinsicSize.Min)
+            .defaultMinSize(minHeight = 24.dp)
+            .then(if (isActive) Modifier.background(activeBackground) else Modifier)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null
             ) { onFocusRequest() }
     ) {
-        // Line Number
-        Text(
-            text = (index + 1).toString(),
+        // Line Number Gutter — Material 3 surface variant
+        Box(
             modifier = Modifier
-                .width(40.dp)
-                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                .padding(end = 4.dp),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontFamily = FontFamily.Monospace,
-            fontSize = 12.sp,
-            lineHeight = 16.sp,
-            textAlign = androidx.compose.ui.text.style.TextAlign.End
-        )
+                .width(48.dp)
+                .defaultMinSize(minHeight = 24.dp)
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+                .padding(horizontal = 8.dp, vertical = 2.dp),
+            contentAlignment = Alignment.CenterEnd
+        ) {
+            Text(
+                text = (index + 1).toString(),
+                color = if (isActive) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                fontFamily = FontFamily.Monospace,
+                fontSize = 11.sp,
+                lineHeight = 20.sp,
+                maxLines = 1
+            )
+        }
 
-        // Hybrid Content
-        Box(modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 8.dp)) {
-            
+        // Content Area
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .defaultMinSize(minHeight = 24.dp)
+                .padding(start = 12.dp, end = 8.dp, top = 2.dp, bottom = 2.dp)
+        ) {
             if (isActive) {
-                // HEAVY: TextField - Now Async Highlighted
-                val focusRequester = remember { FocusRequester() }
-                var tfValue by remember { mutableStateOf(TextFieldValue(content, selection = TextRange(content.length))) }
-
-                // State to hold the async result
-                // We use produceState to handle the debouncing and async calculation
-                val asyncHighlight by produceState<AnnotatedString?>(initialValue = null, key1 = content, key2 = searchQuery) {
-                    // Start with null or keep previous value? 
-                    // ideally we want to keep showing the old valid highlight if possible, but produceState resets on key change?
-                    // actually produceState doesn't reset 'value' if we don't tell it to.
-                    // But here we are producing a NEW state object.
-                    
-                    // Delay for debounce
-                    if (content.isNotEmpty()) delay(300)
-
-                    withContext(Dispatchers.Default) {
-                        val result = ComposeHighlighter.highlight(content, searchQuery)
-                        value = result
-                    }
-                }
-
-                if (tfValue.text != content) {
-                     tfValue = tfValue.copy(text = content)
-                }
-
-                LaunchedEffect(Unit) {
-                    focusRequester.requestFocus()
-                }
-
-                val visualTransformation = remember(asyncHighlight, content) {
-                    VisualTransformation { text ->
-                        // If we have a highlight AND it matches current text, use it.
-                        // Otherwise fallback to plain text to avoid blocking UI.
-                        val currentHighlight = asyncHighlight
-                        if (currentHighlight != null && currentHighlight.text == text.text) {
-                            TransformedText(currentHighlight, OffsetMapping.Identity)
-                        } else {
-                            // While waiting for async highlight, show plain text (or we could cache prev highlight if we had it passed in)
-                            // Passing 'cachedHighlight' into EditorLine helps, but that is "global cache" which might be stale too?
-                            // For now, plain text fallback is safest for responsiveness.
-                            TransformedText(AnnotatedString(text.text), OffsetMapping.Identity)
-                        }
-                    }
-                }
-
-                BasicTextField(
-                    value = tfValue,
-                    onValueChange = { 
-                        tfValue = it
-                         if (it.text.length > content.length && it.text.contains('\n') && !content.contains('\n')) {
-                             onNewLine()
-                        } else {
-                            onValueChange(it.text)
-                        }
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .focusRequester(focusRequester)
-                        .onPreviewKeyEvent { event ->
-                             if (event.key == Key.Backspace && event.type == KeyEventType.KeyDown && tfValue.selection.start == 0) {
-                                 onBackspaceAtStart()
-                                 true
-                             } else if (event.key == Key.Enter && event.type == KeyEventType.KeyDown) {
-                                 onNewLine() 
-                                 true
-                             } else {
-                                 false
-                             }
-                        },
+                ActiveLineEditor(
+                    content = content,
+                    searchQuery = searchQuery,
                     textStyle = textStyle,
-                    visualTransformation = visualTransformation,
-                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                    singleLine = false
+                    onValueChange = onValueChange,
+                    onNewLine = onNewLine,
+                    onBackspaceAtStart = onBackspaceAtStart
                 )
             } else {
-                // LIGHT: Text
-                // Use Global Cache or Fallback to Plain Text (Sync)
-                // We do NOT compute here anymore to avoid duplicate work.
-                
-                val displayText = cachedHighlight ?: AnnotatedString(content)
-                
                 Text(
-                    text = displayText,
+                    text = cachedHighlight ?: AnnotatedString(content),
                     style = textStyle,
                     modifier = Modifier.fillMaxWidth()
                 )
             }
         }
     }
+}
+
+/**
+ * Active (focused) line editor — synchronous highlighting for instant feedback.
+ * Single DTS line highlight is < 1ms, so no need for async produceState.
+ */
+@Composable
+private fun ActiveLineEditor(
+    content: String,
+    searchQuery: String,
+    textStyle: TextStyle,
+    onValueChange: (String) -> Unit,
+    onNewLine: () -> Unit,
+    onBackspaceAtStart: () -> Unit
+) {
+    val focusRequester = remember { FocusRequester() }
+    var tfValue by remember { mutableStateOf(TextFieldValue(content, TextRange(content.length))) }
+
+    if (tfValue.text != content) {
+        tfValue = tfValue.copy(text = content)
+    }
+
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
+    }
+
+    // Synchronous highlight — computed once per content change, not per frame
+    val highlight = remember(content, searchQuery) {
+        if (content.isNotEmpty()) ComposeHighlighter.highlight(content, searchQuery) else null
+    }
+
+    val visualTransformation = remember(highlight, content) {
+        VisualTransformation { text ->
+            val h = highlight
+            if (h != null && h.text == text.text) {
+                TransformedText(h, OffsetMapping.Identity)
+            } else {
+                TransformedText(AnnotatedString(text.text), OffsetMapping.Identity)
+            }
+        }
+    }
+
+    BasicTextField(
+        value = tfValue,
+        onValueChange = { newValue ->
+            tfValue = newValue
+            if (newValue.text.contains('\n') && !content.contains('\n')) {
+                onNewLine()
+            } else {
+                onValueChange(newValue.text)
+            }
+        },
+        modifier = Modifier
+            .fillMaxWidth()
+            .focusRequester(focusRequester)
+            .onPreviewKeyEvent { event ->
+                when {
+                    event.key == Key.Backspace && event.type == KeyEventType.KeyDown && tfValue.selection.start == 0 -> {
+                        onBackspaceAtStart()
+                        true
+                    }
+                    event.key == Key.Enter && event.type == KeyEventType.KeyDown -> {
+                        onNewLine()
+                        true
+                    }
+                    else -> false
+                }
+            },
+        textStyle = textStyle,
+        visualTransformation = visualTransformation,
+        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+        singleLine = false
+    )
 }
