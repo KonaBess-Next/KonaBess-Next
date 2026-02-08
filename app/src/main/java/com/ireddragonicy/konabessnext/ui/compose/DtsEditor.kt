@@ -107,7 +107,6 @@ fun DtsEditor(
     }
     
     // EditorSession handles highlighting externally. DtsEditor is just a viewer/editor.
-    // Debounced save prevents history spam - user types freely, we batch updates.
     
     fun requestSave() {
         // Instead of immediately calling onContentChanged, we set pendingContent

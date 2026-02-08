@@ -32,12 +32,8 @@ object DtsScanner {
 
         val rootNode = DtsTreeHelper.parse(content)
         
-        // DEBUG: Log tree structure info
-        android.util.Log.d("DtsScanner", "Parsed file: ${file.name}, root children: ${rootNode.children.size}")
-        rootNode.children.take(5).forEach { child ->
-            android.util.Log.d("DtsScanner", "  Child: ${child.name}, grandchildren: ${child.children.size}")
-        }
 
+        
         // 1. Find Model
         // Look for property "model" in the root node (or the first child if root is a dummy container)
         var modelProp = rootNode.getProperty("model")
@@ -45,15 +41,10 @@ object DtsScanner {
              modelProp = rootNode.children.firstOrNull()?.getProperty("model")
         }
         val detectedModel = modelProp?.originalValue?.replace("\"", "")?.replace(";", "")?.trim()
-        android.util.Log.d("DtsScanner", "Detected model: $detectedModel")
 
         // 2. Strategy & Bin Detection
         val binNodes = mutableListOf<DtsNode>()
         findPwrLevels(rootNode, binNodes)
-        android.util.Log.d("DtsScanner", "Found ${binNodes.size} bin nodes")
-        binNodes.forEach { bin ->
-            android.util.Log.d("DtsScanner", "  Bin: ${bin.name}, levels: ${bin.children.filter { it.name.startsWith("qcom,gpu-pwrlevel@") }.size}")
-        }
 
         var strategy = "UNKNOWN"
         if (binNodes.size > 1) {

@@ -329,7 +329,7 @@ fun SearchAndToolsBar(
                         }
                     }
                 }
-            ) // Removed invalid colors parameter that contained contentPadding
+            )
 
             // Navigation
             IconButton(onClick = onPrev, enabled = matchCount > 0) {

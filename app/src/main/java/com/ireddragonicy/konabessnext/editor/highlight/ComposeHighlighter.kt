@@ -7,7 +7,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
 import java.util.regex.Pattern
 
-object ComposeHighlighter {
+internal object ComposeHighlighter {
 
     // Colors mapping (based on existing DtsHighlighter/EditorColorScheme)
     private val COLOR_TEXT = Color(0xFFE0E2E7) // Neutral FG

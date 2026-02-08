@@ -17,7 +17,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import android.net.Uri
 import android.content.Context
-import androidx.lifecycle.viewModelScope
 import android.widget.Toast
 import javax.inject.Inject
 
@@ -130,7 +129,6 @@ class SharedGpuViewModel @Inject constructor(
         _binOffsets.value = emptyMap()
         _searchState.value = SearchState()
         _viewMode.value = ViewMode.MAIN_EDITOR
-        android.util.Log.d("SharedGpuViewModel", "Editor state reset")
     }
 
     // --- Actions ---

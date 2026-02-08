@@ -27,13 +27,7 @@ import com.ireddragonicy.konabessnext.model.LevelUiModel
 import androidx.compose.ui.graphics.Color
 
 /**
- * ULTRA-PERFORMANCE GpuLevelList.
- * 
- * Optimizations applied:
- * 1. REMOVED Spacer items: Used `spacedBy` for 50% fewer layout nodes.
- * 2. Pre-loaded Painters: Zero I/O during list scrolling.
- * 3. Minimized allocations: No derivedStateOf in loop, primitive state types.
- * 4. Fast Graphics Layer: Simple lambda without state reads where possible.
+ * GpuLevelList with performance optimizations.
  */
 @Composable
 fun GpuLevelList(

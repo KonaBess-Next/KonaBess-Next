@@ -1,3 +1,4 @@
+/* --- src/main/java/com/ireddragonicy/konabessnext/repository/GpuRepository.kt --- */
 package com.ireddragonicy.konabessnext.repository
 
 import com.ireddragonicy.konabessnext.model.Bin
@@ -9,6 +10,7 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.FlowPreview
 import java.io.IOException
+import java.util.regex.Pattern
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -26,33 +28,20 @@ open class GpuRepository @Inject constructor(
 
     val dtsContent: Flow<String> = _dtsLines.map { it.joinToString("\n") }.flowOn(Dispatchers.Default)
 
-    // --- Derived States (Auto-Synced) ---
-    
-    // 1. Parsed Bins (GUI Model) - Still derived from lines for now, or could be derived from tree?
-    // User requested: "Keep _parsedTree as Mutable Model for editing"
-    // Let's keep bins derived from lines for safety/legacy compatibility unless specific instruction to change everything.
-    // Actually, if we update lines, this will trigger and re-parse bins from lines.
-    // Ideally we should derive bins from the tree... but GpuDomainManager.parseBins logic takes lines. 
-    // Let's stick to lines -> bins for now as it wasn't explicitly asked to refactor parseBins to take Node (it does internally parse AST though).
-    // GpuDomainManager.parseBins calls DtsTreeHelper.parse(lines), so it parses AGAIN.
-    // Optimization: parseBins could assume valid AST input. But let's leave that for later to avoid scope creep.
+    // --- Derived States ---
     val bins: StateFlow<List<Bin>> = _dtsLines
         .map { lines -> gpuDomainManager.parseBins(lines) }
-        .flowOn(Dispatchers.Default) // Compute on background
+        .flowOn(Dispatchers.Default)
         .stateIn(CoroutineScope(Dispatchers.Main), SharingStarted.Lazily, emptyList())
 
-    // 2. Parsed Tree (Visual Tree Model) - NOW MUTABLE SOURCE
     private val _parsedTree = MutableStateFlow<DtsNode?>(null)
     val parsedTree: StateFlow<DtsNode?> = _parsedTree.asStateFlow()
 
-    // 3. Parsed Opps (Voltage Table)
     val opps: StateFlow<List<Opp>> = _dtsLines
         .map { lines -> gpuDomainManager.parseOpps(lines) }
         .flowOn(Dispatchers.Default)
         .stateIn(CoroutineScope(Dispatchers.Main), SharingStarted.Lazily, emptyList())
 
-    // --- History Management (Unified) ---
-    // Delegate to HistoryManager
     val canUndo = historyManager.canUndo
     val canRedo = historyManager.canRedo
     val history = historyManager.history
@@ -67,17 +56,14 @@ open class GpuRepository @Inject constructor(
     suspend fun loadTable() = withContext(Dispatchers.IO) {
         try {
             val lines = dtsFileRepository.loadDtsLines()
-            
-            // Reset State
             historyManager.clear()
-            
-            // Set Truth
             _dtsLines.value = lines
             
-            // Populate Tree
+            // Populate Tree for View Mode
             val fullText = lines.joinToString("\n")
-            val root = DtsTreeHelper.parse(fullText)
-            _parsedTree.value = root
+            try {
+                _parsedTree.value = DtsTreeHelper.parse(fullText)
+            } catch (e: Exception) { e.printStackTrace() }
             
             initialContentHash = lines.hashCode()
             _isDirty.value = false
@@ -90,7 +76,6 @@ open class GpuRepository @Inject constructor(
         try {
             val currentLines = _dtsLines.value
             dtsFileRepository.saveDtsLines(currentLines)
-            
             initialContentHash = currentLines.hashCode()
             _isDirty.value = false
         } catch (e: Exception) {
@@ -98,10 +83,6 @@ open class GpuRepository @Inject constructor(
         }
     }
 
-    /**
-     * The Universal Update Method.
-     * With AST refactor: We usually generate new lines FROM the tree, then call this to update state flows.
-     */
     fun updateContent(newLines: List<String>, description: String = "Edit", addToHistory: Boolean = true) {
         if (newLines == _dtsLines.value) return
 
@@ -112,76 +93,232 @@ open class GpuRepository @Inject constructor(
         _dtsLines.value = newLines
         _isDirty.value = (newLines.hashCode() != initialContentHash)
         
-        // Also update the tree to match these new lines, in case the update came from raw text edit
-        // NOTE: If the update came from AST manipulation, we are reparsing here. 
-        // A better optimization would be to pass the tree if available, but for now strict consistency:
-        // Text -> Tree.
-        // However, if we just generated text FROM tree, we parse it again?
-        // Let's accept this cost for correctness and simplicity unless we add overloads.
-        val fullText = newLines.joinToString("\n")
-        // We run this on Default dispatcher to avoid blocking if called from main?
-        // But updateContent is usually "synchronous state update". 
-        // Let's launch a coroutine to update the tree view if it's lagging?
-        // No, DtsTreeEditor needs consistency.
-        // We'll trust DtsTreeHelper.parse is reasonably fast or accepted overhead.
-        try {
-            _parsedTree.value = DtsTreeHelper.parse(fullText)
-        } catch (e: Exception) {
-            // Keep old tree or null?
+        // Update tree lazily to prevent blocking
+        CoroutineScope(Dispatchers.Default).launch {
+            try {
+                val fullText = newLines.joinToString("\n")
+                _parsedTree.value = DtsTreeHelper.parse(fullText)
+            } catch (ignored: Exception) {}
         }
     }
 
-    // --- GUI Mutators (AST Manipulation) ---
+    // --- GUI Mutators ---
 
     data class ParameterUpdate(val binIndex: Int, val levelIndex: Int, val paramKey: String, val newValue: String)
 
     /**
-     * Updates a specific parameter using AST manipulation and regenerates the file.
+     * Updates a specific parameter directly in the text lines.
+     * Uses robust text scanning to ensure we edit the correct Bin/Level.
      */
     fun updateParameterInBin(binIndex: Int, levelIndex: Int, paramKey: String, newValue: String, historyDesc: String? = null) {
-        val root = _parsedTree.value ?: return
+        val currentLines = ArrayList(_dtsLines.value)
+        val binStartIdx = findBinStartIndex(currentLines, binIndex)
         
-        // 1. Find Nodes
-        val binNode = gpuDomainManager.findBinNode(root, binIndex) ?: return
-        val levelNode = gpuDomainManager.findLevelNode(binNode, levelIndex) ?: return
-        
-        // 2. Modify Property
-        levelNode.setProperty(paramKey, newValue)
-        
-        // 3. Regenerate
-        val newText = DtsTreeHelper.generate(root)
-        val newLines = newText.split("\n")
-        
-        val desc = historyDesc ?: "Update $paramKey to $newValue (Bin $binIndex, Lvl $levelIndex)"
-        
-        // Update valid state (including history)
-        // Note: updateContent will re-parse the tree from text. 
-        // Ideally we would set _parsedTree directly to avoid re-parse, 
-        // but verify consistency first.
-        updateContent(newLines, desc)
+        if (binStartIdx != -1) {
+            val levelStartIdx = findLevelStartIndex(currentLines, binStartIdx, levelIndex)
+            if (levelStartIdx != -1) {
+                // Scan inside the level for the parameter
+                var propFound = false
+                var braceCount = 0
+                
+                // Find end of level to limit search
+                for (i in levelStartIdx until currentLines.size) {
+                    val line = currentLines[i]
+                    if (line.contains("{")) braceCount++
+                    if (line.contains("}")) {
+                        braceCount--
+                        if (braceCount == 0) break // End of level
+                    }
+                    
+                    // Match property:  key = <value>;
+                    // We look for key followed by =
+                    if (line.trim().startsWith(paramKey) && line.contains("=")) {
+                        // Preserve indentation
+                        val indent = line.substring(0, line.indexOf(paramKey))
+                        currentLines[i] = "$indent$paramKey = <$newValue>;"
+                        propFound = true
+                        break
+                    }
+                }
+                
+                // If property not found (e.g. adding a new one), we could insert it, 
+                // but currently we usually update existing ones.
+                
+                if (propFound) {
+                    val desc = historyDesc ?: "Update $paramKey to $newValue (Bin $binIndex, Lvl $levelIndex)"
+                    updateContent(currentLines, desc)
+                }
+            }
+        }
     }
     
     /**
-     * Updates the voltage (opp-microvolt) for an OPP entry matching the given frequency.
-     * This is used for devices where voltage is stored in a separate OPP table rather than
-     * inline qcom,level properties.
+     * Safely deletes a level using text manipulation and renumbers remaining levels.
+     * This avoids AST regeneration issues which can break 'dtc' compilation.
      */
+    fun deleteLevel(binIndex: Int, levelIndex: Int) {
+        val lines = ArrayList(_dtsLines.value)
+        val binStartIdx = findBinStartIndex(lines, binIndex)
+        if (binStartIdx == -1) return
+
+        val levelStartIdx = findLevelStartIndex(lines, binStartIdx, levelIndex)
+        if (levelStartIdx == -1) return
+
+        // 1. Calculate Level End Index
+        var levelEndIdx = -1
+        var braceCount = 0
+        // Determine scope end
+        for (i in levelStartIdx until lines.size) {
+            if (lines[i].contains("{")) braceCount++
+            if (lines[i].contains("}")) {
+                braceCount--
+                if (braceCount == 0) {
+                    levelEndIdx = i
+                    break
+                }
+            }
+        }
+
+        if (levelEndIdx == -1) return
+
+        // 2. Determine Bin Scope (to limit renumbering)
+        var binEndIdx = -1
+        var binBraceCount = 0
+        // Reset and find bin end starting from binStart
+        for (i in binStartIdx until lines.size) {
+            if (lines[i].contains("{")) binBraceCount++
+            if (lines[i].contains("}")) {
+                binBraceCount--
+                if (binBraceCount == 0) {
+                    binEndIdx = i
+                    break
+                }
+            }
+        }
+
+        // 3. Delete Lines
+        val linesToRemove = levelEndIdx - levelStartIdx + 1
+        repeat(linesToRemove) { lines.removeAt(levelStartIdx) }
+        
+        // Adjust binEndIdx because we removed lines
+        binEndIdx -= linesToRemove
+
+        // 4. Renumber Subsequent Levels (Shift ID down by 1)
+        // Only scan within the Bin's scope
+        for (i in binStartIdx..binEndIdx) {
+            val line = lines[i]
+            
+            // Regex match: qcom,gpu-pwrlevel@X
+            val nodeMatch = Regex("qcom,gpu-pwrlevel@(\\d+)").find(line)
+            if (nodeMatch != null) {
+                val currentId = nodeMatch.groupValues[1].toInt()
+                if (currentId > levelIndex) {
+                    val newId = currentId - 1
+                    lines[i] = line.replace("qcom,gpu-pwrlevel@$currentId", "qcom,gpu-pwrlevel@$newId")
+                }
+            }
+            
+            // Regex match: reg = <X> (Decimal) or <0xX> (Hex)
+            // Safety: Only replace strict matches to avoid false positives
+            if (line.trim().startsWith("reg")) {
+                val regMatch = Regex("reg\\s*=\\s*<([^>]+)>").find(line)
+                if (regMatch != null) {
+                    val rawVal = regMatch.groupValues[1].trim()
+                    val intVal = try {
+                        if (rawVal.startsWith("0x")) rawVal.substring(2).toInt(16) else rawVal.toInt()
+                    } catch (e: Exception) { -1 }
+                    
+                    if (intVal > levelIndex) {
+                        val newVal = intVal - 1
+                        val newValStr = if (rawVal.startsWith("0x")) "0x" + Integer.toHexString(newVal) else newVal.toString()
+                        lines[i] = line.replace("<$rawVal>", "<$newValStr>")
+                    }
+                }
+            }
+        }
+
+        // 5. Update Header Pointers (initial-pwrlevel, etc.)
+        for (i in binStartIdx..binEndIdx) {
+            val line = lines[i]
+            if (line.contains("qcom,initial-pwrlevel") || line.contains("qcom,ca-target-pwrlevel")) {
+                val valMatch = Regex("<([^>]+)>").find(line)
+                if (valMatch != null) {
+                    val rawVal = valMatch.groupValues[1].trim()
+                    val intVal = try {
+                        if (rawVal.startsWith("0x")) rawVal.substring(2).toInt(16) else rawVal.toInt()
+                    } catch (e: Exception) { -1 }
+                    
+                    if (intVal != -1) {
+                        var newVal = intVal
+                        if (intVal == levelIndex) {
+                            // Pointed to deleted item -> decrement or clamp to 0
+                            newVal = if (intVal > 0) intVal - 1 else 0
+                        } else if (intVal > levelIndex) {
+                            // Pointed to item that shifted down -> decrement
+                            newVal = intVal - 1
+                        }
+                        
+                        if (newVal != intVal) {
+                            val newValStr = if (rawVal.startsWith("0x")) "0x" + Integer.toHexString(newVal) else newVal.toString()
+                            lines[i] = line.replace("<$rawVal>", "<$newValStr>")
+                        }
+                    }
+                }
+            }
+        }
+        
+        updateContent(lines, "Deleted Level $levelIndex from Bin $binIndex")
+    }
+    
+    // Helper to find bin start line
+    private fun findBinStartIndex(lines: List<String>, binId: Int): Int {
+        // Try precise name first: qcom,gpu-pwrlevels-X
+        var idx = lines.indexOfFirst { it.trim().startsWith("qcom,gpu-pwrlevels-$binId") && it.contains("{") }
+        if (idx != -1) return idx
+        
+        // Fallback: If binId is 0, maybe it's just "qcom,gpu-pwrlevels {" (legacy single bin)
+        if (binId == 0) {
+            idx = lines.indexOfFirst { it.trim().startsWith("qcom,gpu-pwrlevels") && !it.contains("-") && it.contains("{") }
+            if (idx != -1) return idx
+        }
+        
+        // Fallback 2: Iterate all bin nodes and check qcom,speed-bin property?
+        // Too complex for regex line scan, usually naming convention holds.
+        return -1
+    }
+    
+    // Helper to find level start line
+    private fun findLevelStartIndex(lines: List<String>, binStartIdx: Int, levelIndex: Int): Int {
+        var braceCount = 0
+        // Limit search to current bin
+        for (i in binStartIdx until lines.size) {
+            if (lines[i].contains("{")) braceCount++
+            if (lines[i].contains("}")) {
+                braceCount--
+                if (braceCount == 0) return -1 // End of bin
+            }
+            
+            // Match qcom,gpu-pwrlevel@X
+            if (lines[i].trim().startsWith("qcom,gpu-pwrlevel@$levelIndex") && lines[i].contains("{")) {
+                return i
+            }
+        }
+        return -1
+    }
+
+    // --- OPP and Other Updates ---
+    
     fun updateOppVoltage(frequency: Long, newVolt: Long, historyDesc: String? = null) {
         val root = _parsedTree.value ?: return
-        
-        // Use GpuDomainManager to update the OPP voltage in the AST
         val success = gpuDomainManager.updateOppVoltage(root, frequency, newVolt)
         if (!success) return
-        
-        // Regenerate DTS from modified tree
         val newText = DtsTreeHelper.generate(root)
-        val newLines = newText.split("\n")
-        
-        val desc = historyDesc ?: "Updated OPP voltage for ${frequency / 1_000_000}MHz to $newVolt"
-        updateContent(newLines, desc)
+        updateContent(newText.split("\n"), historyDesc ?: "Updated OPP voltage")
     }
 
     fun batchUpdateParameters(updates: List<ParameterUpdate>, description: String = "Batch Update") {
+        // Fallback to AST for batch updates as they are complex to do via Regex
+        // But ensure we re-parse if needed
         val root = _parsedTree.value ?: return
         var anyChanged = false
         
@@ -210,12 +347,10 @@ open class GpuRepository @Inject constructor(
         val patterns = chipRepository.currentChip.value?.voltTablePattern ?: return
         val newBlock = gpuDomainManager.generateOppTableBlock(newOpps)
         
-        // Replace in text
         val currentLines = _dtsLines.value
         val startIdx = currentLines.indexOfFirst { it.trim().contains(patterns) && it.trim().endsWith("{") }
         if (startIdx == -1) return
         
-        // Find end
         var braceCount = 0
         var endIdx = -1
         for (i in startIdx until currentLines.size) {
@@ -229,36 +364,19 @@ open class GpuRepository @Inject constructor(
         
         if (endIdx != -1) {
             val validLines = ArrayList(currentLines)
-            // Remove old block
             val removalCount = endIdx - startIdx + 1
             for (k in 0 until removalCount) validLines.removeAt(startIdx)
-            
-            // Insert new block
             val newLines = newBlock.split("\n")
             validLines.addAll(startIdx, newLines)
-            
             updateContent(validLines, "Updated OPP Table")
         }
     }
-
-    fun deleteLevel(binIndex: Int, levelIndex: Int) {
-        val root = _parsedTree.value ?: return
-        val binNode = gpuDomainManager.findBinNode(root, binIndex) ?: return
-        val levelNode = gpuDomainManager.findLevelNode(binNode, levelIndex) ?: return
-        
-        binNode.children.remove(levelNode)
-        
-        val newText = DtsTreeHelper.generate(root)
-        updateContent(newText.split("\n"), "Deleted Level $levelIndex from Bin $binIndex")
-    }
     
     fun importTable(lines: List<String>) {
-        // Find qcom,gpu-pwrlevels
         val currentLines = _dtsLines.value
         val startIdx = currentLines.indexOfFirst { it.trim().startsWith("qcom,gpu-pwrlevels") && it.contains("{") }
         
         if (startIdx != -1) {
-             // Find end
             var braceCount = 0
             var endIdx = -1
             for (i in startIdx until currentLines.size) {
@@ -269,7 +387,6 @@ open class GpuRepository @Inject constructor(
                      break
                  }
             }
-            
             if (endIdx != -1) {
                 val validLines = ArrayList(currentLines)
                 val removalCount = endIdx - startIdx + 1
@@ -284,7 +401,6 @@ open class GpuRepository @Inject constructor(
         val patterns = chipRepository.currentChip.value?.voltTablePattern ?: return
         val currentLines = _dtsLines.value
         val startIdx = currentLines.indexOfFirst { it.trim().contains(patterns) && it.trim().endsWith("{") }
-        
         if (startIdx != -1) {
             var braceCount = 0
             var endIdx = -1
@@ -306,8 +422,6 @@ open class GpuRepository @Inject constructor(
         }
     }
 
-    // --- History Logic ---
-
     fun undo() {
         val currentState = _dtsLines.value
         val revertedState = historyManager.undo(currentState)
@@ -326,18 +440,12 @@ open class GpuRepository @Inject constructor(
 
     fun getGpuModelName(): String {
         val lines = _dtsLines.value
-        
-        // Try 1: Look for qcom,gpu-model property
-        val modelPattern = java.util.regex.Pattern.compile("""qcom,gpu-model\s*=\s*"([^"]+)";""")
+        val modelPattern = Pattern.compile("""qcom,gpu-model\s*=\s*"([^"]+)";""")
         for (line in lines) {
             val matcher = modelPattern.matcher(line.trim())
-            if (matcher.find()) {
-                return matcher.group(1) ?: ""
-            }
+            if (matcher.find()) return matcher.group(1) ?: ""
         }
-        
-        // Try 2: Extract from qcom,chipid and map to Adreno GPU name
-        val chipidPattern = java.util.regex.Pattern.compile("""qcom,chipid\s*=\s*<(0x[0-9a-fA-F]+)>;""")
+        val chipidPattern = Pattern.compile("""qcom,chipid\s*=\s*<(0x[0-9a-fA-F]+)>;""")
         for (line in lines) {
             val matcher = chipidPattern.matcher(line.trim())
             if (matcher.find()) {
@@ -346,29 +454,12 @@ open class GpuRepository @Inject constructor(
                 return mapChipIdToGpuName(chipid)
             }
         }
-        
-        // Try 3: Extract from label property in kgsl node
-        val labelPattern = java.util.regex.Pattern.compile("""label\s*=\s*"([^"]+)";""")
-        for (line in lines) {
-            val matcher = labelPattern.matcher(line.trim())
-            if (matcher.find()) {
-                val label = matcher.group(1) ?: ""
-                if (label.contains("kgsl")) {
-                    return label.uppercase()
-                }
-            }
-        }
-        
         return ""
     }
     
-    // Map Qualcomm GPU chip IDs to human-readable Adreno names
     private fun mapChipIdToGpuName(chipid: Long): String {
-        // Format: Major.Minor.Patch encoded in hex
-        // e.g., 0x6040001 = Adreno 640, 0x6080001 = Adreno 680
         val major = ((chipid shr 24) and 0xFF).toInt()
         val minor = ((chipid shr 16) and 0xFF).toInt()
-        
         return when {
             major == 6 && minor == 4 -> "Adreno 640"
             major == 6 && minor == 5 -> "Adreno 650"
@@ -378,19 +469,13 @@ open class GpuRepository @Inject constructor(
             major == 7 && minor == 3 -> "Adreno 730"
             major == 7 && minor == 4 -> "Adreno 740"
             major == 7 && minor == 5 -> "Adreno 750"
-            major == 5 && minor == 12 -> "Adreno 512"
-            major == 5 && minor == 40 -> "Adreno 540"
-            major == 6 && minor == 19 -> "Adreno 619"
-            major == 6 && minor == 18 -> "Adreno 618"
-            major == 6 && minor == 12 -> "Adreno 612"
             else -> "Adreno ${major}${minor}0"
         }
     }
 
     fun updateGpuModelName(newName: String) {
         val currentLines = ArrayList(_dtsLines.value)
-        val pattern = java.util.regex.Pattern.compile("""(qcom,gpu-model\s*=\s*")([^"]+)(";.*)""")
-        
+        val pattern = Pattern.compile("""(qcom,gpu-model\s*=\s*")([^"]+)(";.*)""")
         var found = false
         for (i in currentLines.indices) {
             val line = currentLines[i]
@@ -402,7 +487,6 @@ open class GpuRepository @Inject constructor(
                 break
             }
         }
-        
         if (found) {
             updateContent(currentLines, "Renamed GPU to $newName")
         }
