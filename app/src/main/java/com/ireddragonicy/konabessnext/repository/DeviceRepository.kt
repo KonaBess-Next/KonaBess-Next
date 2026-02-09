@@ -124,10 +124,45 @@ open class DeviceRepository @Inject constructor(
     }
 
     suspend fun importExternalDts(inputStream: InputStream, filename: String): Dtb {
-        val importedFile = File(filesDir, "imported_${System.currentTimeMillis()}.dts")
+        val timestamp = System.currentTimeMillis()
+        val rawFile = File(filesDir, "imported_raw_$timestamp")
         withContext(Dispatchers.IO) {
-            FileOutputStream(importedFile).use { output ->
-                inputStream.copyTo(output)
+            FileOutputStream(rawFile).use { output ->
+                val bytesCopied = inputStream.copyTo(output)
+                Log.d(TAG, "Copied $bytesCopied bytes from stream to ${rawFile.absolutePath}")
+            }
+        }
+
+        // Validate that we actually got data
+        if (!rawFile.exists() || rawFile.length() == 0L) {
+            Log.e(TAG, "Import failed: copied file is empty or missing (${rawFile.absolutePath})")
+            rawFile.delete()
+            throw IOException("Failed to read file — 0 bytes received. Check file permissions.")
+        }
+        Log.d(TAG, "Raw import file: ${rawFile.length()} bytes, filename=$filename")
+
+        // Detect if the file is a binary DTB or text DTS/TXT
+        val importedFile = withContext(Dispatchers.IO) {
+            if (isDtbBinary(rawFile)) {
+                // Binary DTB → convert to DTS using dtc
+                Log.d(TAG, "Detected binary DTB, converting to DTS...")
+                val dtsFile = File(filesDir, "imported_$timestamp.dts")
+                val dtcPath = "$filesDir/dtc"
+                File(dtcPath).setExecutable(true)
+                shellRepository.exec("$dtcPath -I dtb -O dts \"${rawFile.absolutePath}\" -o \"${dtsFile.absolutePath}\"")
+                rawFile.delete()
+                if (dtsFile.exists() && dtsFile.length() > 0) {
+                    dtsFile
+                } else {
+                    // Conversion failed, keep raw file as-is (maybe it's actually text with weird extension)
+                    rawFile.renameTo(File(filesDir, "imported_$timestamp.dts"))
+                    File(filesDir, "imported_$timestamp.dts")
+                }
+            } else {
+                // Text file (.dts or .txt) — just rename
+                val dtsFile = File(filesDir, "imported_$timestamp.dts")
+                rawFile.renameTo(dtsFile)
+                dtsFile
             }
         }
 
@@ -137,14 +172,15 @@ open class DeviceRepository @Inject constructor(
         
         val content = withContext(Dispatchers.IO) { importedFile.readText() }
         
-        // Use DtsScanner to analyze
-        val scanResult = DtsScanner.scan(importedFile, virtualId)
-        android.util.Log.d("DeviceRepository", "Scan result: isValid=${scanResult.isValid}, levels=${scanResult.levelCount}, strategy=${scanResult.recommendedStrategy}")
+        // Use DtsScanner smart detection to analyze
+        val scanResult = DtsScanner.scanContent(content, virtualId)
+        Log.d(TAG, "Import scan: isValid=${scanResult.isValid}, levels=${scanResult.levelCount}, " +
+            "strategy=${scanResult.recommendedStrategy}, voltType=${scanResult.voltageType}, " +
+            "bins=${scanResult.binCount}, confidence=${scanResult.confidence}")
         
         // If scan is valid (found power levels), use the scan result to create a proper ChipDefinition
         // Otherwise fall back to a generic placeholder
-        val def = if (scanResult.isValid && scanResult.levelCount > 0) {
-            // Use the scan results to create a valid ChipDefinition with detected levels
+        val def = if (scanResult.isValid) {
             DtsScanner.toChipDefinition(scanResult)
         } else {
             createGenericPlaceholder(virtualId, content, scanResult.detectedModel ?: "Imported (Unknown)")
@@ -157,7 +193,7 @@ open class DeviceRepository @Inject constructor(
         // chooseTarget would set path to "-1234.dts" which doesn't exist
         _dtsPath = importedFile.absolutePath
         importedDtsPaths[virtualId] = importedFile.absolutePath
-        android.util.Log.d("DeviceRepository", "Set dtsPath to imported file: $_dtsPath")
+        Log.d(TAG, "Set dtsPath to imported file: $_dtsPath")
         
         // Now select (this will set currentDtb and chip, but won't override our dtsPath since we set it first)
         chipRepository.setCurrentChip(def)
@@ -166,6 +202,23 @@ open class DeviceRepository @Inject constructor(
         saveLastChipset(virtualId, def.id)
         
         return dtb
+    }
+
+    /**
+     * Detect if a file is a binary DTB by checking for the FDT magic number (0xD00DFEED).
+     */
+    private fun isDtbBinary(file: File): Boolean {
+        if (!file.exists() || file.length() < 4) return false
+        return try {
+            file.inputStream().use { stream ->
+                val magic = ByteArray(4)
+                stream.read(magic)
+                magic[0] == 0xD0.toByte() && magic[1] == 0x0D.toByte() &&
+                    magic[2] == 0xFE.toByte() && magic[3] == 0xED.toByte()
+            }
+        } catch (e: Exception) {
+            false
+        }
     }
 
     fun getDtsFile(index: Int): File = File(filesDir, "$index.dts")
@@ -327,12 +380,34 @@ open class DeviceRepository @Inject constructor(
                 }
                 
                 val chipId = detectChipType(content)
-                val def = chipRepository.getChipById(chipId ?: "") ?: createGenericPlaceholder(i, content, dtsModel)
+                val def = if (chipId != null) {
+                    // Found in hardcoded definitions
+                    chipRepository.getChipById(chipId) ?: createGenericPlaceholder(i, content, dtsModel)
+                } else {
+                    // Not in definitions.json → use smart detection
+                    Log.d(TAG, "DTB $i not in definitions, running smart detection...")
+                    val scanResult = DtsScanner.scanContent(content, i)
+                    Log.d(TAG, "Smart detect DTB $i: valid=${scanResult.isValid}, " +
+                        "strategy=${scanResult.recommendedStrategy}, bins=${scanResult.binCount}, " +
+                        "levels=${scanResult.levelCount}, voltType=${scanResult.voltageType}, " +
+                        "confidence=${scanResult.confidence}")
+                    
+                    if (scanResult.isValid) {
+                        // Smart detection succeeded — create a proper working ChipDefinition
+                        val smartDef = DtsScanner.toChipDefinition(scanResult)
+                        // Save it so it persists across sessions
+                        saveCustomDefinition(smartDef)
+                        smartDef
+                    } else {
+                        createGenericPlaceholder(i, content, dtsModel)
+                    }
+                }
                 dtbs.add(Dtb(i, def))
-            } catch (e: Exception) { /* Log.e(TAG, "Error checking DTB $i: ${e.message}") */ }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error checking DTB $i: ${e.message}")
+            }
         }
         if (activeDtbId == -1 && count == 1) activeDtbId = 0
-        /* Log.i(TAG, "Final Active ID: $activeDtbId") */
     }
 
     private fun createGenericPlaceholder(index: Int, content: String, modelName: String): ChipDefinition {

@@ -2,6 +2,7 @@ package com.ireddragonicy.konabessnext.ui.compose
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -13,10 +14,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.ireddragonicy.konabessnext.R
 import com.ireddragonicy.konabessnext.core.scanner.DtsScanResult
+import com.ireddragonicy.konabessnext.core.scanner.VoltageType
 import com.ireddragonicy.konabessnext.model.ChipDefinition
 import kotlinx.coroutines.delay
 
@@ -24,8 +28,8 @@ import kotlinx.coroutines.delay
 @Composable
 fun ManualChipsetSetupScreen(
     dtbIndex: Int,
-    autoStartScan: Boolean = false, // New Flag
-    existingDefinition: ChipDefinition? = null, // Pre-populate from known definition
+    autoStartScan: Boolean = false,
+    existingDefinition: ChipDefinition? = null,
     onDeepScan: suspend () -> DtsScanResult,
     onSave: (ChipDefinition) -> Unit,
     onCancel: () -> Unit
@@ -40,14 +44,6 @@ fun ManualChipsetSetupScreen(
     var isScanning by remember { mutableStateOf(false) }
     var scanResult by remember { mutableStateOf<DtsScanResult?>(null) }
 
-    // Logic for running the scan
-    val runScan = {
-        isScanning = true
-        // We run this in a LaunchedEffect usually, but here we just toggle state for UI
-        // The actual computation should probably be async, but onDeepScan currently might be blocking or fast enough.
-        // We'll simulate a small UI delay if it's instant to show feedback.
-    }
-
     // Effect to run scan logic
     LaunchedEffect(isScanning) {
         if (isScanning) {
@@ -60,6 +56,7 @@ fun ManualChipsetSetupScreen(
                 maxLevels = result.maxLevels.toString()
                 voltagePattern = result.voltageTablePattern ?: ""
                 chipName = result.detectedModel ?: "Detected Device"
+                ignoreVoltTable = result.voltageType != VoltageType.OPP_TABLE
                 scanResult = result
             }
             isScanning = false
@@ -154,18 +151,114 @@ fun ManualChipsetSetupScreen(
             }
         }
         
+        // Smart Detection Results Card
         AnimatedVisibility(visible = scanResult != null) {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                modifier = Modifier.padding(top = 8.dp).fillMaxWidth()
-            ) {
-                Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Info, null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = "Scan Confidence: ${scanResult?.confidence}",
-                        style = MaterialTheme.typography.labelMedium
-                    )
+            val result = scanResult
+            if (result != null) {
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    ),
+                    modifier = Modifier
+                        .padding(top = 12.dp)
+                        .fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        // Header with confidence badge
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = "Detection Results",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Surface(
+                                color = when (result.confidence) {
+                                    "High" -> MaterialTheme.colorScheme.primary
+                                    "Medium" -> MaterialTheme.colorScheme.tertiary
+                                    else -> MaterialTheme.colorScheme.error
+                                },
+                                shape = MaterialTheme.shapes.small
+                            ) {
+                                Text(
+                                    text = "${result.confidence} Confidence",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onPrimary,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // GPU Info
+                        if (result.gpuModel != null || result.chipId != null) {
+                            ScanResultRow("GPU", buildString {
+                                if (result.gpuModel != null) append(result.gpuModel)
+                                if (result.chipId != null) {
+                                    if (result.gpuModel != null) append(" (${result.chipId})")
+                                    else append(result.chipId)
+                                }
+                            })
+                        }
+
+                        // Strategy & Bins
+                        ScanResultRow("Strategy", "${result.recommendedStrategy} (${result.binCount} bins)")
+                        ScanResultRow("Levels", "${result.levelCount} per bin")
+
+                        // Voltage Type
+                        ScanResultRow("Voltage", when (result.voltageType) {
+                            VoltageType.OPP_TABLE -> "OPP Table: ${result.voltageTablePattern}"
+                            VoltageType.INLINE_LEVEL -> "Inline (qcom,level)"
+                            VoltageType.NONE -> "None detected"
+                        })
+
+                        // GPU Node
+                        if (result.gpuNodeName != null) {
+                            ScanResultRow("GPU Node", result.gpuNodeName)
+                        }
+
+                        // Detected Properties
+                        if (result.detectedProperties.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "Detected Level Properties:",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                result.detectedProperties.forEach { prop ->
+                                    val isImportant = prop in listOf(
+                                        "qcom,gpu-freq", "qcom,level", "qcom,bus-freq",
+                                        "qcom,bus-min", "qcom,bus-max", "qcom,acd-level"
+                                    )
+                                    Surface(
+                                        color = if (isImportant)
+                                            MaterialTheme.colorScheme.primaryContainer
+                                        else
+                                            MaterialTheme.colorScheme.surface,
+                                        shape = MaterialTheme.shapes.extraSmall
+                                    ) {
+                                        Text(
+                                            text = prop,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontFamily = FontFamily.Monospace,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -245,5 +338,28 @@ fun ManualChipsetSetupScreen(
                 Text("Save & Open")
             }
         }
+    }
+}
+
+@Composable
+private fun ScanResultRow(label: String, value: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.width(80.dp)
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodySmall,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.weight(1f)
+        )
     }
 }

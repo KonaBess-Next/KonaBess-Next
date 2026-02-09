@@ -23,6 +23,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import android.net.Uri
+import android.provider.OpenableColumns
 import java.io.FileOutputStream
 import android.widget.Toast
 import javax.inject.Inject
@@ -68,9 +69,41 @@ class DeviceViewModel @Inject constructor(
             try {
                 _detectionState.value = UiState.Loading
                 
-                context.contentResolver.openInputStream(uri)?.use { inputStream ->
-                    val filename = "imported.dts" // we rely on repo timestamp naming
-                    val dtb = repository.importExternalDts(inputStream, filename)
+                // Take persistable URI permission so the stream stays readable
+                try {
+                    context.contentResolver.takePersistableUriPermission(
+                        uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    )
+                } catch (e: SecurityException) {
+                    // Not all providers support persistable permissions — that's OK,
+                    // the one-shot grant from OpenDocument still works.
+                    Log.d("KonaBessVM", "Persistable permission not available: ${e.message}")
+                }
+
+                // Resolve a human-readable filename for logging
+                val displayName = try {
+                    context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                        if (cursor.moveToFirst()) {
+                            val idx = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                            if (idx >= 0) cursor.getString(idx) else null
+                        } else null
+                    }
+                } catch (_: Exception) { null } ?: uri.lastPathSegment ?: "imported"
+                Log.d("KonaBessVM", "Import: uri=$uri, displayName=$displayName")
+
+                val inputStream = context.contentResolver.openInputStream(uri)
+                if (inputStream == null) {
+                    // Permission denied or file inaccessible
+                    Log.e("KonaBessVM", "openInputStream returned null for $uri")
+                    _detectionState.value = UiState.Error(UiText.DynamicString("Cannot read file \u2014 permission denied or file inaccessible"))
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "Import Failed: Cannot open file (permission denied)", Toast.LENGTH_LONG).show()
+                    }
+                    return@launch
+                }
+
+                inputStream.use { stream ->
+                    val dtb = repository.importExternalDts(stream, displayName)
                     
                     // DON'T call selectChipset here! It would overwrite the dtsPath we just set
                     // repository.importExternalDts already set: dtsPath, currentDtb, currentChip, prepared
@@ -92,6 +125,7 @@ class DeviceViewModel @Inject constructor(
                 }
             } catch (e: Exception) {
                 Log.e("KonaBessVM", "Import failed", e)
+                _detectionState.value = UiState.Error(UiText.DynamicString("Import failed: ${e.localizedMessage}"))
                 withContext(Dispatchers.Main) {
                     Toast.makeText(context, "Import Failed: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
                 }
