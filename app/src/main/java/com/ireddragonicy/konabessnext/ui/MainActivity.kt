@@ -50,7 +50,11 @@ class MainActivity : ComponentActivity() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
 
         if (!deviceViewModel.isFilesExtracted.value) {
-            deviceViewModel.detectChipset()
+            if (deviceViewModel.isRootMode) {
+                deviceViewModel.detectChipset()
+            } else {
+                deviceViewModel.loadSavedDts()
+            }
         }
 
         setContent {

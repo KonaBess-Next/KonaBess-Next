@@ -8,7 +8,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -18,6 +17,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.activity.compose.BackHandler
+import android.net.Uri
 import com.ireddragonicy.konabessnext.viewmodel.*
 
 @Composable
@@ -41,7 +41,6 @@ fun HomeScreen(
     // Reload data when import triggers it (reloadTrigger > 0 means import happened)
     LaunchedEffect(reloadTrigger) {
         if (reloadTrigger > 0) {
-            android.util.Log.d("HomeScreen", "Reload triggered: $reloadTrigger")
             sharedViewModel.loadData()
         }
     }
@@ -64,6 +63,17 @@ fun HomeScreen(
 fun InitialSetupScreen(deviceViewModel: DeviceViewModel) {
     val detectionState by deviceViewModel.detectionState.collectAsState()
     var showManualSetup by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val isRootMode = deviceViewModel.isRootMode
+
+    // SAF launcher for importing any file in non-root mode (auto-detects type)
+    val fileImportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            deviceViewModel.importFile(context, uri)
+        }
+    }
 
     if (showManualSetup) {
         Dialog(onDismissRequest = { showManualSetup = false }) {
@@ -86,6 +96,7 @@ fun InitialSetupScreen(deviceViewModel: DeviceViewModel) {
         when (detectionState) {
             is UiState.Loading -> CircularProgressIndicator()
             is UiState.Error -> {
+                // Only root mode reaches Error state now; non-root shows toast + stays on import screen
                 ErrorScreen(
                     message = (detectionState as UiState.Error).message.asString(),
                     onRetryClick = { deviceViewModel.detectChipset() },
@@ -94,7 +105,15 @@ fun InitialSetupScreen(deviceViewModel: DeviceViewModel) {
                     onSubmitDtsClick = { }
                 )
             }
-            else -> DetectionPromptScreen(onStartClick = { deviceViewModel.detectChipset() })
+            else -> {
+                if (isRootMode) {
+                    DetectionPromptScreen(onStartClick = { deviceViewModel.detectChipset() })
+                } else {
+                    NonRootImportScreen(
+                        onImportFile = { fileImportLauncher.launch(arrayOf("*/*")) }
+                    )
+                }
+            }
         }
     }
 }
@@ -133,7 +152,7 @@ fun GpuEditorMainContent(
     }
 
     var activeSheet by remember { mutableStateOf(WorkbenchSheetType.NONE) }
-    var manualSetupIndex by remember { mutableIntStateOf(-1) }
+    var manualSetupIndex by remember { mutableStateOf<Int?>(null) }
 
     // Sheets
     val detectionState by deviceViewModel.detectionState.collectAsState()
@@ -142,30 +161,32 @@ fun GpuEditorMainContent(
     
     val context = LocalContext.current
     val canFlashOrRepack by deviceViewModel.canFlashOrRepack.collectAsState()
+    val isRootMode = deviceViewModel.isRootMode
 
     // Dialogs
-    if (manualSetupIndex != -1) {
+    if (manualSetupIndex != null) {
+        val setupIndex = manualSetupIndex!!
         // Determine if this DTB has an official/known definition
         val dtbsList = (detectionState as? UiState.Success)?.data ?: emptyList()
-        val targetDtb = dtbsList.find { it.id == manualSetupIndex }
+        val targetDtb = dtbsList.find { it.id == setupIndex }
         val isOfficial = targetDtb != null &&
             !targetDtb.type.id.startsWith("custom") &&
             !targetDtb.type.id.startsWith("unsupported")
 
-        Dialog(onDismissRequest = { manualSetupIndex = -1 }) {
+        Dialog(onDismissRequest = { manualSetupIndex = null }) {
             Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surface) {
                 ManualChipsetSetupScreen(
-                    dtbIndex = manualSetupIndex,
+                    dtbIndex = setupIndex,
                     autoStartScan = !isOfficial,
                     existingDefinition = targetDtb?.type,
-                    onDeepScan = { deviceViewModel.performManualScan(manualSetupIndex) },
+                    onDeepScan = { deviceViewModel.performManualScan(setupIndex) },
                     onSave = { def ->
-                        deviceViewModel.saveManualDefinition(def, manualSetupIndex)
+                        deviceViewModel.saveManualDefinition(def, setupIndex)
                         sharedViewModel.loadData()
-                        manualSetupIndex = -1
+                        manualSetupIndex = null
                         activeSheet = WorkbenchSheetType.NONE
                     },
-                    onCancel = { manualSetupIndex = -1 }
+                    onCancel = { manualSetupIndex = null }
                 )
             }
         }
@@ -194,7 +215,7 @@ fun GpuEditorMainContent(
             activeSheet = WorkbenchSheetType.NONE
         },
         onConfigureManual = { id -> manualSetupIndex = id },
-        onAddNewDtb = { manualSetupIndex = 0 },
+        onDeleteDts = { id -> deviceViewModel.deleteDts(id) },
         onImportDts = { uri -> deviceViewModel.importExternalDts(context, uri) }
     )
 
@@ -206,7 +227,8 @@ fun GpuEditorMainContent(
             onRepack = onStartRepack,
             onExportDts = { exportDtsLauncher.launch("gpu_config.dts") },
             onExportImg = { exportImgLauncher.launch("boot_repack.img") },
-            canFlashOrRepack = canFlashOrRepack
+            canFlashOrRepack = canFlashOrRepack,
+            isRootMode = isRootMode
         )
     } else {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -226,7 +248,8 @@ fun GpuEditorMainContent(
                 onFlashClick = { onStartRepack() },
                 onExportDts = { exportDtsLauncher.launch("gpu_config.dts") },
                 onExportImg = { exportImgLauncher.launch("boot_repack.img") },
-                canFlashOrRepack = canFlashOrRepack
+                canFlashOrRepack = canFlashOrRepack,
+                isRootMode = isRootMode
             )
     
             Crossfade(targetState = currentMode, label = "ViewModeSwitch") { mode ->

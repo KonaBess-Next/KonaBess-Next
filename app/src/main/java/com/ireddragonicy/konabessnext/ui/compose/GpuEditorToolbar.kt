@@ -44,6 +44,7 @@ fun GpuEditorToolbar(
     onExportDts: () -> Unit,
     onExportImg: () -> Unit,
     canFlashOrRepack: Boolean,
+    isRootMode: Boolean = true,
     applyStatusBarPadding: Boolean = true,
     modifier: Modifier = Modifier
 ) {
@@ -243,11 +244,11 @@ fun GpuEditorToolbar(
                         )
 
                         // Only show Image/Flash options if we have a valid base boot image
-                        if (canFlashOrRepack) {
+                        if (canFlashOrRepack || !isRootMode) {
                             HorizontalDivider()
                             
                             DropdownMenuItem(
-                                text = { Text("Export .img File") },
+                                text = { Text(if (isRootMode) "Export .img File" else "Repack & Export .img") },
                                 onClick = { 
                                     onExportImg() 
                                     showBuildMenu = false 
@@ -255,15 +256,18 @@ fun GpuEditorToolbar(
                                 leadingIcon = { Icon(Icons.Rounded.Save, null) }
                             )
                             
-                            DropdownMenuItem(
-                                text = { Text("Flash to Device") },
-                                onClick = { 
-                                    onFlashClick() 
-                                    showBuildMenu = false 
-                                },
-                                leadingIcon = { Icon(Icons.Rounded.FlashOn, null) },
-                                colors = MenuDefaults.itemColors(textColor = MaterialTheme.colorScheme.primary)
-                            )
+                            // Flash to device is only available in root mode
+                            if (isRootMode && canFlashOrRepack) {
+                                DropdownMenuItem(
+                                    text = { Text("Flash to Device") },
+                                    onClick = { 
+                                        onFlashClick() 
+                                        showBuildMenu = false 
+                                    },
+                                    leadingIcon = { Icon(Icons.Rounded.FlashOn, null) },
+                                    colors = MenuDefaults.itemColors(textColor = MaterialTheme.colorScheme.primary)
+                                )
+                            }
                         }
                     }
                 }

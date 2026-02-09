@@ -166,6 +166,9 @@ fun SettingsScreenWrapper(
         onAutoSaveToggle = { settingsViewModel.toggleAutoSave() },
         onAmoledModeToggle = { settingsViewModel.toggleAmoledMode() },
         onHelpClick = { showHelpDialog = true },
+        // Root Mode
+        isRootMode = uiState.isRootMode,
+        onRootModeToggle = { settingsViewModel.toggleRootMode() },
         
         // Updater
         updateChannel = uiState.updateChannel,

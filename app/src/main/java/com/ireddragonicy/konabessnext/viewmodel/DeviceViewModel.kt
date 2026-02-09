@@ -24,14 +24,15 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import android.net.Uri
 import android.provider.OpenableColumns
-import java.io.FileOutputStream
+import java.io.IOException
 import android.widget.Toast
 import javax.inject.Inject
 
 @HiltViewModel
 class DeviceViewModel @Inject constructor(
     private val repository: DeviceRepository,
-    private val chipRepository: com.ireddragonicy.konabessnext.repository.ChipRepository
+    private val chipRepository: com.ireddragonicy.konabessnext.repository.ChipRepository,
+    private val settingsRepository: com.ireddragonicy.konabessnext.repository.SettingsRepository
 ) : ViewModel() {
 
     private val _detectionState = MutableStateFlow<UiState<List<Dtb>>?>(null)
@@ -54,80 +55,95 @@ class DeviceViewModel @Inject constructor(
     private val _dataReloadTrigger = MutableStateFlow(0)
     val dataReloadTrigger: StateFlow<Int> = _dataReloadTrigger.asStateFlow()
 
-    // Derived state: Can we flash or repack? 
-    // We assume physical DTBs have ID >= 0. IMPORTED ones have negative IDs (as per my repo change).
+    /** Whether the app is in root mode. Used by UI to show/hide root-only features. */
+    val isRootMode: Boolean
+        get() = settingsRepository.isRootMode()
+
+    // Flash is only allowed in root mode with a physical DTB (ID >= 0).
     val canFlashOrRepack: StateFlow<Boolean> = _activeDtbId.map { id ->
-        id >= 0
+        id >= 0 && settingsRepository.isRootMode()
     }.stateIn(viewModelScope, SharingStarted.Lazily, false)
 
-    // Helper context for file operations that are "outside" repository scope (UI to Repository glue)
-    // Note: In strict architecture, UIs should handle URIs, but ViewModel creates the bridge.
-    // Since we need ContentResolver, functions accept Context.
+    companion object {
+        private const val TAG = "KonaBessVM"
+        // FDT (Flattened Device Tree) magic number
+        private val DTB_MAGIC = byteArrayOf(0xD0.toByte(), 0x0D.toByte(), 0xFE.toByte(), 0xED.toByte())
+        // Android boot image magic
+        private const val BOOT_MAGIC = "ANDROID!"
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────
+
+    /** Resolve display name from a content URI via ContentResolver. */
+    private fun resolveDisplayName(context: Context, uri: Uri, fallback: String = "unknown"): String {
+        return try {
+            context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val idx = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                    if (idx >= 0) cursor.getString(idx) else null
+                } else null
+            }
+        } catch (_: Exception) { null } ?: uri.lastPathSegment ?: fallback
+    }
+
+    /** Finalize a successful DTB detection/import: select best chipset and update state. */
+    private fun finalizeDetection(dtbs: List<Dtb>) {
+        _activeDtbId.value = repository.activeDtbId
+        _detectionState.value = UiState.Success(dtbs)
+        _isFilesExtracted.value = true
+
+        val firstSupported = dtbs.firstOrNull { it.type.strategyType.isNotEmpty() }
+        if (firstSupported != null) {
+            selectChipset(firstSupported)
+        } else {
+            repository.chooseFallbackTarget(dtbs[0].id)
+            _isPrepared.value = false
+        }
+        _dataReloadTrigger.value++
+    }
+
+    // ── Import / Detection ───────────────────────────────────────────
 
     fun importExternalDts(context: Context, uri: Uri) {
         viewModelScope.launch {
             try {
                 _detectionState.value = UiState.Loading
-                
-                // Take persistable URI permission so the stream stays readable
+
+                // Best-effort persistable permission (not all providers support it)
                 try {
                     context.contentResolver.takePersistableUriPermission(
                         uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
                     )
-                } catch (e: SecurityException) {
-                    // Not all providers support persistable permissions — that's OK,
-                    // the one-shot grant from OpenDocument still works.
-                    Log.d("KonaBessVM", "Persistable permission not available: ${e.message}")
-                }
+                } catch (_: SecurityException) { /* OK — one-shot grant still works */ }
 
-                // Resolve a human-readable filename for logging
-                val displayName = try {
-                    context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
-                        if (cursor.moveToFirst()) {
-                            val idx = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
-                            if (idx >= 0) cursor.getString(idx) else null
-                        } else null
-                    }
-                } catch (_: Exception) { null } ?: uri.lastPathSegment ?: "imported"
-                Log.d("KonaBessVM", "Import: uri=$uri, displayName=$displayName")
-
+                val displayName = resolveDisplayName(context, uri, "imported")
                 val inputStream = context.contentResolver.openInputStream(uri)
-                if (inputStream == null) {
-                    // Permission denied or file inaccessible
-                    Log.e("KonaBessVM", "openInputStream returned null for $uri")
-                    _detectionState.value = UiState.Error(UiText.DynamicString("Cannot read file \u2014 permission denied or file inaccessible"))
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(context, "Import Failed: Cannot open file (permission denied)", Toast.LENGTH_LONG).show()
+                    ?: run {
+                        _detectionState.value = null
+                        withContext(Dispatchers.Main) {
+                            Toast.makeText(context, "Cannot open file — permission denied", Toast.LENGTH_LONG).show()
+                        }
+                        return@launch
                     }
-                    return@launch
-                }
 
                 inputStream.use { stream ->
                     val dtb = repository.importExternalDts(stream, displayName)
-                    
-                    // DON'T call selectChipset here! It would overwrite the dtsPath we just set
-                    // repository.importExternalDts already set: dtsPath, currentDtb, currentChip, prepared
-                    // We just need to update ViewModel state
-                    // NOTE: Do NOT set _activeDtbId here - "active" means the slot currently
-                    // running on the device. An imported DTS is not the active device slot.
+                    // Repository already set: dtsPath, currentDtb, currentChip, prepared
                     _selectedChipset.value = dtb
                     _isPrepared.value = dtb.type.strategyType.isNotEmpty()
                     _isFilesExtracted.value = true
-                    
                     _detectionState.value = UiState.Success(ArrayList(repository.dtbs))
-                    
-                    // Signal UI to reload data
                     _dataReloadTrigger.value++
-                    
+
                     withContext(Dispatchers.Main) {
                         Toast.makeText(context, "Import Successful: ${dtb.type.name}", Toast.LENGTH_SHORT).show()
                     }
                 }
             } catch (e: Exception) {
-                Log.e("KonaBessVM", "Import failed", e)
-                _detectionState.value = UiState.Error(UiText.DynamicString("Import failed: ${e.localizedMessage}"))
+                Log.e(TAG, "Import failed", e)
+                _detectionState.value = null
                 withContext(Dispatchers.Main) {
-                    Toast.makeText(context, "Import Failed: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+                    Toast.makeText(context, "Import failed: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
                 }
             }
         }
@@ -163,47 +179,118 @@ class DeviceViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 repository.setupEnv()
-                repository.getBootImage()
+                if (isRootMode) repository.getBootImage()
                 repository.bootImage2dts()
                 repository.checkDevice()
 
                 val dtbs = repository.dtbs
-                
-                // Update active DTB from repository
-                _activeDtbId.value = repository.activeDtbId
-                
-                // If there are literally no DTBs found (rare), then it's a real error.
                 if (dtbs.isEmpty()) {
                     _detectionState.value = UiState.Error(UiText.StringResource(R.string.gpu_prep_failed))
                     return@launch
                 }
 
-                _detectionState.value = UiState.Success(dtbs)
-                _isFilesExtracted.value = true
-
-                // Priority for Auto-Select:
-                // 1. Active DTB (if supported)
-                // 2. First supported DTB
-                // 3. Fallback
-                
+                // Prefer active DTB (matching running device) > first supported > fallback
                 val activeDtb = if (repository.activeDtbId != -1) dtbs.find { it.id == repository.activeDtbId } else null
-                val firstSupported = dtbs.firstOrNull { it.type.strategyType.isNotEmpty() }
-                
                 if (activeDtb != null && activeDtb.type.strategyType.isNotEmpty()) {
+                    _activeDtbId.value = repository.activeDtbId
+                    _detectionState.value = UiState.Success(dtbs)
+                    _isFilesExtracted.value = true
                     selectChipset(activeDtb)
-                } else if (firstSupported != null) {
-                    selectChipset(firstSupported)
+                    _dataReloadTrigger.value++
                 } else {
-                    // All are unsupported placeholders. We point fallback to the first one.
-                    repository.chooseFallbackTarget(dtbs[0].id)
-                    _isPrepared.value = false
+                    finalizeDetection(dtbs)
                 }
-                
             } catch (e: Exception) {
-                Log.e("KonaBessDet", "Detection failed", e)
+                Log.e(TAG, "Detection failed", e)
                 _detectionState.value = UiState.Error(UiText.DynamicString(e.message ?: "Unknown error"), e)
                 _isFilesExtracted.value = false
                 _isPrepared.value = false
+            }
+        }
+    }
+
+    /**
+     * Smart import: auto-detects file type (boot image vs DTS/DTB text) and routes
+     * to the correct handler. Called from the unified non-root import button.
+     */
+    fun importFile(context: Context, uri: Uri) {
+        _detectionState.value = UiState.Loading
+        viewModelScope.launch {
+            try {
+                // Peek first bytes to auto-detect file type
+                val magic = context.contentResolver.openInputStream(uri)?.use { stream ->
+                    val header = ByteArray(16)
+                    val read = stream.read(header)
+                    if (read >= 4) header.copyOfRange(0, read) else null
+                } ?: throw IOException("Cannot read file — permission denied or file inaccessible")
+
+                val isBootImage = magic.size >= 8 &&
+                    String(magic, 0, 8, Charsets.US_ASCII).startsWith(BOOT_MAGIC)
+                val isDtb = magic.size >= 4 &&
+                    magic[0] == DTB_MAGIC[0] && magic[1] == DTB_MAGIC[1] &&
+                    magic[2] == DTB_MAGIC[2] && magic[3] == DTB_MAGIC[3]
+
+                when {
+                    isBootImage && !isRootMode -> {
+                        // Boot images need root mode for unpacking
+                        _detectionState.value = null
+                        withContext(Dispatchers.Main) {
+                            Toast.makeText(context, "Boot images require Root Mode.\nPlease import a .dts or .dtb file.", Toast.LENGTH_LONG).show()
+                        }
+                    }
+                    isBootImage -> importBootImage(context, uri)
+                    else -> {
+                        // Text DTS or binary DTB — both handled by importExternalDts
+                        _detectionState.value = null
+                        importExternalDts(context, uri)
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Smart import failed", e)
+                _detectionState.value = null
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, "Import failed: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
+
+    /**
+     * Import a boot/vendor_boot image from user storage (non-root mode).
+     * Copies the image to filesDir, unpacks it, detects DTBs, and sets up the editor.
+     */
+    private fun importBootImage(context: Context, uri: Uri) {
+        _detectionState.value = UiState.Loading
+        viewModelScope.launch {
+            try {
+                val displayName = resolveDisplayName(context, uri, "boot.img")
+                val inputStream = context.contentResolver.openInputStream(uri)
+                    ?: throw IOException("Cannot read file — permission denied")
+
+                inputStream.use { stream ->
+                    repository.setupEnv()
+                    repository.importBootImage(stream, displayName)
+                }
+
+                repository.bootImage2dts()
+                repository.checkDevice()
+
+                val dtbs = repository.dtbs
+                if (dtbs.isEmpty()) {
+                    _detectionState.value = UiState.Error(UiText.DynamicString("No DTBs found in imported image."))
+                    return@launch
+                }
+
+                finalizeDetection(dtbs)
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, "Boot image imported successfully", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Boot image import failed", e)
+                _detectionState.value = UiState.Error(UiText.DynamicString("Import failed: ${e.localizedMessage}"), e)
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, "Import Failed: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+                }
             }
         }
     }
@@ -239,6 +326,46 @@ class DeviceViewModel @Inject constructor(
         _detectionState.value = UiState.Success(ArrayList(repository.dtbs))
     }
 
+    /**
+     * Load previously saved DTS files from disk (non-root mode startup).
+     * If saved files exist, auto-selects the last one and transitions to the editor.
+     */
+    fun loadSavedDts() {
+        viewModelScope.launch {
+            try {
+                repository.setupEnv()
+                val savedDtbs = repository.loadSavedDts()
+                if (savedDtbs.isNotEmpty()) {
+                    _detectionState.value = UiState.Success(ArrayList(repository.dtbs))
+                    selectChipset(savedDtbs.last())
+                    _isFilesExtracted.value = true
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to load saved DTS", e)
+            }
+        }
+    }
+
+    /**
+     * Delete an imported/saved DTS by virtual ID. Updates UI state accordingly.
+     */
+    fun deleteDts(dtbId: Int) {
+        if (!repository.deleteSavedDts(dtbId)) return
+        val remaining = repository.dtbs
+        if (remaining.isEmpty()) {
+            _detectionState.value = null
+            _isFilesExtracted.value = false
+            _selectedChipset.value = null
+            _isPrepared.value = false
+        } else {
+            _detectionState.value = UiState.Success(ArrayList(remaining))
+            if (_selectedChipset.value?.id == dtbId) {
+                selectChipset(remaining.last())
+            }
+        }
+        _dataReloadTrigger.value++
+    }
+
     fun tryRestoreLastChipset() {
         viewModelScope.launch {
             if (repository.tryRestoreLastChipset()) {
@@ -247,8 +374,6 @@ class DeviceViewModel @Inject constructor(
                     _isPrepared.value = it.type.strategyType.isNotEmpty()
                     _isFilesExtracted.value = true
                     chipRepository.setCurrentChip(it.type)
-                    // We don't know the active one until we scan, so we might need a quick scan here
-                    // or just leave it -1 until full detect
                 }
             }
         }
@@ -258,6 +383,10 @@ class DeviceViewModel @Inject constructor(
     val repackState: StateFlow<UiState<UiText>?> = _repackState.asStateFlow()
 
     fun packAndFlash(context: Context) {
+        if (!isRootMode) {
+            _repackState.value = UiState.Error(UiText.DynamicString("Flash to device is not available in Non-Root mode. Use Export instead."))
+            return
+        }
         _repackState.value = UiState.Loading
         viewModelScope.launch {
             try {

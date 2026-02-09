@@ -3,6 +3,7 @@ package com.ireddragonicy.konabessnext.repository
 import android.content.Context
 import android.content.SharedPreferences
 import com.ireddragonicy.konabessnext.viewmodel.SettingsViewModel
+import com.topjohnwu.superuser.Shell
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -42,4 +43,22 @@ class SettingsRepository @Inject constructor(
     
     fun isAutoCheckUpdate(): Boolean = prefs.getBoolean("auto_check_update", true)
     fun setAutoCheckUpdate(enabled: Boolean) = prefs.edit().putBoolean("auto_check_update", enabled).apply()
+
+    /**
+     * Auto-detect root on first launch: if the pref was never set, probe Shell
+     * and persist the result so the check only runs once.
+     */
+    fun isRootMode(): Boolean {
+        if (!prefs.contains("is_root_mode")) {
+            val hasRoot = try {
+                Shell.getShell().isRoot
+            } catch (_: Exception) {
+                false
+            }
+            prefs.edit().putBoolean("is_root_mode", hasRoot).apply()
+            return hasRoot
+        }
+        return prefs.getBoolean("is_root_mode", false)
+    }
+    fun setRootMode(enabled: Boolean) = prefs.edit().putBoolean("is_root_mode", enabled).apply()
 }

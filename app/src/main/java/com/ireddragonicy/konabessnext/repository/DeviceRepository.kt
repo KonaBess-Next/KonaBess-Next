@@ -12,10 +12,12 @@ import java.io.InputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.IOException
 import java.io.BufferedReader
 import java.io.FileReader
+import java.io.OutputStream
 import java.util.regex.Pattern
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -46,6 +48,8 @@ open class DeviceRepository @Inject constructor(
     }
 
     private val filesDir: String = fileDataSource.getFilesDir().absolutePath
+    private val nativeLibDir: String = fileDataSource.getNativeLibDir().absolutePath
+    private val savedDtsDir: File = File(filesDir, "saved_dts").also { it.mkdirs() }
     
     private var _dtsPath: String? = null
     override val dtsPath: String?
@@ -61,6 +65,10 @@ open class DeviceRepository @Inject constructor(
     
     var activeDtbId: Int = -1
         private set
+
+    /** Whether the app is currently in root mode. */
+    val isRootMode: Boolean
+        get() = shellRepository.isRootMode
 
     private var importCounter: Int = 0
 
@@ -78,7 +86,7 @@ open class DeviceRepository @Inject constructor(
     }
 
     fun setCustomChip(def: ChipDefinition, dtbIndex: Int) {
-        val dtsFile = File(filesDir, "$dtbIndex.dts")
+        val dtsFile = importedDtsPaths[dtbIndex]?.let { File(it) } ?: File(filesDir, "$dtbIndex.dts")
         if (dtsFile.exists()) {
             _dtsPath = dtsFile.absolutePath
             chipRepository.setCurrentChip(def)
@@ -125,42 +133,33 @@ open class DeviceRepository @Inject constructor(
 
     suspend fun importExternalDts(inputStream: InputStream, filename: String): Dtb {
         val timestamp = System.currentTimeMillis()
-        val rawFile = File(filesDir, "imported_raw_$timestamp")
+        val sanitizedName = filename.replace(Regex("[^a-zA-Z0-9._-]"), "_")
+            .removeSuffix(".dts").removeSuffix(".dtb").removeSuffix(".txt")
+        savedDtsDir.mkdirs()
+        val rawFile = File(savedDtsDir, "raw_temp_$timestamp")
         withContext(Dispatchers.IO) {
-            FileOutputStream(rawFile).use { output ->
-                val bytesCopied = inputStream.copyTo(output)
-                Log.d(TAG, "Copied $bytesCopied bytes from stream to ${rawFile.absolutePath}")
-            }
+            FileOutputStream(rawFile).use { output -> inputStream.copyTo(output) }
         }
 
-        // Validate that we actually got data
         if (!rawFile.exists() || rawFile.length() == 0L) {
-            Log.e(TAG, "Import failed: copied file is empty or missing (${rawFile.absolutePath})")
             rawFile.delete()
             throw IOException("Failed to read file — 0 bytes received. Check file permissions.")
         }
-        Log.d(TAG, "Raw import file: ${rawFile.length()} bytes, filename=$filename")
 
         // Detect if the file is a binary DTB or text DTS/TXT
         val importedFile = withContext(Dispatchers.IO) {
+            val dtsFile = File(savedDtsDir, "${sanitizedName}_$timestamp.dts")
             if (isDtbBinary(rawFile)) {
-                // Binary DTB → convert to DTS using dtc
-                Log.d(TAG, "Detected binary DTB, converting to DTS...")
-                val dtsFile = File(filesDir, "imported_$timestamp.dts")
-                val dtcPath = "$filesDir/dtc"
-                File(dtcPath).setExecutable(true)
-                shellRepository.exec("$dtcPath -I dtb -O dts \"${rawFile.absolutePath}\" -o \"${dtsFile.absolutePath}\"")
+                val dtcPath = getBinaryPath("dtc")
+                shellRepository.execAndCheck("$dtcPath -I dtb -O dts \"${rawFile.absolutePath}\" -o \"${dtsFile.absolutePath}\"")
                 rawFile.delete()
                 if (dtsFile.exists() && dtsFile.length() > 0) {
                     dtsFile
                 } else {
-                    // Conversion failed, keep raw file as-is (maybe it's actually text with weird extension)
-                    rawFile.renameTo(File(filesDir, "imported_$timestamp.dts"))
-                    File(filesDir, "imported_$timestamp.dts")
+                    rawFile.renameTo(dtsFile)
+                    dtsFile
                 }
             } else {
-                // Text file (.dts or .txt) — just rename
-                val dtsFile = File(filesDir, "imported_$timestamp.dts")
                 rawFile.renameTo(dtsFile)
                 dtsFile
             }
@@ -174,12 +173,6 @@ open class DeviceRepository @Inject constructor(
         
         // Use DtsScanner smart detection to analyze
         val scanResult = DtsScanner.scanContent(content, virtualId)
-        Log.d(TAG, "Import scan: isValid=${scanResult.isValid}, levels=${scanResult.levelCount}, " +
-            "strategy=${scanResult.recommendedStrategy}, voltType=${scanResult.voltageType}, " +
-            "bins=${scanResult.binCount}, confidence=${scanResult.confidence}")
-        
-        // If scan is valid (found power levels), use the scan result to create a proper ChipDefinition
-        // Otherwise fall back to a generic placeholder
         val def = if (scanResult.isValid) {
             DtsScanner.toChipDefinition(scanResult)
         } else {
@@ -188,20 +181,61 @@ open class DeviceRepository @Inject constructor(
 
         val dtb = Dtb(virtualId, def)
         dtbs.add(dtb)
-        
-        // CRITICAL: Set dtsPath BEFORE chooseTarget, since imported files don't follow the {id}.dts naming convention
-        // chooseTarget would set path to "-1234.dts" which doesn't exist
         _dtsPath = importedFile.absolutePath
         importedDtsPaths[virtualId] = importedFile.absolutePath
-        Log.d(TAG, "Set dtsPath to imported file: $_dtsPath")
-        
-        // Now select (this will set currentDtb and chip, but won't override our dtsPath since we set it first)
         chipRepository.setCurrentChip(def)
         currentDtb = dtb
         prepared = (def.strategyType.isNotEmpty())
         saveLastChipset(virtualId, def.id)
         
         return dtb
+    }
+
+    /**
+     * Load all previously saved DTS files from the saved_dts directory.
+     * Called on non-root startup to restore imported files across app restarts.
+     */
+    suspend fun loadSavedDts(): List<Dtb> = withContext(Dispatchers.IO) {
+        savedDtsDir.mkdirs()
+        val savedFiles = savedDtsDir.listFiles { _, name -> name.endsWith(".dts") }
+            ?.sortedBy { it.lastModified() } ?: return@withContext emptyList()
+
+        val loaded = mutableListOf<Dtb>()
+        for (file in savedFiles) {
+            importCounter++
+            val virtualId = -importCounter
+            val content = file.readText()
+            val scanResult = DtsScanner.scanContent(content, virtualId)
+            val def = if (scanResult.isValid) {
+                DtsScanner.toChipDefinition(scanResult)
+            } else {
+                createGenericPlaceholder(virtualId, content, scanResult.detectedModel ?: file.nameWithoutExtension)
+            }
+            val dtb = Dtb(virtualId, def)
+            dtbs.add(dtb)
+            importedDtsPaths[virtualId] = file.absolutePath
+            loaded.add(dtb)
+        }
+        loaded
+    }
+
+    /**
+     * Delete a saved/imported DTS file by its virtual ID.
+     */
+    fun deleteSavedDts(virtualId: Int): Boolean {
+        val path = importedDtsPaths[virtualId] ?: return false
+        val file = File(path)
+        val deleted = if (file.exists()) file.delete() else true
+        if (deleted) {
+            importedDtsPaths.remove(virtualId)
+            dtbs.removeAll { it.id == virtualId }
+            if (currentDtb?.id == virtualId) {
+                currentDtb = null
+                _dtsPath = null
+                prepared = false
+            }
+        }
+        return deleted
     }
 
     /**
@@ -221,11 +255,47 @@ open class DeviceRepository @Inject constructor(
         }
     }
 
-    fun getDtsFile(index: Int): File = File(filesDir, "$index.dts")
+    fun getDtsFile(index: Int): File {
+        importedDtsPaths[index]?.let { return File(it) }
+        return File(filesDir, "$index.dts")
+    }
 
     suspend fun cleanEnv() = withContext(Dispatchers.IO) {
         resetState()
-        shellRepository.exec("rm -f $filesDir/*.dtb", "rm -f $filesDir/*.dts", "rm -f $filesDir/boot.img", "rm -f $filesDir/boot_new.img", "rm -f $filesDir/kernel_dtb", "rm -f $filesDir/dtb")
+        if (isRootMode) {
+            // Use root shell to delete — handles any file ownership
+            shellRepository.execAndCheck("rm -f $filesDir/*.dtb", "rm -f $filesDir/*.dts", "rm -f $filesDir/boot.img", "rm -f $filesDir/boot_new.img", "rm -f $filesDir/kernel_dtb", "rm -f $filesDir/dtb")
+        } else {
+            // Non-root: use cleanWorkingFiles helper (handles root-owned leftover files)
+            cleanWorkingFiles()
+        }
+    }
+
+    /**
+     * Delete all working/intermediate files from filesDir.
+     * Handles root-owned leftover files from previous root-mode sessions.
+     * On Linux/Android, unlink() depends on parent-directory permissions, not file ownership,
+     * so the app CAN delete root-owned files from its own filesDir.
+     */
+    private fun cleanWorkingFiles() {
+        val dir = File(filesDir)
+        // Explicitly delete known working files
+        listOf("boot.img", "boot_new.img", "kernel_dtb", "dtb").forEach { name ->
+            val f = File(dir, name)
+            if (f.exists()) {
+                val deleted = f.delete()
+                Log.d(TAG, "cleanWorkingFiles: $name delete=${deleted}")
+            }
+        }
+        // Delete all .dtb and .dts files (split/converted artifacts)
+        dir.listFiles()?.forEach { file ->
+            val name = file.name
+            if (name.endsWith(".dtb") || name.endsWith(".dts") ||
+                name.startsWith("imported_raw_") || name.startsWith("imported_")) {
+                val deleted = file.delete()
+                Log.d(TAG, "cleanWorkingFiles: $name delete=${deleted}")
+            }
+        }
     }
 
     private fun resetState() {
@@ -239,12 +309,41 @@ open class DeviceRepository @Inject constructor(
         importedDtsPaths.clear()
     }
 
+    /**
+     * Get the absolute path to a bundled binary (magiskboot or dtc).
+     * In non-root mode, binaries from nativeLibraryDir are used (proper SELinux context).
+     * In root mode, binaries extracted to filesDir are used (root bypasses SELinux).
+     */
+    fun getBinaryPath(name: String): String {
+        val nativeLibFile = File(nativeLibDir, "lib${name}.so")
+        if (nativeLibFile.exists() && nativeLibFile.canExecute()) {
+            return nativeLibFile.absolutePath
+        }
+        // Fallback to filesDir for root mode or if nativeLibDir doesn't have the binary
+        return File(filesDir, name).absolutePath
+    }
+
     suspend fun setupEnv() = withContext(Dispatchers.IO) {
         if (chipRepository.definitions.value.isEmpty()) chipRepository.loadDefinitions()
-        for (binary in REQUIRED_BINARIES) {
-            val file = File(filesDir, binary)
-            exportResource(binary, file.absolutePath)
-            file.setExecutable(true)
+
+        // Prefer binaries from nativeLibraryDir (bundled via jniLibs, proper SELinux context)
+        val nativeLibAvailable = REQUIRED_BINARIES.all { binary ->
+            File(nativeLibDir, "lib${binary}.so").exists()
+        }
+
+        if (!nativeLibAvailable) {
+            // Fallback: extract from assets (legacy path, works in root mode)
+            Log.d(TAG, "setupEnv: extracting binaries from assets")
+            for (binary in REQUIRED_BINARIES) {
+                val file = File(filesDir, binary)
+                if (file.exists()) file.delete()
+                exportResource(binary, file.absolutePath)
+                file.setExecutable(true, false)
+                file.setReadable(true, false)
+            }
+        }
+        if (isRootMode) {
+            shellRepository.execAndCheck("chmod -R 755 $filesDir")
         }
     }
 
@@ -314,6 +413,41 @@ open class DeviceRepository @Inject constructor(
         catch (e: Exception) { getBootImageByType("boot"); bootName = "boot" }
     }
 
+    /**
+     * Import a boot image from an InputStream (non-root mode).
+     * Copies the stream content to filesDir/boot.img for processing.
+     */
+    suspend fun importBootImage(inputStream: InputStream, filename: String) = withContext(Dispatchers.IO) {
+        // Clean up ALL working artifacts first — old files may be root-owned
+        // from a previous root-mode session and can't be overwritten directly.
+        cleanWorkingFiles()
+
+        val bootImgFile = File(filesDir, "boot.img")
+        FileOutputStream(bootImgFile).use { output ->
+            val bytesCopied = inputStream.copyTo(output)
+            Log.d(TAG, "importBootImage: copied $bytesCopied bytes from $filename")
+        }
+        if (!bootImgFile.exists() || bootImgFile.length() == 0L) {
+            throw IOException("Failed to import boot image — 0 bytes received.")
+        }
+        // Determine boot name from filename hint
+        bootName = if (filename.contains("vendor", ignoreCase = true)) "vendor_boot" else "boot"
+        Log.d(TAG, "importBootImage: ${bootImgFile.length()} bytes, bootName=$bootName")
+    }
+
+    /**
+     * Export the repacked boot image to an output stream (non-root mode).
+     */
+    suspend fun exportRepackedImage(outputStream: OutputStream) = withContext(Dispatchers.IO) {
+        val repackedFile = File(filesDir, "boot_new.img")
+        if (!repackedFile.exists() || repackedFile.length() == 0L) {
+            throw IOException("Repacked image not found. Run repack first.")
+        }
+        FileInputStream(repackedFile).use { input ->
+            input.copyTo(outputStream)
+        }
+    }
+
     private suspend fun getBootImageByType(type: String) {
         val bootImgPath = "$filesDir/boot.img"
         val partition = "/dev/block/bootdevice/by-name/$type${getCurrent("slot")}"
@@ -346,16 +480,18 @@ open class DeviceRepository @Inject constructor(
     fun getBootImageFile(): File = File("$filesDir/boot.img")
 
     suspend fun checkDevice() = withContext(Dispatchers.IO) {
-        if (!shellRepository.isRootAvailable()) {
+        if (isRootMode && !shellRepository.isRootAvailable()) {
             userMessageManager.emitError("Root Access Required", "This application requires root access to function. Please grant root permissions.")
             return@withContext
         }
-        setupEnv()
+        // setupEnv is already called by the caller (detectChipset/importBootImage)
         dtbs.clear()
-        shellRepository.exec("chmod -R 777 $filesDir")
+        if (isRootMode) {
+            shellRepository.execAndCheck("chmod -R 777 $filesDir")
+        }
         
-        val runningModel = getRunningDeviceTreeModel()
-        val runningCompatibles = getRunningCompatibleStrings()
+        val runningModel = if (isRootMode) getRunningDeviceTreeModel() else ""
+        val runningCompatibles = if (isRootMode) getRunningCompatibleStrings() else emptyList()
         activeDtbId = -1
         
         val count = getDtbCount()
@@ -449,12 +585,12 @@ open class DeviceRepository @Inject constructor(
     private fun readFileToString(file: File): String = BufferedReader(FileReader(file)).use { it.readText() }
 
     suspend fun bootImage2dts() = withContext(Dispatchers.IO) {
-        dtbType = bootImageProcessor.unpackBootImage(filesDir)
-        dtbNum = bootImageProcessor.splitAndConvertDtbs(filesDir, dtbType!!)
+        dtbType = bootImageProcessor.unpackBootImage(filesDir, getBinaryPath("magiskboot"))
+        dtbNum = bootImageProcessor.splitAndConvertDtbs(filesDir, getBinaryPath("dtc"), dtbType!!)
     }
     
     suspend fun dts2bootImage(): File = withContext(Dispatchers.IO) {
-        bootImageProcessor.repackBootImage(filesDir, dtbNum, dtbType)
+        bootImageProcessor.repackBootImage(filesDir, getBinaryPath("magiskboot"), getBinaryPath("dtc"), dtbNum, dtbType)
         File(filesDir, "boot_new.img")
     }
 

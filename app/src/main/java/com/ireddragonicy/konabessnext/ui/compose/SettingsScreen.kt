@@ -23,6 +23,7 @@ import androidx.compose.material.icons.rounded.Translate
 import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.Save
 import androidx.compose.material.icons.rounded.Contrast
+import androidx.compose.material.icons.rounded.Security
 import com.ireddragonicy.konabessnext.viewmodel.UpdateStatus
 import android.content.Intent
 import android.net.Uri
@@ -71,6 +72,9 @@ fun SettingsScreen(
 
     isAmoledMode: Boolean,
     onAmoledModeToggle: () -> Unit,
+    // Root Mode
+    isRootMode: Boolean,
+    onRootModeToggle: () -> Unit,
     // Updater Params
     updateChannel: String,
     isAutoCheckUpdate: Boolean,
@@ -112,7 +116,10 @@ fun SettingsScreen(
 
     val context = LocalContext.current
 
-    val settingsItems = remember(currentTheme, currentColorPalette, currentLanguage, currentFreqUnit, isAutoSave, isAmoledMode, themeTitle, updateChannel, isAutoCheckUpdate, updateStatus) {
+    val rootModeTitle = "Root Mode"
+    val rootModeDesc = if (isRootMode) "Using root (su) for boot image extraction & flashing" else "Non-root: import/export files manually via SAF"
+
+    val settingsItems = remember(currentTheme, currentColorPalette, currentLanguage, currentFreqUnit, isAutoSave, isAmoledMode, themeTitle, updateChannel, isAutoCheckUpdate, updateStatus, isRootMode) {
         buildList {
             // Appearance section
             add(SettingsListItem.Header(headerAppearance))
@@ -133,6 +140,7 @@ fun SettingsScreen(
             // Behavior section
             add(SettingsListItem.Header(headerBehavior))
             add(SettingsListItem.Setting(SettingItem.Toggle(Icons.Rounded.Save, autoSaveTitle, autoSaveDesc, isAutoSave)))
+            add(SettingsListItem.Setting(SettingItem.Toggle(Icons.Rounded.Security, rootModeTitle, rootModeDesc, isRootMode)))
 
             // About section
             add(SettingsListItem.Header(headerAbout))
@@ -192,6 +200,7 @@ fun SettingsScreen(
                                             amoledTitle -> onAmoledModeToggle()
                                             autoSaveTitle -> onAutoSaveToggle()
                                             autoCheckUpdateTitle -> onAutoCheckUpdateToggle()
+                                            rootModeTitle -> onRootModeToggle()
                                         }
                                     }
                                 )

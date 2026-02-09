@@ -7,8 +7,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -40,7 +40,7 @@ fun GpuWorkbenchSheets(
     activeDtbId: Int,
     onChipsetSelect: (Dtb) -> Unit,
     onConfigureManual: (Int) -> Unit,
-    onAddNewDtb: () -> Unit,
+    onDeleteDts: (Int) -> Unit,
     onImportDts: (android.net.Uri) -> Unit
 ) {
     if (sheetType == WorkbenchSheetType.NONE) return
@@ -65,7 +65,7 @@ fun GpuWorkbenchSheets(
                     activeDtbId = activeDtbId,
                     onSelect = onChipsetSelect,
                     onConfigure = onConfigureManual,
-                    onAdd = onAddNewDtb,
+                    onDelete = onDeleteDts,
                     onImport = onImportDts
                 )
             }
@@ -109,7 +109,7 @@ private fun ChipsetSelectorContent(
     activeDtbId: Int,
     onSelect: (Dtb) -> Unit,
     onConfigure: (Int) -> Unit,
-    onAdd: () -> Unit,
+    onDelete: (Int) -> Unit,
     onImport: (android.net.Uri) -> Unit
 ) {
     val importLauncher = rememberLauncherForActivityResult(
@@ -127,7 +127,7 @@ private fun ChipsetSelectorContent(
     LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         items(dtbs) { dtb ->
             val isOfficial = !dtb.type.id.startsWith("custom") && !dtb.type.id.startsWith("unsupported")
-            val isActive = dtb.id == activeDtbId
+            val isActive = dtb.id >= 0 && dtb.id == activeDtbId
             val isSelected = dtb.id == selectedDtbId
 
             Card(
@@ -164,38 +164,37 @@ private fun ChipsetSelectorContent(
                         )
                     }
                     
-                    IconButton(onClick = { onConfigure(dtb.id) }) {
-                        Icon(
-                            Icons.Default.Build, 
-                            contentDescription = "Configure", 
-                            tint = if (isOfficial) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary
-                        )
+                    Row {
+                        IconButton(onClick = { onConfigure(dtb.id) }) {
+                            Icon(
+                                Icons.Default.Build, 
+                                contentDescription = "Configure", 
+                                tint = if (isOfficial) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        if (dtb.id < 0) {
+                            IconButton(onClick = { onDelete(dtb.id) }) {
+                                Icon(
+                                    Icons.Default.Delete,
+                                    contentDescription = "Delete",
+                                    tint = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        }
                     }
                 }
             }
         }
         
         item {
-             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(
-                    onClick = { importLauncher.launch(arrayOf("*/*")) },
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("Import DTS")
-                }
-                
-                OutlinedButton(
-                    onClick = onAdd,
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Icon(Icons.Default.Settings, null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("New Config")
-                }
+            OutlinedButton(
+                onClick = { importLauncher.launch(arrayOf("*/*")) },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Import DTS")
             }
         }
     }

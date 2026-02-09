@@ -26,7 +26,8 @@ data class SettingsUiState(
     val isAmoledMode: Boolean = false,
     val updateChannel: String = "stable",
     val isAutoCheckUpdate: Boolean = true,
-    val updateStatus: UpdateStatus = UpdateStatus.Idle
+    val updateStatus: UpdateStatus = UpdateStatus.Idle,
+    val isRootMode: Boolean = true
 )
 
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
@@ -112,6 +113,9 @@ class SettingsViewModel @Inject constructor(
         
         // Auto Check Update
         val autoCheckUpdate = repository.isAutoCheckUpdate()
+        
+        // Root Mode
+        val isRootMode = repository.isRootMode()
 
         _uiState.update {
             it.copy(
@@ -123,7 +127,8 @@ class SettingsViewModel @Inject constructor(
                 isAmoledMode = amoledMode,
                 colorPalette = paletteName,
                 updateChannel = updateChannel,
-                isAutoCheckUpdate = autoCheckUpdate
+                isAutoCheckUpdate = autoCheckUpdate,
+                isRootMode = isRootMode
             )
         }
     }
@@ -183,6 +188,12 @@ class SettingsViewModel @Inject constructor(
     fun setLanguage(languageCode: String) {
         repository.setLanguage(languageCode)
         _uiState.update { it.copy(language = languageCode) }
+    }
+
+    fun toggleRootMode() {
+        val newState = !_uiState.value.isRootMode
+        repository.setRootMode(newState)
+        _uiState.update { it.copy(isRootMode = newState) }
     }
 
     fun setColorPalette(paletteInt: Int) {

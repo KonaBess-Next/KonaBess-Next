@@ -44,7 +44,8 @@ fun CurveEditorScreen(
     onRepack: () -> Unit,
     onExportDts: () -> Unit,
     onExportImg: () -> Unit,
-    canFlashOrRepack: Boolean
+    canFlashOrRepack: Boolean,
+    isRootMode: Boolean = true
 ) {
     // State
     // We maintain a local selectedBinId to allow switching bins inside the editor
@@ -113,7 +114,7 @@ fun CurveEditorScreen(
         activeDtbId = -1,
         onChipsetSelect = {},
         onConfigureManual = {},
-        onAddNewDtb = {},
+        onDeleteDts = {},
         onImportDts = {}
     )
 
@@ -200,6 +201,7 @@ fun CurveEditorScreen(
                 onExportDts = onExportDts,
                 onExportImg = onExportImg,
                 canFlashOrRepack = canFlashOrRepack,
+                isRootMode = isRootMode,
                 applyStatusBarPadding = true
             )
         }

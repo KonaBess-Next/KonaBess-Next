@@ -94,8 +94,9 @@ android {
     // Packaging options (new DSL replaces deprecated packagingOptions)
     packaging {
         jniLibs {
-            // Don't extract native libraries (keeps them compressed)
-            useLegacyPackaging = false
+            // Extract native libraries to disk so they can be executed via ProcessBuilder
+            // Required for magiskboot/dtc execution in non-root mode
+            useLegacyPackaging = true
         }
 
         // Exclude unnecessary files

@@ -16,6 +16,10 @@ class AndroidFileDataSource @Inject constructor(
         return context.filesDir
     }
 
+    override fun getNativeLibDir(): File {
+        return File(context.applicationInfo.nativeLibraryDir)
+    }
+
     override fun getFile(path: String): File {
         return File(path)
     }

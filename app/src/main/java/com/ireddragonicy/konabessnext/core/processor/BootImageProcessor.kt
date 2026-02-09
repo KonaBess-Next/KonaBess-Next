@@ -1,5 +1,6 @@
 package com.ireddragonicy.konabessnext.core.processor
 
+import android.util.Log
 import com.ireddragonicy.konabessnext.model.DtbType
 import com.ireddragonicy.konabessnext.repository.ShellRepository
 import java.io.File
@@ -14,13 +15,26 @@ class BootImageProcessor @Inject constructor(
     private val shellRepository: ShellRepository
 ) {
     companion object {
+        private const val TAG = "BootImageProcessor"
         private val DTB_MAGIC = byteArrayOf(0xD0.toByte(), 0x0D.toByte(), 0xFE.toByte(), 0xED.toByte())
         private const val DTB_HEADER_SIZE = 8
         private const val BYTE_MASK = 0xFF
     }
 
-    suspend fun unpackBootImage(filesDir: String): DtbType {
-        shellRepository.exec("cd $filesDir && ./magiskboot unpack boot.img && chmod -R 777 $filesDir")
+    suspend fun unpackBootImage(filesDir: String, magiskbootPath: String): DtbType {
+        val binaryFile = File(magiskbootPath)
+        if (!binaryFile.exists()) {
+            throw Exception("magiskboot binary not found at $magiskbootPath")
+        }
+
+        val result = shellRepository.execAdaptive("cd $filesDir && $magiskbootPath unpack boot.img")
+        if (!result.isSuccess) {
+            val errMsg = result.err.joinToString("\n").ifEmpty { result.out.joinToString("\n") }
+            throw Exception("Failed to unpack boot image: $errMsg")
+        }
+        
+        // Ensure all unpacked files are readable/writable
+        File(filesDir).listFiles()?.forEach { it.setReadable(true, false); it.setWritable(true, false) }
         
         val hasKernelDtb = File(filesDir, "kernel_dtb").exists()
         val hasDtb = File(filesDir, "dtb").exists()
@@ -33,7 +47,7 @@ class BootImageProcessor @Inject constructor(
         }
     }
 
-    suspend fun splitAndConvertDtbs(filesDir: String, dtbType: DtbType): Int {
+    suspend fun splitAndConvertDtbs(filesDir: String, dtcPath: String, dtbType: DtbType): Int {
         val dtbFile = if (dtbType == DtbType.DTB || dtbType == DtbType.BOTH) File(filesDir, "dtb") else File(filesDir, "kernel_dtb")
         if (dtbType == DtbType.BOTH) File(filesDir, "kernel_dtb").delete()
         
@@ -62,16 +76,17 @@ class BootImageProcessor @Inject constructor(
 
         // Convert all to DTS
         for (idx in offsets.indices) {
-            shellRepository.exec("cd $filesDir && ./dtc -I dtb -O dts $idx.dtb -o $idx.dts && rm -f $idx.dtb")
+            shellRepository.execAndCheck("cd $filesDir && $dtcPath -I dtb -O dts $idx.dtb -o $idx.dts")
+            File(filesDir, "$idx.dtb").delete()
         }
 
         return offsets.size
     }
 
-    suspend fun repackBootImage(filesDir: String, dtbCount: Int, dtbType: DtbType?) {
+    suspend fun repackBootImage(filesDir: String, magiskbootPath: String, dtcPath: String, dtbCount: Int, dtbType: DtbType?) {
         // Compile DTS to DTB
         for (i in 0 until dtbCount) {
-            shellRepository.exec("cd $filesDir && ./dtc -I dts -O dtb $i.dts -o $i.dtb")
+            shellRepository.execAndCheck("cd $filesDir && $dtcPath -I dts -O dtb $i.dts -o $i.dtb")
         }
 
         // Concatenate
@@ -81,8 +96,8 @@ class BootImageProcessor @Inject constructor(
         cmd.append(" > $out")
         
         if (dtbType == DtbType.BOTH) cmd.append(" && cp dtb kernel_dtb")
-        cmd.append(" && ./magiskboot repack boot.img boot_new.img")
+        cmd.append(" && $magiskbootPath repack boot.img boot_new.img")
         
-        shellRepository.exec(cmd.toString())
+        shellRepository.execAndCheck(cmd.toString())
     }
 }
