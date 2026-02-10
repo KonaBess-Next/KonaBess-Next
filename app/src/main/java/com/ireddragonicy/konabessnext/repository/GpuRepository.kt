@@ -680,26 +680,48 @@ open class GpuRepository @Inject constructor(
     
     fun importTable(lines: List<String>) {
         val currentLines = _dtsLines.value
-        val startIdx = currentLines.indexOfFirst { it.trim().startsWith("qcom,gpu-pwrlevels") && it.contains("{") }
-        
-        if (startIdx != -1) {
-            var braceCount = 0
-            var endIdx = -1
-            for (i in startIdx until currentLines.size) {
-                 if (currentLines[i].contains("{")) braceCount++
-                 if (currentLines[i].contains("}")) braceCount--
-                 if (braceCount == 0) {
-                     endIdx = i
-                     break
-                 }
+        val validLines = ArrayList(currentLines)
+
+        // Find ALL qcom,gpu-pwrlevels blocks (there can be multiple bins)
+        val blocksToRemove = ArrayList<IntRange>()
+        var i = 0
+        while (i < validLines.size) {
+            val trimmed = validLines[i].trim()
+            if (trimmed.startsWith("qcom,gpu-pwrlevels") && trimmed.contains("{")) {
+                val blockStart = i
+                var braceCount = 0
+                var blockEnd = -1
+                for (j in i until validLines.size) {
+                    if (validLines[j].contains("{")) braceCount++
+                    if (validLines[j].contains("}")) braceCount--
+                    if (braceCount == 0) {
+                        blockEnd = j
+                        break
+                    }
+                }
+                if (blockEnd != -1) {
+                    blocksToRemove.add(blockStart..blockEnd)
+                    i = blockEnd + 1
+                } else {
+                    i++
+                }
+            } else {
+                i++
             }
-            if (endIdx != -1) {
-                val validLines = ArrayList(currentLines)
-                val removalCount = endIdx - startIdx + 1
-                for (k in 0 until removalCount) validLines.removeAt(startIdx)
-                validLines.addAll(startIdx, lines)
-                updateContent(validLines, "Imported Frequency Table")
+        }
+
+        if (blocksToRemove.isNotEmpty()) {
+            val insertIdx = blocksToRemove.first().first
+
+            // Remove blocks from bottom to top to preserve indices
+            for (range in blocksToRemove.reversed()) {
+                for (k in range.last downTo range.first) {
+                    validLines.removeAt(k)
+                }
             }
+
+            validLines.addAll(insertIdx, lines)
+            updateContent(validLines, "Imported Frequency Table")
         }
     }
 
