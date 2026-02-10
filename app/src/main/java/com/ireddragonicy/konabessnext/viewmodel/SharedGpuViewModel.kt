@@ -504,6 +504,10 @@ class SharedGpuViewModel @Inject constructor(
     }
     
     // --- Tree Logic ---
+    fun syncTreeToText() {
+        repository.syncTreeToText("Property Edit")
+    }
+
     fun toggleNodeExpansion(path: String, expanded: Boolean) {
         val set = _expandedNodePaths.value.toMutableSet()
         if (expanded) set.add(path) else set.remove(path)

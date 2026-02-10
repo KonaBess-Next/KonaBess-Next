@@ -89,7 +89,8 @@ fun VisualTreeContent(sharedViewModel: SharedGpuViewModel) {
                     if (treeCurrentIndex >= count) {
                         treeCurrentIndex = if (count > 0) 0 else -1
                     }
-                }
+                },
+                onTreeModified = { sharedViewModel.syncTreeToText() }
             )
         }
     }

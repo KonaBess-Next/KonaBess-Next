@@ -31,13 +31,18 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -70,7 +75,8 @@ fun DtsTreeScreen(
     searchQuery: String = "",
     searchMatchIndex: Int = -1,
     onNodeToggle: ((String, Boolean) -> Unit)? = null,
-    onSearchMatchesChanged: ((Int) -> Unit)? = null
+    onSearchMatchesChanged: ((Int) -> Unit)? = null,
+    onTreeModified: (() -> Unit)? = null
 ) {
     if (rootNode == null) {
         Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -102,6 +108,12 @@ fun DtsTreeScreen(
     }
     val stableOnPropertyChange: (DtsProperty, String) -> Unit = remember {
         { prop: DtsProperty, newValue: String -> prop.updateFromDisplayValue(newValue) }
+    }
+
+    // Stable callback for tree-to-text sync after editing completes
+    val currentOnTreeModified = rememberUpdatedState(onTreeModified)
+    val stableOnEditComplete: () -> Unit = remember {
+        { currentOnTreeModified.value?.invoke() }
     }
 
     // ─── Deep search entire tree — O(N), includes collapsed subtrees ───
@@ -191,7 +203,8 @@ fun DtsTreeScreen(
                     isActiveMatch = item.id == activeMatchId,
                     style = style,
                     onToggleExpand = stableOnToggle,
-                    onPropertyChange = stableOnPropertyChange
+                    onPropertyChange = stableOnPropertyChange,
+                    onEditComplete = stableOnEditComplete
                 )
             }
         }
@@ -457,7 +470,8 @@ private fun TreeRow(
     isActiveMatch: Boolean,
     style: TreeRowStyle,
     onToggleExpand: (DtsNode) -> Unit,
-    onPropertyChange: (DtsProperty, String) -> Unit
+    onPropertyChange: (DtsProperty, String) -> Unit,
+    onEditComplete: () -> Unit
 ) {
     val rowBackground = when {
         isActiveMatch -> style.activeHighlight
@@ -489,7 +503,8 @@ private fun TreeRow(
                 PropertyRow(
                     item = item,
                     style = style,
-                    onPropertyChange = onPropertyChange
+                    onPropertyChange = onPropertyChange,
+                    onEditComplete = onEditComplete
                 )
             }
         }
@@ -558,10 +573,12 @@ private fun RowScope.NodeRow(
 private fun RowScope.PropertyRow(
     item: TreeItem,
     style: TreeRowStyle,
-    onPropertyChange: (DtsProperty, String) -> Unit
+    onPropertyChange: (DtsProperty, String) -> Unit,
+    onEditComplete: () -> Unit
 ) {
     val prop = item.property!!
     var isEditing by remember { mutableStateOf(false) }
+    var tapCursorOffset by remember { mutableIntStateOf(-1) }
 
     Icon(
         imageVector = item.icon,
@@ -580,15 +597,29 @@ private fun RowScope.PropertyRow(
 
     if (isEditing) {
         // Heavy editing infra — only composed when user taps to edit
-        var editValue by remember(prop) { mutableStateOf(prop.getDisplayValue()) }
+        val initialValue = remember { prop.getDisplayValue() }
+        // Place cursor at tapped position, or end of text if unknown
+        val initialCursor = remember {
+            val pos = tapCursorOffset
+            if (pos in 0..initialValue.length) pos else initialValue.length
+        }
+        var editValue by remember {
+            mutableStateOf(TextFieldValue(
+                text = initialValue,
+                selection = TextRange(initialCursor)
+            ))
+        }
         val focusRequester = remember { FocusRequester() }
         val focusManager = LocalFocusManager.current
+        // Guard: only exit edit mode after focus has been gained at least once.
+        // Prevents onFocusChanged initial-state callback from killing edit mode.
+        var hasFocused by remember { mutableStateOf(false) }
 
         BasicTextField(
             value = editValue,
             onValueChange = {
                 editValue = it
-                onPropertyChange(prop, it)
+                onPropertyChange(prop, it.text)
             },
             textStyle = style.propValueStyle,
             cursorBrush = SolidColor(style.primaryColor),
@@ -596,7 +627,14 @@ private fun RowScope.PropertyRow(
                 .weight(1f)
                 .focusRequester(focusRequester)
                 .onFocusChanged { state ->
-                    if (!state.isFocused) isEditing = false
+                    if (state.isFocused) {
+                        hasFocused = true
+                    } else if (hasFocused) {
+                        isEditing = false
+                        if (editValue.text != initialValue) {
+                            onEditComplete()
+                        }
+                    }
                 },
             maxLines = 1,
             singleLine = true,
@@ -609,14 +647,41 @@ private fun RowScope.PropertyRow(
     } else {
         // Lightweight read-only display — zero editing overhead
         val displayValue = remember(prop) { prop.getDisplayValue() }
+        // Capture text layout to convert tap position → character offset
+        var textLayoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
         Text(
-            text = displayValue,
-            style = style.propValueStyle,
+            text = displayValue.ifEmpty { "(empty)" },
+            style = if (displayValue.isEmpty())
+                style.propValueStyle.copy(color = style.badgeColor)
+            else
+                style.propValueStyle,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
+            onTextLayout = { textLayoutResult = it },
             modifier = Modifier
                 .weight(1f)
-                .clickable { isEditing = true }
+                .defaultMinSize(minHeight = 24.dp)
+                .pointerInput(Unit) {
+                    awaitPointerEventScope {
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            val press = event.changes.firstOrNull()
+                            if (press != null && press.pressed) {
+                                press.consume()
+                                // Convert tap X to character offset
+                                val layout = textLayoutResult
+                                tapCursorOffset = if (layout != null) {
+                                    try {
+                                        layout.getOffsetForPosition(
+                                            Offset(press.position.x, press.position.y)
+                                        )
+                                    } catch (_: Exception) { -1 }
+                                } else -1
+                                isEditing = true
+                            }
+                        }
+                    }
+                }
         )
     }
 

@@ -84,7 +84,8 @@ fun RawDtsScreen(viewModel: SharedGpuViewModel) {
                     if (treeCurrentIndex >= count) {
                         treeCurrentIndex = if (count > 0) 0 else -1
                     }
-                }
+                },
+                onTreeModified = { viewModel.syncTreeToText() }
             )
         } else {
             DtsEditor(

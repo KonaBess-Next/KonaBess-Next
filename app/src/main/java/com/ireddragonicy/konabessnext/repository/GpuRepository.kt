@@ -632,6 +632,19 @@ open class GpuRepository @Inject constructor(
         }
     }
     
+    /**
+     * Sync in-memory tree edits back to text representation.
+     * Called after user finishes editing a property in the tree view.
+     */
+    fun syncTreeToText(description: String = "Tree Edit") {
+        val root = _parsedTree.value ?: return
+        val newText = DtsTreeHelper.generate(root)
+        val newLines = newText.split("\n")
+        if (newLines != _dtsLines.value) {
+            updateContent(newLines, description)
+        }
+    }
+
     fun applySnapshot(content: String) {
         updateContent(content.split("\n"), "Applied external snapshot")
     }
