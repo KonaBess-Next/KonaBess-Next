@@ -84,6 +84,18 @@ class DtsNode(name: String?) {
         }
     }
 
+    fun deepCopy(): DtsNode {
+        val copy = DtsNode(name)
+        copy.isExpanded = isExpanded
+        for (prop in properties) {
+            copy.addProperty(DtsProperty(prop.name, prop.originalValue))
+        }
+        for (child in children) {
+            copy.addChild(child.deepCopy())
+        }
+        return copy
+    }
+
     // Helpful for debugging
     override fun toString(): String {
         return name

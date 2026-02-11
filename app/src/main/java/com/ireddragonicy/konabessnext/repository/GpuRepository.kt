@@ -3,13 +3,11 @@ package com.ireddragonicy.konabessnext.repository
 
 import com.ireddragonicy.konabessnext.model.Bin
 import com.ireddragonicy.konabessnext.model.Opp
-import com.ireddragonicy.konabessnext.utils.DtsHelper
 import com.ireddragonicy.konabessnext.model.dts.DtsNode
 import com.ireddragonicy.konabessnext.utils.DtsTreeHelper
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.FlowPreview
-import java.io.IOException
 import java.util.regex.Pattern
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -171,447 +169,181 @@ open class GpuRepository @Inject constructor(
     data class ParameterUpdate(val binIndex: Int, val levelIndex: Int, val paramKey: String, val newValue: String)
 
     /**
-     * Updates a specific parameter directly in the text lines.
-     * Uses robust text scanning to ensure we edit the correct Bin/Level.
+     * Updates a specific parameter using AST-only mutation.
      */
     fun updateParameterInBin(binIndex: Int, levelIndex: Int, paramKey: String, newValue: String, historyDesc: String? = null) {
-        val currentLines = ArrayList(_dtsLines.value)
-        val binStartIdx = findBinStartIndex(currentLines, binIndex)
-        
-        if (binStartIdx != -1) {
-            val levelStartIdx = findLevelStartIndex(currentLines, binStartIdx, levelIndex)
-            if (levelStartIdx != -1) {
-                // Scan inside the level for the parameter
-                var propFound = false
-                var braceCount = 0
-                
-                // Find end of level to limit search
-                for (i in levelStartIdx until currentLines.size) {
-                    val line = currentLines[i]
-                    if (line.contains("{")) braceCount++
-                    if (line.contains("}")) {
-                        braceCount--
-                        if (braceCount == 0) break // End of level
-                    }
-                    
-                    // Match property:  key = <value>;
-                    // We look for key followed by =
-                    if (line.trim().startsWith(paramKey) && line.contains("=")) {
-                        // Preserve indentation
-                        val indent = line.substring(0, line.indexOf(paramKey))
-                        currentLines[i] = "$indent$paramKey = <$newValue>;"
-                        propFound = true
-                        break
-                    }
-                }
-                
-                // If property not found (e.g. adding a new one), we could insert it, 
-                // but currently we usually update existing ones.
-                
-                if (propFound) {
-                    val desc = historyDesc ?: "Update $paramKey to $newValue (Bin $binIndex, Lvl $levelIndex)"
-                    updateContent(currentLines, desc)
-                    _structuralChange.tryEmit(Unit)
-                }
-            }
-        }
+        val root = ensureParsedTree() ?: return
+        val binNode = gpuDomainManager.findBinNode(root, binIndex) ?: return
+        val levelNode = gpuDomainManager.findLevelNode(binNode, levelIndex) ?: return
+
+        levelNode.setProperty(paramKey, newValue)
+
+        val desc = historyDesc ?: "Update $paramKey to $newValue (Bin $binIndex, Lvl $levelIndex)"
+        commitTreeChanges(desc)
     }
     
-    /**
-     * Safely deletes a level using text manipulation and renumbers remaining levels.
-     * This avoids AST regeneration issues which can break 'dtc' compilation.
-     */
     fun deleteLevel(binIndex: Int, levelIndex: Int) {
-        val lines = ArrayList(_dtsLines.value)
-        val binStartIdx = findBinStartIndex(lines, binIndex)
-        if (binStartIdx == -1) return
+        val root = ensureParsedTree() ?: return
+        val binNode = gpuDomainManager.findBinNode(root, binIndex) ?: return
+        val levelNode = gpuDomainManager.findLevelNode(binNode, levelIndex) ?: return
 
-        val levelStartIdx = findLevelStartIndex(lines, binStartIdx, levelIndex)
-        if (levelStartIdx == -1) return
+        val removed = binNode.children.remove(levelNode)
+        if (!removed) return
+        levelNode.parent = null
 
-        // 1. Calculate Level End Index
-        var levelEndIdx = -1
-        var braceCount = 0
-        // Determine scope end
-        for (i in levelStartIdx until lines.size) {
-            if (lines[i].contains("{")) braceCount++
-            if (lines[i].contains("}")) {
-                braceCount--
-                if (braceCount == 0) {
-                    levelEndIdx = i
-                    break
-                }
-            }
-        }
+        renumberLevelNodes(binNode)
+        shiftHeaderPointersForDelete(binNode, levelIndex)
 
-        if (levelEndIdx == -1) return
-
-        // 2. Determine Bin Scope (to limit renumbering)
-        var binEndIdx = -1
-        var binBraceCount = 0
-        // Reset and find bin end starting from binStart
-        for (i in binStartIdx until lines.size) {
-            if (lines[i].contains("{")) binBraceCount++
-            if (lines[i].contains("}")) {
-                binBraceCount--
-                if (binBraceCount == 0) {
-                    binEndIdx = i
-                    break
-                }
-            }
-        }
-
-        // 3. Delete Lines
-        val linesToRemove = levelEndIdx - levelStartIdx + 1
-        repeat(linesToRemove) { lines.removeAt(levelStartIdx) }
-        
-        // Adjust binEndIdx because we removed lines
-        binEndIdx -= linesToRemove
-
-        // 4. Renumber Subsequent Levels (Shift ID down by 1)
-        // Only scan within the Bin's scope
-        for (i in binStartIdx..binEndIdx) {
-            val line = lines[i]
-            
-            // Regex match: qcom,gpu-pwrlevel@X
-            val nodeMatch = Regex("qcom,gpu-pwrlevel@(\\d+)").find(line)
-            if (nodeMatch != null) {
-                val currentId = nodeMatch.groupValues[1].toInt()
-                if (currentId > levelIndex) {
-                    val newId = currentId - 1
-                    lines[i] = line.replace("qcom,gpu-pwrlevel@$currentId", "qcom,gpu-pwrlevel@$newId")
-                }
-            }
-            
-            // Regex match: reg = <X> (Decimal) or <0xX> (Hex)
-            // Safety: Only replace strict matches to avoid false positives
-            if (line.trim().startsWith("reg")) {
-                val regMatch = Regex("reg\\s*=\\s*<([^>]+)>").find(line)
-                if (regMatch != null) {
-                    val rawVal = regMatch.groupValues[1].trim()
-                    val intVal = try {
-                        if (rawVal.startsWith("0x")) rawVal.substring(2).toInt(16) else rawVal.toInt()
-                    } catch (e: Exception) { -1 }
-                    
-                    if (intVal > levelIndex) {
-                        val newVal = intVal - 1
-                        val newValStr = if (rawVal.startsWith("0x")) "0x" + Integer.toHexString(newVal) else newVal.toString()
-                        lines[i] = line.replace("<$rawVal>", "<$newValStr>")
-                    }
-                }
-            }
-        }
-
-        // 5. Update Header Pointers (initial-pwrlevel, etc.)
-        for (i in binStartIdx..binEndIdx) {
-            val line = lines[i]
-            if (line.contains("qcom,initial-pwrlevel") || line.contains("qcom,ca-target-pwrlevel")) {
-                val valMatch = Regex("<([^>]+)>").find(line)
-                if (valMatch != null) {
-                    val rawVal = valMatch.groupValues[1].trim()
-                    val intVal = try {
-                        if (rawVal.startsWith("0x")) rawVal.substring(2).toInt(16) else rawVal.toInt()
-                    } catch (e: Exception) { -1 }
-                    
-                    if (intVal != -1) {
-                        var newVal = intVal
-                        if (intVal == levelIndex) {
-                            // Pointed to deleted item -> decrement or clamp to 0
-                            newVal = if (intVal > 0) intVal - 1 else 0
-                        } else if (intVal > levelIndex) {
-                            // Pointed to item that shifted down -> decrement
-                            newVal = intVal - 1
-                        }
-                        
-                        if (newVal != intVal) {
-                            val newValStr = if (rawVal.startsWith("0x")) "0x" + Integer.toHexString(newVal) else newVal.toString()
-                            lines[i] = line.replace("<$rawVal>", "<$newValStr>")
-                        }
-                    }
-                }
-            }
-        }
-        
-        updateContent(lines, "Deleted Level $levelIndex from Bin $binIndex")
-        _structuralChange.tryEmit(Unit)
+        commitTreeChanges("Deleted Level $levelIndex from Bin $binIndex")
     }
     
-    /**
-     * Adds a new level at top or bottom of a bin by duplicating an existing template level.
-     * Handles node naming (qcom,gpu-pwrlevel@X) and reg property renumbering.
-     */
     fun addLevel(binIndex: Int, toTop: Boolean) {
-        val lines = ArrayList(_dtsLines.value)
-        val binStartIdx = findBinStartIndex(lines, binIndex)
-        if (binStartIdx == -1) return
+        val root = ensureParsedTree() ?: return
+        val binNode = gpuDomainManager.findBinNode(root, binIndex) ?: return
+        val levelNodes = getLevelNodes(binNode)
+        if (levelNodes.isEmpty()) return
 
-        // Find existing level count and the template level
-        val levelIndices = findAllLevelRanges(lines, binStartIdx)
-        if (levelIndices.isEmpty()) return
+        val templateNode = if (toTop) levelNodes.first() else levelNodes.last()
+        val copiedNode = templateNode.deepCopy()
 
-        val templateRange = if (toTop) levelIndices.first() else levelIndices.last()
-        val templateLines = lines.subList(templateRange.first, templateRange.last + 1).toList()
-
-        if (toTop) {
-            // Insert before first level, shift all level numbers up by 1
-            val insertIdx = levelIndices.first().first
-
-            // First shift all existing level numbers +1
-            shiftLevelNumbers(lines, binStartIdx, 0, 1)
-            
-            // Create new level with index 0
-            val newLevelLines = templateLines.map { line ->
-                renameLevelInLine(line, templateRange, 0)
-            }
-            lines.addAll(insertIdx, newLevelLines)
-
-            // Update header pointers (+1)
-            offsetHeaderPointers(lines, binStartIdx, 1)
+        val insertionChildIndex = if (toTop) {
+            val firstLevelChildIndex = binNode.children.indexOf(levelNodes.first())
+            if (firstLevelChildIndex == -1) 0 else firstLevelChildIndex
         } else {
-            // Insert after last level
-            val insertIdx = levelIndices.last().last + 1
-            val newIndex = levelIndices.size
-
-            val newLevelLines = templateLines.map { line ->
-                renameLevelInLine(line, templateRange, newIndex)
-            }
-            lines.addAll(insertIdx, newLevelLines)
+            val lastLevelChildIndex = binNode.children.indexOf(levelNodes.last())
+            if (lastLevelChildIndex == -1) binNode.children.size else lastLevelChildIndex + 1
         }
 
-        updateContent(lines, "Added Level ${if (toTop) "at Top" else "at Bottom"} of Bin $binIndex")
-        _structuralChange.tryEmit(Unit)
+        binNode.children.add(insertionChildIndex, copiedNode)
+        copiedNode.parent = binNode
+
+        val insertedLevelIndex = if (toTop) 0 else levelNodes.size
+        renumberLevelNodes(binNode)
+        shiftHeaderPointersForInsert(binNode, insertedLevelIndex)
+
+        commitTreeChanges("Added Level ${if (toTop) "at Top" else "at Bottom"} of Bin $binIndex")
     }
 
-    /**
-     * Duplicates a level within a bin, inserting the copy right after the original.
-     * Shifts subsequent level numbers up by 1.
-     */
     fun duplicateLevelAt(binIndex: Int, levelIndex: Int) {
-        val lines = ArrayList(_dtsLines.value)
-        val binStartIdx = findBinStartIndex(lines, binIndex)
-        if (binStartIdx == -1) return
+        val root = ensureParsedTree() ?: return
+        val binNode = gpuDomainManager.findBinNode(root, binIndex) ?: return
+        val levelNode = gpuDomainManager.findLevelNode(binNode, levelIndex) ?: return
+        val insertionIndex = binNode.children.indexOf(levelNode)
+        if (insertionIndex == -1) return
 
-        val levelStartIdx = findLevelStartIndex(lines, binStartIdx, levelIndex)
-        if (levelStartIdx == -1) return
+        val copiedNode = levelNode.deepCopy()
+        binNode.children.add(insertionIndex + 1, copiedNode)
+        copiedNode.parent = binNode
 
-        // Find level end
-        var levelEndIdx = -1
-        var braceCount = 0
-        for (i in levelStartIdx until lines.size) {
-            if (lines[i].contains("{")) braceCount++
-            if (lines[i].contains("}")) {
-                braceCount--
-                if (braceCount == 0) { levelEndIdx = i; break }
-            }
-        }
-        if (levelEndIdx == -1) return
+        renumberLevelNodes(binNode)
+        shiftHeaderPointersForInsert(binNode, levelIndex + 1)
 
-        val templateLines = lines.subList(levelStartIdx, levelEndIdx + 1).toList()
-        val newIndex = levelIndex + 1
+        commitTreeChanges("Duplicated Level $levelIndex in Bin $binIndex")
+    }
 
-        // Shift levels after levelIndex up by 1
-        shiftLevelNumbers(lines, binStartIdx, newIndex, 1)
+    private fun ensureParsedTree(): DtsNode? {
+        _parsedTree.value?.let { return it }
+        val currentLines = _dtsLines.value
+        if (currentLines.isEmpty()) return null
 
-        // Create duplicate with newIndex
-        val newLevelLines = templateLines.map { line ->
-            var result = line
-            val nodeMatch = Regex("qcom,gpu-pwrlevel@(\\d+)").find(result)
-            if (nodeMatch != null) {
-                result = result.replace("qcom,gpu-pwrlevel@${nodeMatch.groupValues[1]}", "qcom,gpu-pwrlevel@$newIndex")
-            }
-            if (result.trim().startsWith("reg")) {
-                val regMatch = Regex("reg\\s*=\\s*<([^>]+)>").find(result)
-                if (regMatch != null) {
-                    val rawVal = regMatch.groupValues[1].trim()
-                    val isHex = rawVal.startsWith("0x")
-                    val newValStr = if (isHex) "0x" + Integer.toHexString(newIndex) else newIndex.toString()
-                    result = result.replace("<$rawVal>", "<$newValStr>")
-                }
-            }
-            result
-        }
+        val parsedRoot = DtsTreeHelper.parse(currentLines.joinToString("\n"))
+        _parsedTree.value = parsedRoot
+        return parsedRoot
+    }
 
-        // Insert after original
-        lines.addAll(levelEndIdx + 1, newLevelLines)
-
-        // Update header pointers (+1)
-        offsetHeaderPointers(lines, binStartIdx, 1)
-
-        updateContent(lines, "Duplicated Level $levelIndex in Bin $binIndex")
+    private fun commitTreeChanges(description: String) {
+        val root = _parsedTree.value ?: return
+        // NOTE: DtsNode currently does not preserve comments; AST round-trip favors safety/validity.
+        val newLines = DtsTreeHelper.generate(root).split("\n")
+        updateContent(newLines, description)
         _structuralChange.tryEmit(Unit)
     }
 
-    /**
-     * Finds all level node ranges (start..end line indices) within a bin scope.
-     */
-    private fun findAllLevelRanges(lines: List<String>, binStartIdx: Int): List<IntRange> {
-        val ranges = ArrayList<IntRange>()
-        var binBraceCount = 0
-        var i = binStartIdx
-        while (i < lines.size) {
-            if (lines[i].contains("{")) binBraceCount++
-            if (lines[i].contains("}")) {
-                binBraceCount--
-                if (binBraceCount == 0) break // End of bin
-            }
-            if (lines[i].trim().startsWith("qcom,gpu-pwrlevel@") && lines[i].contains("{")) {
-                val start = i
-                var levelBraceCount = 0
-                for (j in start until lines.size) {
-                    if (lines[j].contains("{")) levelBraceCount++
-                    if (lines[j].contains("}")) {
-                        levelBraceCount--
-                        if (levelBraceCount == 0) {
-                            ranges.add(start..j)
-                            i = j
-                            break
-                        }
-                    }
-                }
-            }
-            i++
-        }
-        return ranges
+    private fun getLevelNodes(binNode: DtsNode): List<DtsNode> {
+        return binNode.children.filter { child -> child.name.startsWith(LEVEL_NODE_PREFIX) }
     }
 
-    /**
-     * Shifts level numbers >= fromIndex by the given offset within a bin scope.
-     */
-    private fun shiftLevelNumbers(lines: MutableList<String>, binStartIdx: Int, fromIndex: Int, offset: Int) {
-        var binBraceCount = 0
-        for (i in binStartIdx until lines.size) {
-            if (lines[i].contains("{")) binBraceCount++
-            if (lines[i].contains("}")) {
-                binBraceCount--
-                if (binBraceCount == 0) break
-            }
+    private fun renumberLevelNodes(binNode: DtsNode) {
+        val levelNodes = getLevelNodes(binNode)
+        levelNodes.forEachIndexed { index, levelNode ->
+            levelNode.name = "$LEVEL_NODE_PREFIX$index"
 
-            val nodeMatch = Regex("qcom,gpu-pwrlevel@(\\d+)").find(lines[i])
-            if (nodeMatch != null) {
-                val currentId = nodeMatch.groupValues[1].toInt()
-                if (currentId >= fromIndex) {
-                    val newId = currentId + offset
-                    lines[i] = lines[i].replace("qcom,gpu-pwrlevel@$currentId", "qcom,gpu-pwrlevel@$newId")
-                }
-            }
-
-            if (lines[i].trim().startsWith("reg")) {
-                val regMatch = Regex("reg\\s*=\\s*<([^>]+)>").find(lines[i])
-                if (regMatch != null) {
-                    val rawVal = regMatch.groupValues[1].trim()
-                    val intVal = try {
-                        if (rawVal.startsWith("0x")) rawVal.substring(2).toInt(16) else rawVal.toInt()
-                    } catch (e: Exception) { -1 }
-                    if (intVal >= fromIndex) {
-                        val newVal = intVal + offset
-                        val newValStr = if (rawVal.startsWith("0x")) "0x" + Integer.toHexString(newVal) else newVal.toString()
-                        lines[i] = lines[i].replace("<$rawVal>", "<$newValStr>")
-                    }
-                }
+            val regProp = levelNode.getProperty("reg")
+            if (regProp == null) {
+                levelNode.setProperty("reg", "<0x${index.toString(16)}>")
+            } else if (regProp.isHexArray) {
+                levelNode.setProperty("reg", index.toString())
+            } else {
+                levelNode.setProperty("reg", "<0x${index.toString(16)}>")
             }
         }
     }
 
-    /**
-     * Offsets initial-pwrlevel and ca-target-pwrlevel header pointers by the given amount.
-     */
-    private fun offsetHeaderPointers(lines: MutableList<String>, binStartIdx: Int, offset: Int) {
-        var binBraceCount = 0
-        for (i in binStartIdx until lines.size) {
-            if (lines[i].contains("{")) binBraceCount++
-            if (lines[i].contains("}")) {
-                binBraceCount--
-                if (binBraceCount == 0) break
-            }
-            if (lines[i].contains("qcom,initial-pwrlevel") || lines[i].contains("qcom,ca-target-pwrlevel")) {
-                val valMatch = Regex("<([^>]+)>").find(lines[i])
-                if (valMatch != null) {
-                    val rawVal = valMatch.groupValues[1].trim()
-                    val intVal = try {
-                        if (rawVal.startsWith("0x")) rawVal.substring(2).toInt(16) else rawVal.toInt()
-                    } catch (e: Exception) { -1 }
-                    if (intVal != -1) {
-                        val newVal = (intVal + offset).coerceAtLeast(0)
-                        val newValStr = if (rawVal.startsWith("0x")) "0x" + Integer.toHexString(newVal) else newVal.toString()
-                        lines[i] = lines[i].replace("<$rawVal>", "<$newValStr>")
-                    }
-                }
+    private fun shiftHeaderPointersForDelete(binNode: DtsNode, deletedIndex: Int) {
+        val maxLevelIndex = (getLevelNodes(binNode).size - 1).coerceAtLeast(0)
+        for (property in binNode.properties) {
+            if (!isPowerLevelPointerProperty(property.name)) continue
+            val currentIndex = parseSingleCellIndex(property.originalValue) ?: continue
+            if (currentIndex < deletedIndex) continue
+
+            val shiftedIndex = (currentIndex - 1).coerceAtLeast(0).coerceAtMost(maxLevelIndex)
+            if (shiftedIndex != currentIndex) {
+                binNode.setProperty(property.name, shiftedIndex.toString())
             }
         }
     }
 
-    /**
-     * Renames level node references in a single line to use the target index.
-     */
-    private fun renameLevelInLine(line: String, originalRange: IntRange, targetIndex: Int): String {
-        var result = line
-        val nodeMatch = Regex("qcom,gpu-pwrlevel@(\\d+)").find(result)
-        if (nodeMatch != null) {
-            result = result.replace("qcom,gpu-pwrlevel@${nodeMatch.groupValues[1]}", "qcom,gpu-pwrlevel@$targetIndex")
-        }
-        if (result.trim().startsWith("reg")) {
-            val regMatch = Regex("reg\\s*=\\s*<([^>]+)>").find(result)
-            if (regMatch != null) {
-                val rawVal = regMatch.groupValues[1].trim()
-                val isHex = rawVal.startsWith("0x")
-                val newValStr = if (isHex) "0x" + Integer.toHexString(targetIndex) else targetIndex.toString()
-                result = result.replace("<$rawVal>", "<$newValStr>")
+    private fun shiftHeaderPointersForInsert(binNode: DtsNode, insertedIndex: Int) {
+        val maxLevelIndex = (getLevelNodes(binNode).size - 1).coerceAtLeast(0)
+        for (property in binNode.properties) {
+            if (!isPowerLevelPointerProperty(property.name)) continue
+            val currentIndex = parseSingleCellIndex(property.originalValue) ?: continue
+            if (currentIndex < insertedIndex) continue
+
+            val shiftedIndex = (currentIndex + 1).coerceAtMost(maxLevelIndex)
+            if (shiftedIndex != currentIndex) {
+                binNode.setProperty(property.name, shiftedIndex.toString())
             }
         }
-        return result
     }
-    
-    // Helper to find bin start line
-    private fun findBinStartIndex(lines: List<String>, binId: Int): Int {
-        // Try precise name first: qcom,gpu-pwrlevels-X
-        var idx = lines.indexOfFirst { it.trim().startsWith("qcom,gpu-pwrlevels-$binId") && it.contains("{") }
-        if (idx != -1) return idx
-        
-        // Fallback: If binId is 0, maybe it's just "qcom,gpu-pwrlevels {" (legacy single bin)
-        if (binId == 0) {
-            idx = lines.indexOfFirst { it.trim().startsWith("qcom,gpu-pwrlevels") && !it.contains("-") && it.contains("{") }
-            if (idx != -1) return idx
-        }
-        
-        // Fallback 2: Iterate all bin nodes and check qcom,speed-bin property?
-        // Too complex for regex line scan, usually naming convention holds.
-        return -1
+
+    private fun isPowerLevelPointerProperty(propertyName: String): Boolean {
+        return propertyName.contains("pwrlevel") && !propertyName.contains("pwrlevels")
     }
-    
-    // Helper to find level start line
-    private fun findLevelStartIndex(lines: List<String>, binStartIdx: Int, levelIndex: Int): Int {
-        var braceCount = 0
-        // Limit search to current bin
-        for (i in binStartIdx until lines.size) {
-            if (lines[i].contains("{")) braceCount++
-            if (lines[i].contains("}")) {
-                braceCount--
-                if (braceCount == 0) return -1 // End of bin
-            }
-            
-            // Match qcom,gpu-pwrlevel@X
-            if (lines[i].trim().startsWith("qcom,gpu-pwrlevel@$levelIndex") && lines[i].contains("{")) {
-                return i
-            }
+
+    private fun parseSingleCellIndex(rawValue: String): Int? {
+        val trimmed = rawValue.trim()
+        if (trimmed.isEmpty()) return null
+
+        if (!trimmed.startsWith("<") || !trimmed.endsWith(">")) {
+            return trimmed.toIntOrNull()
         }
-        return -1
+
+        val inner = trimmed.substring(1, trimmed.length - 1).trim()
+        if (inner.isEmpty() || inner.contains(" ")) return null
+
+        return if (inner.startsWith("0x", ignoreCase = true)) {
+            inner.substring(2).toIntOrNull(16)
+        } else {
+            inner.toIntOrNull()
+        }
+    }
+
+    private companion object {
+        const val LEVEL_NODE_PREFIX = "qcom,gpu-pwrlevel@"
     }
 
     // --- OPP and Other Updates ---
     
     fun updateOppVoltage(frequency: Long, newVolt: Long, historyDesc: String? = null) {
-        val root = _parsedTree.value ?: return
+        val root = ensureParsedTree() ?: return
         val success = gpuDomainManager.updateOppVoltage(root, frequency, newVolt)
         if (!success) return
-        val newText = DtsTreeHelper.generate(root)
-        updateContent(newText.split("\n"), historyDesc ?: "Updated OPP voltage")
-        _structuralChange.tryEmit(Unit)
+        commitTreeChanges(historyDesc ?: "Updated OPP voltage")
     }
 
     fun batchUpdateParameters(updates: List<ParameterUpdate>, description: String = "Batch Update") {
-        // Fallback to AST for batch updates as they are complex to do via Regex
-        // But ensure we re-parse if needed
-        val root = _parsedTree.value ?: return
+        val root = ensureParsedTree() ?: return
         var anyChanged = false
         
         updates.forEach { update ->
@@ -626,9 +358,7 @@ open class GpuRepository @Inject constructor(
         }
         
         if (anyChanged) {
-            val newText = DtsTreeHelper.generate(root)
-            updateContent(newText.split("\n"), description)
-            _structuralChange.tryEmit(Unit)
+            commitTreeChanges(description)
         }
     }
     
@@ -637,7 +367,7 @@ open class GpuRepository @Inject constructor(
      * Called after user finishes editing a property in the tree view.
      */
     fun syncTreeToText(description: String = "Tree Edit") {
-        val root = _parsedTree.value ?: return
+        val root = ensureParsedTree() ?: return
         val newText = DtsTreeHelper.generate(root)
         val newLines = newText.split("\n")
         if (newLines != _dtsLines.value) {
