@@ -248,6 +248,7 @@ class DtsParser(tokens: List<Token>) {
                 TokenType.SEMICOLON, TokenType.RBRACE, TokenType.EOF -> break
                 TokenType.STRING_LITERAL -> { sb.append('"').append(t.value).append('"'); pos++ }
                 TokenType.LANGLE -> sb.append(parseArray())
+                TokenType.LBRACKET -> sb.append(parseByteArray())
                 TokenType.REF -> { sb.append(t.value); pos++ }
                 TokenType.HEX_LITERAL, TokenType.INT_LITERAL, TokenType.IDENTIFIER -> { sb.append(t.value); pos++ }
                 TokenType.EQUALS -> { sb.append('='); pos++ }
@@ -274,6 +275,19 @@ class DtsParser(tokens: List<Token>) {
         }
         match(TokenType.RANGLE)
         sb.append('>')
+        return sb.toString()
+    }
+
+    private fun parseByteArray(): String {
+        val sb = StringBuilder("[")
+        pos++ // [
+        while (pos < len && tokens[pos].type != TokenType.RBRACKET && tokens[pos].type != TokenType.EOF) {
+            sb.append(tokens[pos].value)
+            pos++
+            if (pos < len && tokens[pos].type != TokenType.RBRACKET) sb.append(' ')
+        }
+        match(TokenType.RBRACKET)
+        sb.append(']')
         return sb.toString()
     }
 

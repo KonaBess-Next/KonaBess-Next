@@ -160,6 +160,65 @@ class GpuRepositoryTest {
         )
     }
 
+    @Test
+    fun testUpdateGpuModelName_AstEdit_PreservesByteArraySyntax() = runBlocking {
+        fakeChipRepository.setCurrentChip(createChipDefinition("tuna", "Tuna SoC"))
+        val originalLines = loadFixtureLines("Tuna0.txt")
+        repository.updateContent(originalLines, description = "Load Tuna fixture", addToHistory = false)
+
+        repository.updateGpuModelName("Adreno840")
+        val updatedText = repository.dtsLines.value.joinToString("\n")
+
+        assertTrue(
+            "AST rename should update qcom,gpu-model",
+            updatedText.contains("qcom,gpu-model = \"Adreno840\";")
+        )
+        assertTrue(
+            "Unrelated byte-array syntax must remain untouched",
+            Regex("""qcom,eud-utmi-delay\s*=\s*\[[^\]]+\];""").containsMatchIn(updatedText)
+        )
+        assertTrue(
+            "Another byte-array syntax should remain bracketed",
+            Regex("""qcom,platform-strength-ctrl\s*=\s*\[[^\]]+\];""").containsMatchIn(updatedText)
+        )
+        assertTrue(
+            "Hex bytes without 0x prefix should remain unsplit (1d, not '1 d')",
+            Regex("""qcom,platform-regulator-settings\s*=\s*\[1d(?:\s+1d){4}\];""").containsMatchIn(updatedText)
+        )
+    }
+
+    @Test
+    fun testUpdateFrequency_AstEdit_PreservesByteArraySyntax() = runBlocking {
+        fakeChipRepository.setCurrentChip(createChipDefinition("tuna", "Tuna SoC"))
+        val originalLines = loadFixtureLines("Tuna0.txt")
+        repository.updateContent(originalLines, description = "Load Tuna fixture", addToHistory = false)
+
+        repository.updateParameterInBin(
+            binIndex = 0,
+            levelIndex = 0,
+            paramKey = "qcom,gpu-freq",
+            newValue = "999999999"
+        )
+
+        val updatedText = repository.dtsLines.value.joinToString("\n")
+        assertTrue(
+            "Frequency edit should be applied",
+            updatedText.contains("qcom,gpu-freq = <0x3b9ac9ff>;")
+        )
+        assertTrue(
+            "Byte-array syntax must remain untouched after AST frequency edit",
+            Regex("""qcom,eud-utmi-delay\s*=\s*\[[^\]]+\];""").containsMatchIn(updatedText)
+        )
+        assertTrue(
+            "Secondary byte-array should remain bracketed",
+            Regex("""qcom,platform-strength-ctrl\s*=\s*\[[^\]]+\];""").containsMatchIn(updatedText)
+        )
+        assertTrue(
+            "Regulator settings hex bytes must remain unsplit after AST frequency edit",
+            Regex("""qcom,platform-regulator-settings\s*=\s*\[1d(?:\s+1d){4}\];""").containsMatchIn(updatedText)
+        )
+    }
+
     private fun createChipDefinition(id: String, name: String): ChipDefinition {
         return ChipDefinition(
             id = id,

@@ -41,6 +41,7 @@ fun GpuEditorToolbar(
     onChipsetClick: () -> Unit = {},
 
     onFlashClick: () -> Unit,
+    onInstallToInactiveSlot: () -> Unit,
     onExportDts: () -> Unit,
     onExportImg: () -> Unit,
     canFlashOrRepack: Boolean,
@@ -234,6 +235,8 @@ fun GpuEditorToolbar(
                         expanded = showBuildMenu,
                         onDismissRequest = { showBuildMenu = false }
                     ) {
+                        val showImageActions = canFlashOrRepack || !isRootMode
+
                         DropdownMenuItem(
                             text = { Text("Export .dts Source") },
                             onClick = { 
@@ -243,9 +246,26 @@ fun GpuEditorToolbar(
                             leadingIcon = { Icon(Icons.Rounded.Code, null) }
                         )
 
-                        // Only show Image/Flash options if we have a valid base boot image
-                        if (canFlashOrRepack || !isRootMode) {
+                        if (isRootMode || showImageActions) {
                             HorizontalDivider()
+                        }
+
+                        if (isRootMode) {
+                            DropdownMenuItem(
+                                text = { Text("Install to Inactive Slot (OTA)") },
+                                onClick = {
+                                    onInstallToInactiveSlot()
+                                    showBuildMenu = false
+                                },
+                                leadingIcon = { Icon(Icons.Rounded.SystemUpdate, null) }
+                            )
+                        }
+
+                        // Only show Image/Flash options if we have a valid base boot image
+                        if (showImageActions) {
+                            if (isRootMode) {
+                                HorizontalDivider()
+                            }
                             
                             DropdownMenuItem(
                                 text = { Text(if (isRootMode) "Export .img File" else "Repack & Export .img") },

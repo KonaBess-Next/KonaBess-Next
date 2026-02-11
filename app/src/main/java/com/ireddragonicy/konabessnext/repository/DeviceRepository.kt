@@ -376,6 +376,15 @@ open class DeviceRepository @Inject constructor(
             else -> ""
         }
     }
+
+    private fun getInactiveSlotSuffix(): String {
+        return when (getCurrent("slot").trim()) {
+            "_a", "a" -> "_b"
+            "_b", "b" -> "_a"
+            "" -> throw IllegalStateException("Could not determine A/B slot status")
+            else -> throw IllegalStateException("This device does not report a valid A/B slot suffix")
+        }
+    }
     
     private fun sanitizeString(input: String): String {
         return input.replace("\u0000", "").replace("\"", "").replace("\n", "").trim()
@@ -462,6 +471,46 @@ open class DeviceRepository @Inject constructor(
         verifyPartitionSize(partition, newBootPath)
         
         shellRepository.execAndCheck("dd if=$newBootPath of=$partition")
+    }
+
+    suspend fun installToInactiveSlot(shouldBackup: Boolean): String = withContext(Dispatchers.IO) {
+        if (!isRootMode) throw IllegalStateException("Root access required")
+        val newImg = File(filesDir, "boot_new.img")
+        if (!newImg.exists() || newImg.length() == 0L) {
+            throw IOException("Repacked image not found. Please 'Build > Repack' first.")
+        }
+
+        val resolvedBootName = bootName
+            ?: throw IllegalStateException("Boot partition type unknown. Please import/detect first.")
+        val targetSlot = getInactiveSlotSuffix()
+        val targetPartition = "/dev/block/by-name/${resolvedBootName}${targetSlot}"
+
+        if (!shellRepository.execAndCheck("[ -e '$targetPartition' ]")) {
+            throw IOException("Target partition $targetPartition does not exist")
+        }
+
+        val sb = StringBuilder()
+
+        if (shouldBackup) {
+            val timestamp = System.currentTimeMillis()
+            val backupDir = "/sdcard/Download"
+            val backupPath = "$backupDir/boot_backup_${resolvedBootName}${targetSlot}_$timestamp.img"
+
+            if (!shellRepository.execAndCheck("mkdir -p '$backupDir'")) {
+                throw IOException("Failed to prepare backup directory at $backupDir")
+            }
+
+            val backupResult = shellRepository.execAndCheck("dd if='$targetPartition' of='$backupPath'")
+            if (!backupResult) throw IOException("Failed to backup inactive slot")
+            sb.append("Backup saved to: $backupPath\n")
+        }
+
+        verifyPartitionSize(targetPartition, newImg.absolutePath)
+        val flashResult = shellRepository.execAndCheck("dd if='${newImg.absolutePath}' of='$targetPartition'")
+        if (!flashResult) throw IOException("Failed to write to $targetPartition")
+
+        sb.append("Successfully installed to inactive slot ($targetSlot).")
+        return@withContext sb.toString()
     }
 
     private suspend fun verifyPartitionSize(partitionPath: String, imagePath: String) {

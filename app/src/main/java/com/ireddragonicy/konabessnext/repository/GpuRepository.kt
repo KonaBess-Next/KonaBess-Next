@@ -488,10 +488,60 @@ open class GpuRepository @Inject constructor(
     }
 
     fun updateGpuModelName(newName: String) {
-        val root = ensureParsedTree() ?: return
-        val modelNode = gpuDomainManager.findNodeContainingProperty(root, "qcom,gpu-model") ?: return
-        modelNode.setProperty("qcom,gpu-model", "\"$newName\"")
-        commitTreeChanges("Renamed GPU to $newName")
+        val normalized = normalizeGpuModelName(newName)
+        if (normalized.isEmpty()) return
+
+        val root = ensureParsedTree()
+        if (root != null) {
+            val modelNode = gpuDomainManager.findNodeContainingProperty(root, "qcom,gpu-model")
+            if (modelNode != null) {
+                modelNode.setProperty("qcom,gpu-model", "\"$normalized\"")
+                commitTreeChanges("Renamed GPU to ${normalized.replace("\\\"", "\"")}")
+                return
+            }
+        }
+
+        // Fallback if the AST path cannot locate qcom,gpu-model.
+        val currentLines = _dtsLines.value
+        val patched = replaceGpuModelInRawLines(currentLines, normalized) ?: return
+        updateContent(
+            patched,
+            description = "Renamed GPU to ${normalized.replace("\\\"", "\"")}",
+            reparseTree = true
+        )
+        _structuralChange.tryEmit(Unit)
+    }
+
+    private fun normalizeGpuModelName(input: String): String {
+        val collapsed = input
+            .replace("\u0000", "")
+            .replace("\r", " ")
+            .replace("\n", " ")
+            .trim()
+            .replace(Regex("\\s+"), " ")
+
+        // Escape characters that can break DTS string literals.
+        return collapsed
+            .replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+    }
+
+    private fun replaceGpuModelInRawLines(lines: List<String>, modelName: String): List<String>? {
+        val regex = Regex("""^(\s*qcom,gpu-model\s*=\s*)(.*?)(\s*;.*)$""")
+        val result = lines.toMutableList()
+        var changed = false
+
+        for (i in result.indices) {
+            val match = regex.find(result[i]) ?: continue
+            val updatedLine = "${match.groupValues[1]}\"$modelName\"${match.groupValues[3]}"
+            if (updatedLine != result[i]) {
+                result[i] = updatedLine
+                changed = true
+            }
+            break
+        }
+
+        return if (changed) result else null
     }
 
     private fun buildOppNode(opp: Opp): DtsNode {

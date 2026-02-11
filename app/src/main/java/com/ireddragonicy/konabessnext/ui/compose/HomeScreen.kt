@@ -1,13 +1,24 @@
 package com.ireddragonicy.konabessnext.ui.compose
 
 import androidx.compose.animation.Crossfade
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.SystemUpdate
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -153,6 +164,7 @@ fun GpuEditorMainContent(
 
     var activeSheet by remember { mutableStateOf(WorkbenchSheetType.NONE) }
     var manualSetupIndex by remember { mutableStateOf<Int?>(null) }
+    var showInactiveInstallDialog by remember { mutableStateOf(false) }
 
     // Sheets
     val detectionState by deviceViewModel.detectionState.collectAsState()
@@ -192,6 +204,48 @@ fun GpuEditorMainContent(
         }
     }
 
+    if (showInactiveInstallDialog) {
+        var backupChecked by remember { mutableStateOf(true) }
+        val targetSlot = deviceViewModel.getInactiveSlotSuffixOrNull() ?: "unknown"
+
+        AlertDialog(
+            onDismissRequest = { showInactiveInstallDialog = false },
+            icon = { Icon(Icons.Rounded.SystemUpdate, null) },
+            title = { Text("Install to Inactive Slot") },
+            text = {
+                Column {
+                    Text(
+                        "This will flash your current configuration to the inactive slot " +
+                            "(Slot $targetSlot). Use this after an OTA update before rebooting."
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.clickable { backupChecked = !backupChecked }
+                    ) {
+                        Checkbox(checked = backupChecked, onCheckedChange = { backupChecked = it })
+                        Text("Backup target boot image first")
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        deviceViewModel.installToInactiveSlot(backupChecked)
+                        showInactiveInstallDialog = false
+                    }
+                ) {
+                    Text("Install")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showInactiveInstallDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
     val exportDtsLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
         if (uri != null) sharedViewModel.exportRawDts(context, uri)
     }
@@ -225,6 +279,7 @@ fun GpuEditorMainContent(
             sharedViewModel = sharedViewModel,
             onBack = { activeCurveEditorBinId = -1 },
             onRepack = onStartRepack,
+            onInstallToInactiveSlot = { showInactiveInstallDialog = true },
             onExportDts = { exportDtsLauncher.launch("gpu_config.dts") },
             onExportImg = { exportImgLauncher.launch("boot_repack.img") },
             canFlashOrRepack = canFlashOrRepack,
@@ -246,6 +301,7 @@ fun GpuEditorMainContent(
                 onViewModeChanged = { mode -> sharedViewModel.switchViewMode(mode) },
                 onChipsetClick = { activeSheet = WorkbenchSheetType.CHIPSET },
                 onFlashClick = { onStartRepack() },
+                onInstallToInactiveSlot = { showInactiveInstallDialog = true },
                 onExportDts = { exportDtsLauncher.launch("gpu_config.dts") },
                 onExportImg = { exportImgLauncher.launch("boot_repack.img") },
                 canFlashOrRepack = canFlashOrRepack,

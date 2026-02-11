@@ -42,6 +42,7 @@ fun CurveEditorScreen(
     sharedViewModel: SharedGpuViewModel,
     onBack: () -> Unit,
     onRepack: () -> Unit,
+    onInstallToInactiveSlot: () -> Unit,
     onExportDts: () -> Unit,
     onExportImg: () -> Unit,
     canFlashOrRepack: Boolean,
@@ -198,6 +199,7 @@ fun CurveEditorScreen(
                     onBack() // Navigate back to main screen to show the new mode
                 },
                 onFlashClick = onRepack,
+                onInstallToInactiveSlot = onInstallToInactiveSlot,
                 onExportDts = onExportDts,
                 onExportImg = onExportImg,
                 canFlashOrRepack = canFlashOrRepack,

@@ -3,6 +3,7 @@ package com.ireddragonicy.konabessnext.utils
 enum class TokenType {
     LBRACE, RBRACE, SEMICOLON, EQUALS,
     LANGLE, RANGLE, // < and >
+    LBRACKET, RBRACKET, // [ and ] byte arrays
     IDENTIFIER, // node_name, property-name
     STRING_LITERAL, // "..."
     HEX_LITERAL, // 0x...
@@ -112,6 +113,8 @@ class DtsLexer(private val input: String) {
                 c == '=' -> { advance(); tokens.add(Token(TokenType.EQUALS, "=", startLine, startCol)) }
                 c == '<' -> { advance(); tokens.add(Token(TokenType.LANGLE, "<", startLine, startCol)) }
                 c == '>' -> { advance(); tokens.add(Token(TokenType.RANGLE, ">", startLine, startCol)) }
+                c == '[' -> { advance(); tokens.add(Token(TokenType.LBRACKET, "[", startLine, startCol)) }
+                c == ']' -> { advance(); tokens.add(Token(TokenType.RBRACKET, "]", startLine, startCol)) }
                 c == '"' -> tokens.add(readString(startLine, startCol))
                 c == '/' -> {
                     // Disambiguate: preprocessor directive (/dts-v1/, /delete-node/, …) vs root node name "/"
@@ -197,6 +200,15 @@ class DtsLexer(private val input: String) {
             return Token(TokenType.HEX_LITERAL, input.substring(startPos, pos), startLine, startCol)
         }
         while (pos < len && input[pos] in '0'..'9') { pos++; col++ }
+
+        // DTS byte arrays frequently use hex bytes without 0x prefix (e.g. [1d 1d]).
+        // Preserve those as a single hex token instead of splitting into "1" and "d".
+        val suffixStart = pos
+        while (pos < len && (input[pos] in 'a'..'f' || input[pos] in 'A'..'F')) { pos++; col++ }
+        if (pos > suffixStart) {
+            return Token(TokenType.HEX_LITERAL, input.substring(startPos, pos), startLine, startCol)
+        }
+
         return Token(TokenType.INT_LITERAL, input.substring(startPos, pos), startLine, startCol)
     }
 

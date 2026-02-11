@@ -399,12 +399,32 @@ class DeviceViewModel @Inject constructor(
         }
     }
 
+    fun installToInactiveSlot(shouldBackup: Boolean) {
+        if (!isRootMode) return
+        _repackState.value = UiState.Loading
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val resultMsg = repository.installToInactiveSlot(shouldBackup)
+                _repackState.value = UiState.Success(UiText.DynamicString(resultMsg))
+            } catch (e: Exception) {
+                _repackState.value = UiState.Error(UiText.DynamicString(e.message ?: "Unknown error"), e)
+            }
+        }
+    }
+
     fun reboot() {
         viewModelScope.launch { try { repository.reboot() } catch (e: Exception) {} }
     }
 
     fun getDeviceModel(): String = repository.getCurrent("model")
     fun getDeviceBrand(): String = repository.getCurrent("brand")
+    fun getInactiveSlotSuffixOrNull(): String? {
+        return when (repository.getCurrent("slot").trim()) {
+            "_a", "a" -> "_b"
+            "_b", "b" -> "_a"
+            else -> null
+        }
+    }
 
     fun clearRepackState() {
         _repackState.value = null
