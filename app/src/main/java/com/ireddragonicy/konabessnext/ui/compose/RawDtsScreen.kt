@@ -12,8 +12,12 @@ import kotlin.math.abs
 
 @Composable
 fun RawDtsScreen(viewModel: SharedGpuViewModel) {
-    val dtsContent by viewModel.dtsContent.collectAsState()
     val searchState by viewModel.searchState.collectAsState()
+    val foldSessionKey by viewModel.dtsEditorSessionKey.collectAsState()
+    val editorState = viewModel.dtsEditorState
+    val persistedCollapsedFolds = remember(foldSessionKey) {
+        viewModel.getCollapsedFolds(foldSessionKey)
+    }
     
     // Read initial persisted positions once; then sync back with throttling.
     val initialTextScrollIdx = remember { viewModel.textScrollIndex.value }
@@ -151,8 +155,11 @@ fun RawDtsScreen(viewModel: SharedGpuViewModel) {
             )
         } else {
             DtsEditor(
-                content = dtsContent,
-                onContentChanged = { viewModel.updateFromText(it, "Raw Edit") },
+                editorState = editorState,
+                onLinesChanged = { viewModel.updateFromEditorLines(it, "Raw Edit") },
+                foldSessionKey = foldSessionKey,
+                persistedCollapsedFolds = persistedCollapsedFolds,
+                onFoldStateChanged = { viewModel.updateCollapsedFolds(foldSessionKey, it) },
                 searchQuery = searchState.query,
                 searchResultIndex = searchState.currentIndex,
                 searchResults = emptyList(),

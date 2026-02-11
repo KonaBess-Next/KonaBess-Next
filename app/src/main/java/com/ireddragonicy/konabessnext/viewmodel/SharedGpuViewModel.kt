@@ -29,6 +29,7 @@ import android.content.Context
 import android.widget.Toast
 import javax.inject.Inject
 import com.ireddragonicy.konabessnext.utils.DtsEditorDebug
+import com.ireddragonicy.konabessnext.editor.text.DtsEditorState
 
 @HiltViewModel
 class SharedGpuViewModel @Inject constructor(
@@ -57,6 +58,10 @@ class SharedGpuViewModel @Inject constructor(
     private val _lintErrorCount = MutableStateFlow(0)
     val lintErrorCount: StateFlow<Int> = _lintErrorCount.asStateFlow()
     private var lintJob: Job? = null
+    val dtsEditorState = DtsEditorState("")
+    private val _dtsEditorSessionKey = MutableStateFlow("session:default")
+    val dtsEditorSessionKey: StateFlow<String> = _dtsEditorSessionKey.asStateFlow()
+    private val collapsedFoldsBySession: SnapshotStateMap<String, Map<Int, Int>> = mutableStateMapOf()
 
     @OptIn(kotlinx.coroutines.FlowPreview::class)
     val gpuModelName: StateFlow<String> = repository.dtsLines
@@ -129,7 +134,101 @@ class SharedGpuViewModel @Inject constructor(
         }
     }
 
+    private fun startEditorStateSync() {
+        viewModelScope.launch {
+            repository.dtsLines.collect { lines ->
+                if (isEditorOutOfSync(lines)) {
+                    dtsEditorState.replaceLines(lines)
+                }
+                refreshEditorSessionKey()
+            }
+        }
+    }
+
+    private fun refreshEditorSessionKey() {
+        val path = repository.currentDtsPath()
+        if (!path.isNullOrBlank()) {
+            _dtsEditorSessionKey.value = "session:path:$path"
+            return
+        }
+
+        if (_dtsEditorSessionKey.value == "session:default") {
+            val seed = System.currentTimeMillis()
+            _dtsEditorSessionKey.value = "session:memory:$seed"
+        }
+    }
+
+    fun getCollapsedFolds(sessionKey: String): Map<Int, Int> {
+        return collapsedFoldsBySession[sessionKey].orEmpty()
+    }
+
+    fun updateCollapsedFolds(sessionKey: String, folds: Map<Int, Int>) {
+        if (folds.isEmpty()) {
+            collapsedFoldsBySession.remove(sessionKey)
+        } else {
+            collapsedFoldsBySession[sessionKey] = folds.toMap()
+        }
+    }
+
+    private fun isEditorOutOfSync(lines: List<String>): Boolean {
+        if (dtsEditorState.lines.size != lines.size) return true
+        for (i in lines.indices) {
+            if (dtsEditorState.lines[i].text != lines[i]) return true
+        }
+        return false
+    }
+
+    private fun estimateCharCount(lines: List<String>): Int {
+        var total = if (lines.isEmpty()) 0 else lines.size - 1
+        for (line in lines) total += line.length
+        return total
+    }
+
+    private fun scheduleLint(lines: List<String>) {
+        val snapshot = lines.toList()
+        lintJob?.let {
+            it.cancel()
+            DtsEditorDebug.logLintJobCancel()
+        }
+        DtsEditorDebug.logLintJobStart()
+        lintJob = viewModelScope.launch {
+            delay(600)
+            val startTime = System.nanoTime()
+            val grouped = withContext(Dispatchers.Default) {
+                try {
+                    val content = snapshot.joinToString("\n")
+                    val lexer = DtsLexer(content)
+                    val tokens = lexer.tokenize()
+                    val parser = DtsParser(tokens)
+                    parser.parse()
+                    parser.getLintResult().errors.groupBy { it.line }
+                } catch (_: Exception) {
+                    emptyMap()
+                }
+            }
+            val durationMs = (System.nanoTime() - startTime) / 1_000_000
+            // Diff-update the SnapshotStateMap so only changed lines recompose
+            val oldKeys = lintErrorsByLine.keys.toSet()
+            val newKeys = grouped.keys
+            // Remove lines that no longer have errors
+            for (key in oldKeys - newKeys) {
+                lintErrorsByLine.remove(key)
+            }
+            // Add/update lines with errors
+            for ((key, value) in grouped) {
+                val existing = lintErrorsByLine[key]
+                if (existing != value) {
+                    lintErrorsByLine[key] = value
+                }
+            }
+            _lintErrorCount.value = grouped.values.sumOf { it.size }
+            DtsEditorDebug.logLintJobComplete(grouped.values.sumOf { it.size }, durationMs)
+        }
+    }
+
     init {
+        refreshEditorSessionKey()
+        startEditorStateSync()
         startHighlightSession()
     }
     val textScrollIndex = MutableStateFlow(0)
@@ -173,6 +272,7 @@ class SharedGpuViewModel @Inject constructor(
         viewModelScope.launch {
             try { 
                 repository.loadTable()
+                refreshEditorSessionKey()
                 
                 // DATA SYNCHRONIZATION BARRIER
                 // loadTable() emits _structuralChange which triggers immediate bins re-parse.
@@ -199,48 +299,17 @@ class SharedGpuViewModel @Inject constructor(
 
     // Text Editor -> Repository
     fun updateFromText(content: String, description: String) {
-        val lines = content.split("\n")
-        DtsEditorDebug.logUpdateFromText(content.length, lines.size)
-        repository.updateContent(lines, description)
+        updateFromEditorLines(content.split("\n"), description)
+    }
 
-        // Debounced lint — cancel previous and schedule new after 600ms idle
-        lintJob?.let {
-            it.cancel()
-            DtsEditorDebug.logLintJobCancel()
+    fun updateFromEditorLines(lines: List<String>, description: String) {
+        val current = repository.dtsLines.value
+        if (current.size == lines.size && current.indices.all { current[it] == lines[it] }) {
+            return
         }
-        DtsEditorDebug.logLintJobStart()
-        lintJob = viewModelScope.launch {
-            delay(600)
-            val startTime = System.nanoTime()
-            val grouped = withContext(Dispatchers.Default) {
-                try {
-                    val lexer = DtsLexer(content)
-                    val tokens = lexer.tokenize()
-                    val parser = DtsParser(tokens)
-                    parser.parse()
-                    parser.getLintResult().errors.groupBy { it.line }
-                } catch (_: Exception) {
-                    emptyMap()
-                }
-            }
-            val durationMs = (System.nanoTime() - startTime) / 1_000_000
-            // Diff-update the SnapshotStateMap so only changed lines recompose
-            val oldKeys = lintErrorsByLine.keys.toSet()
-            val newKeys = grouped.keys
-            // Remove lines that no longer have errors
-            for (key in oldKeys - newKeys) {
-                lintErrorsByLine.remove(key)
-            }
-            // Add/update lines with errors
-            for ((key, value) in grouped) {
-                val existing = lintErrorsByLine[key]
-                if (existing != value) {
-                    lintErrorsByLine[key] = value
-                }
-            }
-            _lintErrorCount.value = grouped.values.sumOf { it.size }
-            DtsEditorDebug.logLintJobComplete(grouped.values.sumOf { it.size }, durationMs)
-        }
+        DtsEditorDebug.logUpdateFromText(estimateCharCount(lines), lines.size)
+        repository.updateContent(lines, description)
+        scheduleLint(lines)
     }
 
     /**

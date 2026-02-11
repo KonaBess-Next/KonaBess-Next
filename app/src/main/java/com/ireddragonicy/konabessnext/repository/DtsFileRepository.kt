@@ -12,6 +12,8 @@ class DtsFileRepository @Inject constructor(
     private val fileDataSource: FileDataSource,
     private val deviceRepository: DeviceRepositoryInterface
 ) {
+    fun currentDtsPath(): String? = deviceRepository.dtsPath
+
     suspend fun loadDtsLines(): List<String> = withContext(Dispatchers.IO) {
         val path = deviceRepository.dtsPath ?: 
                    (if (deviceRepository.tryRestoreLastChipset()) deviceRepository.dtsPath else null) ?: 

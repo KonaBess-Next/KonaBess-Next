@@ -12,9 +12,13 @@ import kotlin.math.abs
 
 @Composable
 fun UnifiedDtsEditorScreen(sharedViewModel: SharedGpuViewModel) {
-    val dtsContent by sharedViewModel.dtsContent.collectAsState()
     val searchState by sharedViewModel.searchState.collectAsState()
     val lintErrorCount by sharedViewModel.lintErrorCount.collectAsState()
+    val foldSessionKey by sharedViewModel.dtsEditorSessionKey.collectAsState()
+    val editorState = sharedViewModel.dtsEditorState
+    val persistedCollapsedFolds = remember(foldSessionKey) {
+        sharedViewModel.getCollapsedFolds(foldSessionKey)
+    }
     @Suppress("DEPRECATION")
     val clipboardManager = LocalClipboardManager.current
     
@@ -76,14 +80,17 @@ fun UnifiedDtsEditorScreen(sharedViewModel: SharedGpuViewModel) {
             onQueryChange = { sharedViewModel.search(it) },
             onNext = { sharedViewModel.nextSearchResult() },
             onPrev = { sharedViewModel.previousSearchResult() },
-            onCopyAll = { clipboardManager.setText(AnnotatedString(dtsContent)) },
+            onCopyAll = { clipboardManager.setText(AnnotatedString(editorState.getText())) },
             onReformat = { sharedViewModel.reformatCode() },
             lintErrorCount = lintErrorCount
         )
 
         DtsEditor(
-            content = dtsContent,
-            onContentChanged = { sharedViewModel.updateFromText(it, "Raw Edit") },
+            editorState = editorState,
+            onLinesChanged = { sharedViewModel.updateFromEditorLines(it, "Raw Edit") },
+            foldSessionKey = foldSessionKey,
+            persistedCollapsedFolds = persistedCollapsedFolds,
+            onFoldStateChanged = { sharedViewModel.updateCollapsedFolds(foldSessionKey, it) },
             searchQuery = searchState.query,
             searchResultIndex = searchState.currentIndex,
             searchResults = searchState.results.map { LineSearchResult(it.lineIndex) },

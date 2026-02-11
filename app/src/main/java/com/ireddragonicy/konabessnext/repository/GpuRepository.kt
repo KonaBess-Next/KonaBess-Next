@@ -27,6 +27,8 @@ open class GpuRepository @Inject constructor(
 
     val dtsContent: Flow<String> = _dtsLines.map { it.joinToString("\n") }.flowOn(Dispatchers.Default)
 
+    fun currentDtsPath(): String? = dtsFileRepository.currentDtsPath()
+
     // Manual trigger to force-refresh bins/opps immediately (bypasses debounce).
     // Used after structural changes (add/remove/duplicate level) so UI updates instantly.
     private val _structuralChange = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
