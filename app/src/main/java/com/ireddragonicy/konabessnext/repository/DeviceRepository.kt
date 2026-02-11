@@ -7,6 +7,7 @@ import com.ireddragonicy.konabessnext.core.processor.BootImageProcessor
 import com.ireddragonicy.konabessnext.model.ChipDefinition
 import com.ireddragonicy.konabessnext.model.Dtb
 import com.ireddragonicy.konabessnext.model.DtbType
+import com.ireddragonicy.konabessnext.model.LevelPresets
 import com.ireddragonicy.konabessnext.core.scanner.DtsScanner
 import java.io.InputStream
 import kotlinx.coroutines.Dispatchers
@@ -124,7 +125,7 @@ open class DeviceRepository @Inject constructor(
             voltTablePattern = pattern,
             strategyType = strategy,
             levelCount = 480,
-            levels = mapOf(),
+            levelPreset = LevelPresets.inferPreset(null, 480),
             binDescriptions = null,
             needsCaTargetOffset = false,
             models = listOf("Custom")
@@ -557,7 +558,7 @@ open class DeviceRepository @Inject constructor(
             voltTablePattern = null,
             strategyType = "",
             levelCount = 480,
-            levels = mapOf(),
+            levelPreset = LevelPresets.inferPreset(modelName, 480),
             binDescriptions = null,
             needsCaTargetOffset = false,
             models = listOf(displayModel)

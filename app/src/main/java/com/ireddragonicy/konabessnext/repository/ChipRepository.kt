@@ -44,9 +44,10 @@ open class ChipRepository @Inject constructor(
     override fun getLevelStringsForCurrentChip(): Array<String> {
         val c = _currentChip.value ?: return emptyArray()
         val size = c.levelCount
+        val resolved = c.resolvedLevels
         return Array(size) { i ->
             // Map keys in JSON are indices (0-based)
-            c.levels[i] ?: (i + 1).toString()
+            resolved[i] ?: (i + 1).toString()
         }
     }
 }

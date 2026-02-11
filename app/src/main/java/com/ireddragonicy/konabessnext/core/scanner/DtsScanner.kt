@@ -1,6 +1,7 @@
 package com.ireddragonicy.konabessnext.core.scanner
 
 import com.ireddragonicy.konabessnext.model.ChipDefinition
+import com.ireddragonicy.konabessnext.model.LevelPresets
 import com.ireddragonicy.konabessnext.model.dts.DtsNode
 import com.ireddragonicy.konabessnext.utils.DtsTreeHelper
 import java.io.File
@@ -236,7 +237,7 @@ object DtsScanner {
             voltTablePattern = result.voltageTablePattern,
             strategyType = result.recommendedStrategy,
             levelCount = 480,
-            levels = mapOf(),
+            levelPreset = LevelPresets.inferPreset(result.detectedModel, 480),
             binDescriptions = binDescriptions,
             models = listOf(result.detectedModel ?: "Custom")
         )

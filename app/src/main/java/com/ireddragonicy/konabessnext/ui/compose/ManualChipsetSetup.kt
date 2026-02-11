@@ -22,6 +22,7 @@ import com.ireddragonicy.konabessnext.R
 import com.ireddragonicy.konabessnext.core.scanner.DtsScanResult
 import com.ireddragonicy.konabessnext.core.scanner.VoltageType
 import com.ireddragonicy.konabessnext.model.ChipDefinition
+import com.ireddragonicy.konabessnext.model.LevelPresets
 import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -328,6 +329,8 @@ fun ManualChipsetSetupScreen(
                         strategyType = strategy,
                         levelCount = existingDefinition?.levelCount ?: 480,
                         levels = existingDefinition?.levels ?: mapOf(),
+                        levelPreset = existingDefinition?.levelPreset
+                            ?: LevelPresets.inferPreset(existingDefinition?.models?.firstOrNull(), existingDefinition?.levelCount ?: 480),
                         binDescriptions = existingDefinition?.binDescriptions,
                         needsCaTargetOffset = existingDefinition?.needsCaTargetOffset ?: false,
                         models = existingDefinition?.models ?: listOf("Custom")

@@ -482,7 +482,7 @@ class SharedGpuViewModel @Inject constructor(
             // Use Level's voltage level
             val chip = currentChip.value
             val levelName = if (chip != null) {
-                 val raw = chip.levels[vLevel - 1] ?: chip.levels[vLevel] ?: ""
+                 val raw = chip.resolvedLevels[vLevel - 1] ?: chip.resolvedLevels[vLevel] ?: ""
                  if (raw.contains(" - ")) raw.substringAfter(" - ") else raw
             } else {
                  ""

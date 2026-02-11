@@ -333,7 +333,7 @@ fun CurveEditorScreen(
                                         override fun getFormattedValue(value: Float): String {
                                             val volt = value.toInt()
                                             val chip = sharedViewModel.currentChip.value
-                                            val rawName = chip?.levels?.get(volt - 1) ?: chip?.levels?.get(volt)
+                                            val rawName = chip?.resolvedLevels?.get(volt - 1) ?: chip?.resolvedLevels?.get(volt)
                                             val name = if (rawName?.contains(" - ") == true) rawName.substringAfter(" - ") else rawName
                                             return if (!name.isNullOrEmpty()) "$volt\n$name" else "$volt"
                                         }
