@@ -5,8 +5,10 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.*
 import com.ireddragonicy.konabessnext.viewmodel.SharedGpuViewModel
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
+import kotlin.math.abs
 
 @Composable
 fun UnifiedDtsEditorScreen(sharedViewModel: SharedGpuViewModel) {
@@ -16,22 +18,53 @@ fun UnifiedDtsEditorScreen(sharedViewModel: SharedGpuViewModel) {
     @Suppress("DEPRECATION")
     val clipboardManager = LocalClipboardManager.current
     
-    // Persistent States
-    val textScrollIdx by sharedViewModel.textScrollIndex.collectAsState()
-    val textScrollOff by sharedViewModel.textScrollOffset.collectAsState()
+    // Read initial persisted scroll once; then sync back with throttling.
+    val initialTextScrollIdx = remember { sharedViewModel.textScrollIndex.value }
+    val initialTextScrollOff = remember { sharedViewModel.textScrollOffset.value }
     
     // Text Editor Scroll State (Persisted)
     val listState = rememberLazyListState(
-        initialFirstVisibleItemIndex = textScrollIdx,
-        initialFirstVisibleItemScrollOffset = textScrollOff
+        initialFirstVisibleItemIndex = initialTextScrollIdx,
+        initialFirstVisibleItemScrollOffset = initialTextScrollOff
     )
     
-    // Sync Text Scroll to VM
+    // Sync text scroll with throttling to avoid per-frame StateFlow writes.
     LaunchedEffect(listState) {
+        var lastCommittedIndex = initialTextScrollIdx
+        var lastCommittedOffset = initialTextScrollOff
         snapshotFlow { Pair(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset) }
+            .distinctUntilChanged()
             .collectLatest { (index, offset) ->
-                sharedViewModel.textScrollIndex.value = index
-                sharedViewModel.textScrollOffset.value = offset
+                val shouldPersist =
+                    index != lastCommittedIndex || abs(offset - lastCommittedOffset) >= 24
+                if (shouldPersist) {
+                    if (sharedViewModel.textScrollIndex.value != index) {
+                        sharedViewModel.textScrollIndex.value = index
+                    }
+                    if (sharedViewModel.textScrollOffset.value != offset) {
+                        sharedViewModel.textScrollOffset.value = offset
+                    }
+                    lastCommittedIndex = index
+                    lastCommittedOffset = offset
+                }
+            }
+    }
+    
+    // Ensure final exact position is persisted when scrolling stops.
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.isScrollInProgress }
+            .distinctUntilChanged()
+            .collectLatest { scrolling ->
+                if (!scrolling) {
+                    val index = listState.firstVisibleItemIndex
+                    val offset = listState.firstVisibleItemScrollOffset
+                    if (sharedViewModel.textScrollIndex.value != index) {
+                        sharedViewModel.textScrollIndex.value = index
+                    }
+                    if (sharedViewModel.textScrollOffset.value != offset) {
+                        sharedViewModel.textScrollOffset.value = offset
+                    }
+                }
             }
     }
     

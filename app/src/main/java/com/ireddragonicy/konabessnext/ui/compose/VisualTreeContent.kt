@@ -6,39 +6,74 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.ireddragonicy.konabessnext.model.dts.DtsNode
 import com.ireddragonicy.konabessnext.viewmodel.SharedGpuViewModel
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
+import kotlin.math.abs
 
 @Composable
 fun VisualTreeContent(sharedViewModel: SharedGpuViewModel) {
     // Use Cached Tree from VM to persist object state (isExpanded flags)
     val rootNode by sharedViewModel.parsedTree.collectAsState()
-    val searchState by sharedViewModel.searchState.collectAsState()
-    val dtsContent by sharedViewModel.dtsContent.collectAsState()
     @Suppress("DEPRECATION")
     val clipboardManager = LocalClipboardManager.current
     
-    // Persistent Scroll State from VM
-    val scrollIndex by sharedViewModel.treeScrollIndex.collectAsState()
-    val scrollOffset by sharedViewModel.treeScrollOffset.collectAsState()
+    // Tree view keeps local query to avoid triggering line-search pipeline.
+    var treeQuery by rememberSaveable { mutableStateOf(sharedViewModel.searchState.value.query) }
+    
+    // Read initial persisted scroll once; then sync back with throttling.
+    val initialScrollIndex = remember { sharedViewModel.treeScrollIndex.value }
+    val initialScrollOffset = remember { sharedViewModel.treeScrollOffset.value }
     
     // Initialize LazyListState with persistent values
     val listState = rememberLazyListState(
-        initialFirstVisibleItemIndex = scrollIndex,
-        initialFirstVisibleItemScrollOffset = scrollOffset
+        initialFirstVisibleItemIndex = initialScrollIndex,
+        initialFirstVisibleItemScrollOffset = initialScrollOffset
     )
     
-    // Sync Scroll Changes Back to VM
+    // Sync scroll changes with throttling to avoid per-frame StateFlow writes.
     LaunchedEffect(listState) {
+        var lastCommittedIndex = initialScrollIndex
+        var lastCommittedOffset = initialScrollOffset
         snapshotFlow { Pair(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset) }
+            .distinctUntilChanged()
             .collectLatest { (index, offset) ->
-                sharedViewModel.treeScrollIndex.value = index
-                sharedViewModel.treeScrollOffset.value = offset
+                val shouldPersist =
+                    index != lastCommittedIndex || abs(offset - lastCommittedOffset) >= 24
+                if (shouldPersist) {
+                    if (sharedViewModel.treeScrollIndex.value != index) {
+                        sharedViewModel.treeScrollIndex.value = index
+                    }
+                    if (sharedViewModel.treeScrollOffset.value != offset) {
+                        sharedViewModel.treeScrollOffset.value = offset
+                    }
+                    lastCommittedIndex = index
+                    lastCommittedOffset = offset
+                }
+            }
+    }
+
+    // Ensure final exact position is persisted when scrolling stops.
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.isScrollInProgress }
+            .distinctUntilChanged()
+            .collectLatest { scrolling ->
+                if (!scrolling) {
+                    val index = listState.firstVisibleItemIndex
+                    val offset = listState.firstVisibleItemScrollOffset
+                    if (sharedViewModel.treeScrollIndex.value != index) {
+                        sharedViewModel.treeScrollIndex.value = index
+                    }
+                    if (sharedViewModel.treeScrollOffset.value != offset) {
+                        sharedViewModel.treeScrollOffset.value = offset
+                    }
+                }
             }
     }
 
@@ -47,8 +82,8 @@ fun VisualTreeContent(sharedViewModel: SharedGpuViewModel) {
     var treeCurrentIndex by remember { mutableIntStateOf(-1) }
 
     // Reset tree search index when query changes
-    LaunchedEffect(searchState.query) {
-        treeCurrentIndex = if (searchState.query.isNotEmpty()) 0 else -1
+    LaunchedEffect(treeQuery) {
+        treeCurrentIndex = if (treeQuery.isNotEmpty()) 0 else -1
     }
 
     if (rootNode == null) {
@@ -58,10 +93,10 @@ fun VisualTreeContent(sharedViewModel: SharedGpuViewModel) {
     } else {
         Column {
              SearchAndToolsBar(
-                query = searchState.query,
+                query = treeQuery,
                 matchCount = treeMatchCount,
                 currentMatchIndex = treeCurrentIndex,
-                onQueryChange = { sharedViewModel.search(it) },
+                onQueryChange = { treeQuery = it },
                 onNext = {
                     if (treeMatchCount > 0) {
                         treeCurrentIndex = (treeCurrentIndex + 1) % treeMatchCount
@@ -72,13 +107,13 @@ fun VisualTreeContent(sharedViewModel: SharedGpuViewModel) {
                         treeCurrentIndex = if (treeCurrentIndex - 1 < 0) treeMatchCount - 1 else treeCurrentIndex - 1
                     }
                 },
-                onCopyAll = { clipboardManager.setText(AnnotatedString(dtsContent)) }
+                onCopyAll = { clipboardManager.setText(AnnotatedString(sharedViewModel.dtsContent.value)) }
             )
 
             DtsTreeScreen(
                 rootNode = rootNode!!,
                 listState = listState,
-                searchQuery = searchState.query,
+                searchQuery = treeQuery,
                 searchMatchIndex = treeCurrentIndex,
                 onNodeToggle = { path, expanded ->
                     sharedViewModel.toggleNodeExpansion(path, expanded)

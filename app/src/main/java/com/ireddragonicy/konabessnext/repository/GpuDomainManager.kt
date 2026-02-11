@@ -105,7 +105,7 @@ class GpuDomainManager @Inject constructor(
         return bins
     }
 
-    private fun findAllBinNodes(root: DtsNode): List<DtsNode> {
+    fun findAllBinNodes(root: DtsNode): List<DtsNode> {
         val results = ArrayList<DtsNode>()
         fun recurse(node: DtsNode) {
             val compatible = node.getProperty("compatible")?.originalValue
@@ -220,12 +220,21 @@ class GpuDomainManager @Inject constructor(
      * Recursively searches for a DtsNode whose name matches or whose
      * "compatible" property contains the given pattern.
      */
-    private fun findNodeByNameOrCompatible(root: DtsNode, pattern: String): DtsNode? {
+    fun findNodeByNameOrCompatible(root: DtsNode, pattern: String): DtsNode? {
         if (root.name == pattern ||
             root.getProperty("compatible")?.originalValue?.contains(pattern) == true
         ) return root
         for (child in root.children) {
             val found = findNodeByNameOrCompatible(child, pattern)
+            if (found != null) return found
+        }
+        return null
+    }
+
+    fun findNodeContainingProperty(root: DtsNode, propertyName: String): DtsNode? {
+        if (root.getProperty(propertyName) != null) return root
+        for (child in root.children) {
+            val found = findNodeContainingProperty(child, propertyName)
             if (found != null) return found
         }
         return null

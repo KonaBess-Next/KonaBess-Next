@@ -10,6 +10,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -41,6 +42,13 @@ import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isAltPressed
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
@@ -66,6 +74,95 @@ private val BreadcrumbBold = androidx.compose.ui.text.TextStyle(
 private val BreadcrumbNormal = androidx.compose.ui.text.TextStyle(
     fontFamily = FontFamily.Monospace
 )
+
+private data class TreeSelectionRequest(val start: Int, val end: Int)
+
+private const val TREE_TRIPLE_TAP_WINDOW_MS = 350L
+private const val TREE_EXPAND_STAGE_WORD = 0
+private const val TREE_EXPAND_STAGE_TOKEN = 1
+private const val TREE_EXPAND_STAGE_LINE = 2
+
+private fun treeCaretSelection(offset: Int): TreeSelectionRequest = TreeSelectionRequest(offset, offset)
+
+private fun treeLineSelection(text: String): TreeSelectionRequest = TreeSelectionRequest(0, text.length)
+
+private fun isTreeWordChar(ch: Char): Boolean {
+    return ch.isLetterOrDigit() || ch == '_'
+}
+
+private fun isTreeTokenChar(ch: Char): Boolean {
+    return !ch.isWhitespace()
+}
+
+private fun treeSelectionAround(
+    text: String,
+    tapOffset: Int,
+    predicate: (Char) -> Boolean
+): TreeSelectionRequest {
+    if (text.isEmpty()) return TreeSelectionRequest(0, 0)
+    val cursor = tapOffset.coerceIn(0, text.length)
+    val anchor = when {
+        cursor < text.length && predicate(text[cursor]) -> cursor
+        cursor > 0 && predicate(text[cursor - 1]) -> cursor - 1
+        else -> -1
+    }
+    if (anchor < 0) return treeCaretSelection(cursor)
+
+    var start = anchor
+    var end = anchor + 1
+    while (start > 0 && predicate(text[start - 1])) start--
+    while (end < text.length && predicate(text[end])) end++
+    return TreeSelectionRequest(start, end)
+}
+
+private fun treeWordSelection(text: String, tapOffset: Int): TreeSelectionRequest {
+    return treeSelectionAround(text, tapOffset, ::isTreeWordChar)
+}
+
+private fun treeTokenSelection(text: String, tapOffset: Int): TreeSelectionRequest {
+    return treeSelectionAround(text, tapOffset, ::isTreeTokenChar)
+}
+
+private fun nextTreeExpandedSelection(
+    text: String,
+    anchor: Int,
+    previousStage: Int
+): Pair<TreeSelectionRequest, Int> {
+    val stages = listOf(
+        treeWordSelection(text, anchor) to TREE_EXPAND_STAGE_WORD,
+        treeTokenSelection(text, anchor) to TREE_EXPAND_STAGE_TOKEN,
+        treeLineSelection(text) to TREE_EXPAND_STAGE_LINE
+    )
+
+    val previousSelection = when (previousStage) {
+        TREE_EXPAND_STAGE_WORD -> stages[0].first
+        TREE_EXPAND_STAGE_TOKEN -> stages[1].first
+        TREE_EXPAND_STAGE_LINE -> stages[2].first
+        else -> null
+    }
+    var idx = when (previousStage) {
+        TREE_EXPAND_STAGE_WORD -> 1
+        TREE_EXPAND_STAGE_TOKEN -> 2
+        TREE_EXPAND_STAGE_LINE -> 2
+        else -> 0
+    }
+
+    while (idx < stages.size) {
+        val candidate = stages[idx]
+        if (previousSelection == null || candidate.first != previousSelection || idx == stages.lastIndex) {
+            return candidate
+        }
+        idx++
+    }
+    return stages.last()
+}
+
+private fun isTreeExpandSelectionShortcut(event: androidx.compose.ui.input.key.KeyEvent): Boolean {
+    return event.type == KeyEventType.KeyDown &&
+        event.isShiftPressed &&
+        event.isAltPressed &&
+        event.key == Key.DirectionRight
+}
 
 @Composable
 fun DtsTreeScreen(
@@ -174,6 +271,7 @@ fun DtsTreeScreen(
         propValueStyle = MaterialTheme.typography.bodyMedium.merge(MonoRegular).copy(color = onSurfaceColor),
         badgeStyle = MaterialTheme.typography.labelSmall,
     )
+    val isListScrolling by remember(listState) { derivedStateOf { listState.isScrollInProgress } }
 
     Column(modifier = modifier.fillMaxSize()) {
         // ─── Breadcrumb: scoped composable — reads scroll state internally ───
@@ -201,6 +299,7 @@ fun DtsTreeScreen(
                     item = item,
                     isSearchMatch = item.id in matchIdSet,
                     isActiveMatch = item.id == activeMatchId,
+                    isListScrolling = isListScrolling,
                     style = style,
                     onToggleExpand = stableOnToggle,
                     onPropertyChange = stableOnPropertyChange,
@@ -468,6 +567,7 @@ private fun TreeRow(
     item: TreeItem,
     isSearchMatch: Boolean,
     isActiveMatch: Boolean,
+    isListScrolling: Boolean,
     style: TreeRowStyle,
     onToggleExpand: (DtsNode) -> Unit,
     onPropertyChange: (DtsProperty, String) -> Unit,
@@ -478,16 +578,19 @@ private fun TreeRow(
         isSearchMatch -> style.passiveHighlight
         else -> Color.Transparent
     }
+    val toggleModifier = if (item.type == ItemType.NODE) {
+        item.node?.let { node ->
+            Modifier.clickable { onToggleExpand(node) }
+        } ?: Modifier
+    } else {
+        Modifier
+    }
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .background(rowBackground)
-            .then(
-                if (item.type == ItemType.NODE && item.node != null)
-                    Modifier.clickable { onToggleExpand(item.node!!) }
-                else Modifier
-            )
+            .then(toggleModifier)
     ) {
         Row(
             modifier = Modifier
@@ -498,7 +601,7 @@ private fun TreeRow(
             Spacer(modifier = Modifier.width(item.indent))
 
             if (item.type == ItemType.NODE) {
-                NodeRow(item = item, style = style)
+                NodeRow(item = item, style = style, isListScrolling = isListScrolling)
             } else {
                 PropertyRow(
                     item = item,
@@ -520,13 +623,16 @@ private fun TreeRow(
 @Composable
 private fun RowScope.NodeRow(
     item: TreeItem,
-    style: TreeRowStyle
+    style: TreeRowStyle,
+    isListScrolling: Boolean
 ) {
-    val arrowRotation by animateFloatAsState(
-        targetValue = if (item.isExpanded) 0f else -90f,
+    val targetRotation = if (item.isExpanded) 0f else -90f
+    val animatedRotation by animateFloatAsState(
+        targetValue = targetRotation,
         animationSpec = tween(durationMillis = 150),
         label = "arrow"
     )
+    val arrowRotation = if (isListScrolling) targetRotation else animatedRotation
 
     Icon(
         imageVector = Icons.Rounded.ExpandMore,
@@ -578,7 +684,8 @@ private fun RowScope.PropertyRow(
 ) {
     val prop = item.property!!
     var isEditing by remember { mutableStateOf(false) }
-    var tapCursorOffset by remember { mutableIntStateOf(-1) }
+    var pendingSelection by remember { mutableStateOf<TreeSelectionRequest?>(null) }
+    var lastDoubleTapTimestamp by remember { mutableLongStateOf(0L) }
 
     Icon(
         imageVector = item.icon,
@@ -598,27 +705,55 @@ private fun RowScope.PropertyRow(
     if (isEditing) {
         // Heavy editing infra — only composed when user taps to edit
         val initialValue = remember { prop.getDisplayValue() }
-        // Place cursor at tapped position, or end of text if unknown
-        val initialCursor = remember {
-            val pos = tapCursorOffset
-            if (pos in 0..initialValue.length) pos else initialValue.length
+        val initialSelection = remember(initialValue, pendingSelection) {
+            val selection = pendingSelection ?: TreeSelectionRequest(initialValue.length, initialValue.length)
+            val start = selection.start.coerceIn(0, initialValue.length)
+            val end = selection.end.coerceIn(0, initialValue.length)
+            TextRange(start, end)
         }
         var editValue by remember {
             mutableStateOf(TextFieldValue(
                 text = initialValue,
-                selection = TextRange(initialCursor)
+                selection = initialSelection
             ))
         }
+        var expandAnchor by remember { mutableIntStateOf(initialSelection.start) }
         val focusRequester = remember { FocusRequester() }
         val focusManager = LocalFocusManager.current
         // Guard: only exit edit mode after focus has been gained at least once.
         // Prevents onFocusChanged initial-state callback from killing edit mode.
         var hasFocused by remember { mutableStateOf(false) }
 
+        fun applyNextExpandSelection() {
+            val textNow = editValue.text
+            val anchor = when {
+                expandAnchor in 0..textNow.length -> expandAnchor
+                editValue.selection.start in 0..textNow.length -> editValue.selection.start
+                else -> textNow.length
+            }
+            val current = TreeSelectionRequest(
+                editValue.selection.start.coerceIn(0, textNow.length),
+                editValue.selection.end.coerceIn(0, textNow.length)
+            )
+            val word = treeWordSelection(textNow, anchor)
+            val token = treeTokenSelection(textNow, anchor)
+            val line = treeLineSelection(textNow)
+            val previousStage = when (current) {
+                line -> TREE_EXPAND_STAGE_LINE
+                token -> TREE_EXPAND_STAGE_TOKEN
+                word -> TREE_EXPAND_STAGE_WORD
+                else -> -1
+            }
+            val (nextSelection, _) = nextTreeExpandedSelection(textNow, anchor, previousStage)
+            editValue = editValue.copy(selection = TextRange(nextSelection.start, nextSelection.end))
+            expandAnchor = anchor
+        }
+
         BasicTextField(
             value = editValue,
             onValueChange = {
                 editValue = it
+                expandAnchor = it.selection.start.coerceIn(0, it.text.length)
                 onPropertyChange(prop, it.text)
             },
             textStyle = style.propValueStyle,
@@ -626,11 +761,20 @@ private fun RowScope.PropertyRow(
             modifier = Modifier
                 .weight(1f)
                 .focusRequester(focusRequester)
+                .onPreviewKeyEvent { event ->
+                    if (isTreeExpandSelectionShortcut(event)) {
+                        applyNextExpandSelection()
+                        true
+                    } else {
+                        false
+                    }
+                }
                 .onFocusChanged { state ->
                     if (state.isFocused) {
                         hasFocused = true
                     } else if (hasFocused) {
                         isEditing = false
+                        pendingSelection = null
                         if (editValue.text != initialValue) {
                             onEditComplete()
                         }
@@ -647,7 +791,6 @@ private fun RowScope.PropertyRow(
     } else {
         // Lightweight read-only display — zero editing overhead
         val displayValue = remember(prop) { prop.getDisplayValue() }
-        // Capture text layout to convert tap position → character offset
         var textLayoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
         Text(
             text = displayValue.ifEmpty { "(empty)" },
@@ -661,26 +804,42 @@ private fun RowScope.PropertyRow(
             modifier = Modifier
                 .weight(1f)
                 .defaultMinSize(minHeight = 24.dp)
-                .pointerInput(Unit) {
-                    awaitPointerEventScope {
-                        while (true) {
-                            val event = awaitPointerEvent()
-                            val press = event.changes.firstOrNull()
-                            if (press != null && press.pressed) {
-                                press.consume()
-                                // Convert tap X to character offset
-                                val layout = textLayoutResult
-                                tapCursorOffset = if (layout != null) {
-                                    try {
-                                        layout.getOffsetForPosition(
-                                            Offset(press.position.x, press.position.y)
-                                        )
-                                    } catch (_: Exception) { -1 }
-                                } else -1
-                                isEditing = true
+                .pointerInput(displayValue) {
+                    detectTapGestures(
+                        onTap = { tapPosition ->
+                            val cursorOffset = textLayoutResult?.let { layout ->
+                                try {
+                                    layout.getOffsetForPosition(Offset(tapPosition.x, tapPosition.y))
+                                        .coerceIn(0, displayValue.length)
+                                } catch (_: Exception) {
+                                    displayValue.length
+                                }
+                            } ?: displayValue.length
+                            val now = android.os.SystemClock.uptimeMillis()
+                            val shouldSelectLine =
+                                lastDoubleTapTimestamp != 0L && (now - lastDoubleTapTimestamp) <= TREE_TRIPLE_TAP_WINDOW_MS
+                            pendingSelection = if (shouldSelectLine) {
+                                lastDoubleTapTimestamp = 0L
+                                treeLineSelection(displayValue)
+                            } else {
+                                treeCaretSelection(cursorOffset)
                             }
+                            isEditing = true
+                        },
+                        onDoubleTap = { tapPosition ->
+                            val cursorOffset = textLayoutResult?.let { layout ->
+                                try {
+                                    layout.getOffsetForPosition(Offset(tapPosition.x, tapPosition.y))
+                                        .coerceIn(0, displayValue.length)
+                                } catch (_: Exception) {
+                                    displayValue.length
+                                }
+                            } ?: displayValue.length
+                            pendingSelection = treeWordSelection(displayValue, cursorOffset)
+                            lastDoubleTapTimestamp = android.os.SystemClock.uptimeMillis()
+                            isEditing = true
                         }
-                    }
+                    )
                 }
         )
     }

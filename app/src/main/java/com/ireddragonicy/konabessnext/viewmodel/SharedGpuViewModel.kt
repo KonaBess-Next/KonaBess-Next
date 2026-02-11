@@ -73,8 +73,8 @@ class SharedGpuViewModel @Inject constructor(
 
     // --- State Proxies from Repository (SSOT) ---
     
-    // PERF: flowOn(Default) prevents 600KB string construction from blocking main thread
-    val dtsContent = repository.dtsLines.map { it.joinToString("\n") }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.Lazily, "")
+    val dtsContent = repository.dtsContent
+        .stateIn(viewModelScope, SharingStarted.Lazily, "")
     val bins: StateFlow<List<Bin>> = repository.bins
     val opps: StateFlow<List<Opp>> = repository.opps
 
@@ -119,7 +119,10 @@ class SharedGpuViewModel @Inject constructor(
             // EditorSession.visibleRange ensures only visible lines are prioritized
             combine(repository.dtsLines, _searchState) { lines, search ->
                 lines to search.query
-            }.debounce(300).collect { (lines, query) ->
+            }
+                .debounce(300)
+                .distinctUntilChanged()
+                .collect { (lines, query) ->
                 DtsEditorDebug.logEditorSessionUpdate(lines.size, query)
                 com.ireddragonicy.konabessnext.editor.EditorSession.update(lines, query, viewModelScope)
             }
@@ -533,7 +536,7 @@ class SharedGpuViewModel @Inject constructor(
     fun getLevelValues() = chipRepository.getLevelsForCurrentChip()
     
     // --- Level Manipulation (add/remove/duplicate) ---
-    // These delegate to GpuRepository's text-level operations which manipulate DTS lines directly.
+    // These delegate to GpuRepository's AST-level operations and sync back safely.
     
     fun addFrequencyWrapper(binIndex: Int, toTop: Boolean) {
         repository.addLevel(binIndex, toTop)

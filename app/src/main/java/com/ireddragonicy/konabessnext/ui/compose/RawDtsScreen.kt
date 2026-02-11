@@ -7,18 +7,20 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import com.ireddragonicy.konabessnext.viewmodel.SharedGpuViewModel
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlin.math.abs
 
 @Composable
 fun RawDtsScreen(viewModel: SharedGpuViewModel) {
     val dtsContent by viewModel.dtsContent.collectAsState()
     val searchState by viewModel.searchState.collectAsState()
     
-    // Persistent States
-    val textScrollIdx by viewModel.textScrollIndex.collectAsState()
-    val textScrollOff by viewModel.textScrollOffset.collectAsState()
-    
-    val treeScrollIdx by viewModel.treeScrollIndex.collectAsState()
-    val treeScrollOff by viewModel.treeScrollOffset.collectAsState()
+    // Read initial persisted positions once; then sync back with throttling.
+    val initialTextScrollIdx = remember { viewModel.textScrollIndex.value }
+    val initialTextScrollOff = remember { viewModel.textScrollOffset.value }
+    val initialTreeScrollIdx = remember { viewModel.treeScrollIndex.value }
+    val initialTreeScrollOff = remember { viewModel.treeScrollOffset.value }
+
     val parsedTree by viewModel.parsedTree.collectAsState()
     
     // View Mode (Local switch for standalone activity)
@@ -26,31 +28,91 @@ fun RawDtsScreen(viewModel: SharedGpuViewModel) {
     
     // Text Editor Scroll State (Persisted)
     val textListState = rememberLazyListState(
-        initialFirstVisibleItemIndex = textScrollIdx,
-        initialFirstVisibleItemScrollOffset = textScrollOff
+        initialFirstVisibleItemIndex = initialTextScrollIdx,
+        initialFirstVisibleItemScrollOffset = initialTextScrollOff
     )
     
-    // Sync Text Scroll to VM
+    // Sync text scroll with throttling to avoid per-frame StateFlow writes.
     LaunchedEffect(textListState) {
+        var lastCommittedIndex = initialTextScrollIdx
+        var lastCommittedOffset = initialTextScrollOff
         snapshotFlow { Pair(textListState.firstVisibleItemIndex, textListState.firstVisibleItemScrollOffset) }
+            .distinctUntilChanged()
             .collectLatest { (index, offset) ->
-                viewModel.textScrollIndex.value = index
-                viewModel.textScrollOffset.value = offset
+                val shouldPersist =
+                    index != lastCommittedIndex || abs(offset - lastCommittedOffset) >= 24
+                if (shouldPersist) {
+                    if (viewModel.textScrollIndex.value != index) {
+                        viewModel.textScrollIndex.value = index
+                    }
+                    if (viewModel.textScrollOffset.value != offset) {
+                        viewModel.textScrollOffset.value = offset
+                    }
+                    lastCommittedIndex = index
+                    lastCommittedOffset = offset
+                }
+            }
+    }
+    
+    LaunchedEffect(textListState) {
+        snapshotFlow { textListState.isScrollInProgress }
+            .distinctUntilChanged()
+            .collectLatest { scrolling ->
+                if (!scrolling) {
+                    val index = textListState.firstVisibleItemIndex
+                    val offset = textListState.firstVisibleItemScrollOffset
+                    if (viewModel.textScrollIndex.value != index) {
+                        viewModel.textScrollIndex.value = index
+                    }
+                    if (viewModel.textScrollOffset.value != offset) {
+                        viewModel.textScrollOffset.value = offset
+                    }
+                }
             }
     }
     
     // Tree Editor Scroll State (Persisted)
     val treeListState = rememberLazyListState(
-        initialFirstVisibleItemIndex = treeScrollIdx,
-        initialFirstVisibleItemScrollOffset = treeScrollOff
+        initialFirstVisibleItemIndex = initialTreeScrollIdx,
+        initialFirstVisibleItemScrollOffset = initialTreeScrollOff
     )
     
-    // Sync Tree Scroll to VM
+    // Sync tree scroll with throttling to avoid per-frame StateFlow writes.
     LaunchedEffect(treeListState) {
+        var lastCommittedIndex = initialTreeScrollIdx
+        var lastCommittedOffset = initialTreeScrollOff
         snapshotFlow { Pair(treeListState.firstVisibleItemIndex, treeListState.firstVisibleItemScrollOffset) }
+            .distinctUntilChanged()
             .collectLatest { (index, offset) ->
-                viewModel.treeScrollIndex.value = index
-                viewModel.treeScrollOffset.value = offset
+                val shouldPersist =
+                    index != lastCommittedIndex || abs(offset - lastCommittedOffset) >= 24
+                if (shouldPersist) {
+                    if (viewModel.treeScrollIndex.value != index) {
+                        viewModel.treeScrollIndex.value = index
+                    }
+                    if (viewModel.treeScrollOffset.value != offset) {
+                        viewModel.treeScrollOffset.value = offset
+                    }
+                    lastCommittedIndex = index
+                    lastCommittedOffset = offset
+                }
+            }
+    }
+    
+    LaunchedEffect(treeListState) {
+        snapshotFlow { treeListState.isScrollInProgress }
+            .distinctUntilChanged()
+            .collectLatest { scrolling ->
+                if (!scrolling) {
+                    val index = treeListState.firstVisibleItemIndex
+                    val offset = treeListState.firstVisibleItemScrollOffset
+                    if (viewModel.treeScrollIndex.value != index) {
+                        viewModel.treeScrollIndex.value = index
+                    }
+                    if (viewModel.treeScrollOffset.value != offset) {
+                        viewModel.treeScrollOffset.value = offset
+                    }
+                }
             }
     }
 

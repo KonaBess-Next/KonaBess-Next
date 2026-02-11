@@ -4,11 +4,11 @@ package com.ireddragonicy.konabessnext.repository
 import com.ireddragonicy.konabessnext.model.Bin
 import com.ireddragonicy.konabessnext.model.Opp
 import com.ireddragonicy.konabessnext.model.dts.DtsNode
+import com.ireddragonicy.konabessnext.model.dts.DtsProperty
 import com.ireddragonicy.konabessnext.utils.DtsTreeHelper
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.FlowPreview
-import java.util.regex.Pattern
 import javax.inject.Inject
 import javax.inject.Singleton
 import com.ireddragonicy.konabessnext.utils.DtsEditorDebug
@@ -46,6 +46,7 @@ open class GpuRepository @Inject constructor(
         _dtsLines.debounce(1000),
         _structuralChange.map { _dtsLines.value }
     )
+        .distinctUntilChanged()
         .map { lines ->
             DtsEditorDebug.logFlowTriggered("bins", lines.size)
             gpuDomainManager.parseBins(lines)
@@ -63,6 +64,7 @@ open class GpuRepository @Inject constructor(
         _dtsLines.debounce(1000),
         _structuralChange.map { _dtsLines.value }
     )
+        .distinctUntilChanged()
         .map { lines ->
             DtsEditorDebug.logFlowTriggered("opps", lines.size)
             gpuDomainManager.parseOpps(lines)
@@ -119,7 +121,12 @@ open class GpuRepository @Inject constructor(
         }
     }
 
-    fun updateContent(newLines: List<String>, description: String = "Edit", addToHistory: Boolean = true) {
+    fun updateContent(
+        newLines: List<String>,
+        description: String = "Edit",
+        addToHistory: Boolean = true,
+        reparseTree: Boolean = true
+    ) {
         if (newLines == _dtsLines.value) {
             DtsEditorDebug.logUpdateContentSkipped("newLines == oldLines")
             return
@@ -134,6 +141,12 @@ open class GpuRepository @Inject constructor(
         
         _dtsLines.value = newLines
         _isDirty.value = (newLines.hashCode() != initialContentHash)
+
+        if (!reparseTree) {
+            treeParseJob?.cancel()
+            treeParseJob = null
+            return
+        }
         
         // FIX: Cancel previous tree parse job before starting new one
         // Previously: CoroutineScope(Dispatchers.Default).launch { ... } ← LEAKED!
@@ -176,7 +189,7 @@ open class GpuRepository @Inject constructor(
         val binNode = gpuDomainManager.findBinNode(root, binIndex) ?: return
         val levelNode = gpuDomainManager.findLevelNode(binNode, levelIndex) ?: return
 
-        levelNode.setProperty(paramKey, newValue)
+        setPropertyPreservingFormat(levelNode, paramKey, newValue)
 
         val desc = historyDesc ?: "Update $paramKey to $newValue (Bin $binIndex, Lvl $levelIndex)"
         commitTreeChanges(desc)
@@ -255,7 +268,8 @@ open class GpuRepository @Inject constructor(
         val root = _parsedTree.value ?: return
         // NOTE: DtsNode currently does not preserve comments; AST round-trip favors safety/validity.
         val newLines = DtsTreeHelper.generate(root).split("\n")
-        updateContent(newLines, description)
+        if (newLines == _dtsLines.value) return
+        updateContent(newLines, description, reparseTree = false)
         _structuralChange.tryEmit(Unit)
     }
 
@@ -351,7 +365,7 @@ open class GpuRepository @Inject constructor(
             if (binNode != null) {
                 val levelNode = gpuDomainManager.findLevelNode(binNode, update.levelIndex)
                 if (levelNode != null) {
-                    levelNode.setProperty(update.paramKey, update.newValue)
+                    setPropertyPreservingFormat(levelNode, update.paramKey, update.newValue)
                     anyChanged = true
                 }
             }
@@ -367,12 +381,8 @@ open class GpuRepository @Inject constructor(
      * Called after user finishes editing a property in the tree view.
      */
     fun syncTreeToText(description: String = "Tree Edit") {
-        val root = ensureParsedTree() ?: return
-        val newText = DtsTreeHelper.generate(root)
-        val newLines = newText.split("\n")
-        if (newLines != _dtsLines.value) {
-            updateContent(newLines, description)
-        }
+        if (ensureParsedTree() == null) return
+        commitTreeChanges(description)
     }
 
     fun applySnapshot(content: String) {
@@ -380,104 +390,51 @@ open class GpuRepository @Inject constructor(
     }
 
     fun updateOpps(newOpps: List<Opp>) {
-        val patterns = chipRepository.currentChip.value?.voltTablePattern ?: return
-        val newBlock = gpuDomainManager.generateOppTableBlock(newOpps)
-        
-        val currentLines = _dtsLines.value
-        val startIdx = currentLines.indexOfFirst { it.trim().contains(patterns) && it.trim().endsWith("{") }
-        if (startIdx == -1) return
-        
-        var braceCount = 0
-        var endIdx = -1
-        for (i in startIdx until currentLines.size) {
-             if (currentLines[i].contains("{")) braceCount++
-             if (currentLines[i].contains("}")) braceCount--
-             if (braceCount == 0) {
-                 endIdx = i
-                 break
-             }
-        }
-        
-        if (endIdx != -1) {
-            val validLines = ArrayList(currentLines)
-            val removalCount = endIdx - startIdx + 1
-            for (k in 0 until removalCount) validLines.removeAt(startIdx)
-            val newLines = newBlock.split("\n")
-            validLines.addAll(startIdx, newLines)
-            updateContent(validLines, "Updated OPP Table")
-        }
+        val root = ensureParsedTree() ?: return
+        val pattern = chipRepository.currentChip.value?.voltTablePattern ?: return
+        val tableNode = gpuDomainManager.findNodeByNameOrCompatible(root, pattern) ?: return
+        val oppNodes = newOpps.map(::buildOppNode)
+        replaceOppChildren(tableNode, oppNodes)
+        commitTreeChanges("Updated OPP Table")
     }
     
     fun importTable(lines: List<String>) {
-        val currentLines = _dtsLines.value
-        val validLines = ArrayList(currentLines)
+        val root = ensureParsedTree() ?: return
+        val importedTree = parseExternalLinesToTree(lines) ?: return
+        val importedBins = gpuDomainManager.findAllBinNodes(importedTree).map { it.deepCopy() }
+        if (importedBins.isEmpty()) return
 
-        // Find ALL qcom,gpu-pwrlevels blocks (there can be multiple bins)
-        val blocksToRemove = ArrayList<IntRange>()
-        var i = 0
-        while (i < validLines.size) {
-            val trimmed = validLines[i].trim()
-            if (trimmed.startsWith("qcom,gpu-pwrlevels") && trimmed.contains("{")) {
-                val blockStart = i
-                var braceCount = 0
-                var blockEnd = -1
-                for (j in i until validLines.size) {
-                    if (validLines[j].contains("{")) braceCount++
-                    if (validLines[j].contains("}")) braceCount--
-                    if (braceCount == 0) {
-                        blockEnd = j
-                        break
-                    }
-                }
-                if (blockEnd != -1) {
-                    blocksToRemove.add(blockStart..blockEnd)
-                    i = blockEnd + 1
-                } else {
-                    i++
-                }
-            } else {
-                i++
-            }
+        val existingBins = collectGpuBinNodesWithParents(root)
+        if (existingBins.isEmpty()) return
+
+        val insertParent = existingBins.first().first
+        val insertIndex = existingBins
+            .filter { (parent, _) -> parent === insertParent }
+            .mapNotNull { (parent, node) -> parent.children.indexOf(node).takeIf { it >= 0 } }
+            .minOrNull() ?: insertParent.children.size
+
+        existingBins.forEach { (parent, node) ->
+            parent.children.remove(node)
+            node.parent = null
         }
 
-        if (blocksToRemove.isNotEmpty()) {
-            val insertIdx = blocksToRemove.first().first
-
-            // Remove blocks from bottom to top to preserve indices
-            for (range in blocksToRemove.reversed()) {
-                for (k in range.last downTo range.first) {
-                    validLines.removeAt(k)
-                }
-            }
-
-            validLines.addAll(insertIdx, lines)
-            updateContent(validLines, "Imported Frequency Table")
+        importedBins.forEachIndexed { index, binNode ->
+            insertParent.children.add(insertIndex + index, binNode)
+            binNode.parent = insertParent
         }
+
+        commitTreeChanges("Imported Frequency Table")
     }
 
     fun importVoltTable(lines: List<String>) {
-        val patterns = chipRepository.currentChip.value?.voltTablePattern ?: return
-        val currentLines = _dtsLines.value
-        val startIdx = currentLines.indexOfFirst { it.trim().contains(patterns) && it.trim().endsWith("{") }
-        if (startIdx != -1) {
-            var braceCount = 0
-            var endIdx = -1
-            for (i in startIdx until currentLines.size) {
-                 if (currentLines[i].contains("{")) braceCount++
-                 if (currentLines[i].contains("}")) braceCount--
-                 if (braceCount == 0) {
-                     endIdx = i
-                     break
-                 }
-            }
-            if (endIdx != -1) {
-                val validLines = ArrayList(currentLines)
-                val removalCount = endIdx - startIdx + 1
-                for (k in 0 until removalCount) validLines.removeAt(startIdx)
-                validLines.addAll(startIdx, lines)
-                updateContent(validLines, "Imported Voltage Table")
-            }
-        }
+        val root = ensureParsedTree() ?: return
+        val pattern = chipRepository.currentChip.value?.voltTablePattern ?: return
+        val tableNode = gpuDomainManager.findNodeByNameOrCompatible(root, pattern) ?: return
+        val importedOppNodes = extractImportedOppNodes(lines, pattern)
+        if (importedOppNodes.isEmpty()) return
+
+        replaceOppChildren(tableNode, importedOppNodes)
+        commitTreeChanges("Imported Voltage Table")
     }
 
     fun undo() {
@@ -499,22 +456,17 @@ open class GpuRepository @Inject constructor(
     }
 
     fun getGpuModelName(): String {
-        val lines = _dtsLines.value
-        val modelPattern = Pattern.compile("""qcom,gpu-model\s*=\s*"([^"]+)";""")
-        for (line in lines) {
-            val matcher = modelPattern.matcher(line.trim())
-            if (matcher.find()) return matcher.group(1) ?: ""
+        val root = ensureParsedTree() ?: return ""
+        val modelNode = gpuDomainManager.findNodeContainingProperty(root, "qcom,gpu-model")
+        val model = modelNode?.getProperty("qcom,gpu-model")?.originalValue?.trim()
+        if (!model.isNullOrEmpty()) {
+            return model.removeSurrounding("\"")
         }
-        val chipidPattern = Pattern.compile("""qcom,chipid\s*=\s*<(0x[0-9a-fA-F]+)>;""")
-        for (line in lines) {
-            val matcher = chipidPattern.matcher(line.trim())
-            if (matcher.find()) {
-                val chipidHex = matcher.group(1) ?: ""
-                val chipid = chipidHex.removePrefix("0x").toLongOrNull(16) ?: 0L
-                return mapChipIdToGpuName(chipid)
-            }
-        }
-        return ""
+
+        val chipIdNode = gpuDomainManager.findNodeContainingProperty(root, "qcom,chipid")
+        val chipIdRaw = chipIdNode?.getProperty("qcom,chipid")?.originalValue ?: return ""
+        val chipId = parseSingleCellLong(chipIdRaw) ?: return ""
+        return mapChipIdToGpuName(chipId)
     }
     
     private fun mapChipIdToGpuName(chipid: Long): String {
@@ -534,21 +486,153 @@ open class GpuRepository @Inject constructor(
     }
 
     fun updateGpuModelName(newName: String) {
-        val currentLines = ArrayList(_dtsLines.value)
-        val pattern = Pattern.compile("""(qcom,gpu-model\s*=\s*")([^"]+)(";.*)""")
-        var found = false
-        for (i in currentLines.indices) {
-            val line = currentLines[i]
-            val matcher = pattern.matcher(line)
-            if (matcher.find()) {
-                val newLine = line.replaceFirst(Regex(""""[^"]+""""), "\"$newName\"")
-                currentLines[i] = newLine
-                found = true
-                break
+        val root = ensureParsedTree() ?: return
+        val modelNode = gpuDomainManager.findNodeContainingProperty(root, "qcom,gpu-model") ?: return
+        modelNode.setProperty("qcom,gpu-model", "\"$newName\"")
+        commitTreeChanges("Renamed GPU to $newName")
+    }
+
+    private fun buildOppNode(opp: Opp): DtsNode {
+        val oppNode = DtsNode("opp-${opp.frequency}")
+        oppNode.addProperty(DtsProperty("opp-hz", "/bits/ 64 <${opp.frequency}>"))
+        oppNode.addProperty(DtsProperty("opp-microvolt", "<${opp.volt}>"))
+        return oppNode
+    }
+
+    private fun replaceOppChildren(tableNode: DtsNode, newOppNodes: List<DtsNode>) {
+        val preservedChildren = tableNode.children.filterNot(::isOppNode)
+        tableNode.children.clear()
+        preservedChildren.forEach(tableNode::addChild)
+        newOppNodes.forEach(tableNode::addChild)
+    }
+
+    private fun isOppNode(node: DtsNode): Boolean {
+        return node.name.startsWith("opp-") || node.getProperty("opp-hz") != null
+    }
+
+    private fun extractImportedOppNodes(lines: List<String>, tablePattern: String): List<DtsNode> {
+        val importedTree = parseExternalLinesToTree(lines) ?: return emptyList()
+        val sourceOppNodes = gpuDomainManager.findNodeByNameOrCompatible(importedTree, tablePattern)
+            ?.children
+            ?.filter(::isOppNode)
+            .orEmpty()
+            .ifEmpty { collectOppNodes(importedTree) }
+        return sourceOppNodes.map { it.deepCopy() }
+    }
+
+    private fun collectOppNodes(root: DtsNode): List<DtsNode> {
+        val results = ArrayList<DtsNode>()
+        fun recurse(node: DtsNode) {
+            if (isOppNode(node)) {
+                results.add(node)
+            }
+            node.children.forEach(::recurse)
+        }
+        recurse(root)
+        return results
+    }
+
+    private fun collectGpuBinNodesWithParents(root: DtsNode): List<Pair<DtsNode, DtsNode>> {
+        val results = ArrayList<Pair<DtsNode, DtsNode>>()
+        fun recurse(parent: DtsNode, node: DtsNode) {
+            if (isGpuBinNode(node)) {
+                results.add(parent to node)
+                return
+            }
+            node.children.forEach { child -> recurse(node, child) }
+        }
+        root.children.forEach { child -> recurse(root, child) }
+        return results
+    }
+
+    private fun isGpuBinNode(node: DtsNode): Boolean {
+        val compatible = node.getProperty("compatible")?.originalValue
+        val isCompatibleBin = compatible?.contains("qcom,gpu-pwrlevels") == true && !compatible.contains("bins")
+        return isCompatibleBin || node.name.startsWith("qcom,gpu-pwrlevels")
+    }
+
+    private fun parseExternalLinesToTree(lines: List<String>): DtsNode? {
+        val nonEmptyLines = lines.filter { it.isNotBlank() }
+        if (nonEmptyLines.isEmpty()) return null
+
+        val rawText = nonEmptyLines.joinToString("\n")
+        val wrappedText = if (nonEmptyLines.any { it.contains("/dts-v1/") }) {
+            rawText
+        } else {
+            buildString {
+                append("/dts-v1/;\n\n/ {\n")
+                nonEmptyLines.forEach { line ->
+                    append('\t').append(line).append('\n')
+                }
+                append("};")
             }
         }
-        if (found) {
-            updateContent(currentLines, "Renamed GPU to $newName")
+
+        return DtsTreeHelper.parse(wrappedText)
+    }
+
+    private fun parseSingleCellLong(rawValue: String): Long? {
+        val trimmed = rawValue.trim()
+        if (trimmed.isEmpty()) return null
+
+        val token = if (trimmed.startsWith("<") && trimmed.endsWith(">")) {
+            val inner = trimmed.substring(1, trimmed.length - 1).trim()
+            if (inner.isEmpty()) return null
+            inner.split(Regex("\\s+")).firstOrNull() ?: return null
+        } else {
+            trimmed
+        }
+
+        return if (token.startsWith("0x", ignoreCase = true)) {
+            token.substring(2).toLongOrNull(16)
+        } else {
+            token.toLongOrNull()
+        }
+    }
+
+    private fun setPropertyPreservingFormat(node: DtsNode, propertyName: String, newValue: String) {
+        val existingProp = node.getProperty(propertyName)
+        if (existingProp == null) {
+            node.setProperty(propertyName, newValue)
+            return
+        }
+
+        if (existingProp.isHexArray) {
+            existingProp.updateFromDisplayValue(newValue)
+            return
+        }
+
+        val original = existingProp.originalValue.trim()
+        if (original.startsWith("\"") && original.endsWith("\"")) {
+            existingProp.originalValue = "\"${newValue.removeSurrounding("\"")}\""
+            return
+        }
+
+        val open = original.indexOf('<')
+        val close = original.indexOf('>', open + 1)
+        if (open != -1 && close != -1) {
+            val currentCellToken = original
+                .substring(open + 1, close)
+                .trim()
+                .split(Regex("\\s+"))
+                .firstOrNull()
+            val formattedCell = formatCellValueByCurrentStyle(newValue, currentCellToken)
+            existingProp.originalValue = original.substring(0, open + 1) + formattedCell + original.substring(close)
+            return
+        }
+
+        existingProp.originalValue = newValue
+    }
+
+    private fun formatCellValueByCurrentStyle(newValue: String, currentCellToken: String?): String {
+        val normalized = newValue.trim()
+        if (normalized.startsWith("0x", ignoreCase = true)) return normalized
+        val numeric = normalized.toLongOrNull() ?: return normalized
+
+        return if (currentCellToken?.startsWith("0x", ignoreCase = true) == true) {
+            "0x${numeric.toString(16)}"
+        } else {
+            numeric.toString()
         }
     }
 }
