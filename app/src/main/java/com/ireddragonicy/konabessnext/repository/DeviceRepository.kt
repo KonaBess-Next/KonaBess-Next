@@ -400,6 +400,41 @@ open class DeviceRepository @Inject constructor(
         return output.map { sanitizeString(it) }.filter { it.isNotEmpty() }
     }
 
+    override suspend fun getRunTimeGpuFrequencies(): List<Long> = withContext(Dispatchers.IO) {
+        val probeCommands = listOf(
+            "cat /sys/class/kgsl/kgsl-3d0/frequencies",
+            "cat /sys/class/kgsl/kgsl-3d0/available_frequencies",
+            "cat /sys/class/kgsl/kgsl-3d0/devfreq/available_frequencies",
+            "cat /sys/devices/platform/soc/*.qcom,kgsl-3d0/kgsl/kgsl-3d0/frequencies",
+            "cat /sys/devices/platform/soc/*.qcom,kgsl-3d0/kgsl/kgsl-3d0/available_frequencies",
+            "cat /sys/devices/platform/soc/*.qcom,kgsl-3d0/kgsl/kgsl-3d0/devfreq/available_frequencies",
+            "cat /sys/devices/platform/soc@0/*.qcom,kgsl-3d0/kgsl/kgsl-3d0/frequencies",
+            "cat /sys/devices/platform/soc@0/*.qcom,kgsl-3d0/kgsl/kgsl-3d0/available_frequencies",
+            "cat /sys/devices/platform/soc@0/*.qcom,kgsl-3d0/kgsl/kgsl-3d0/devfreq/available_frequencies",
+            "cat /sys/devices/platform/*.qcom,kgsl-3d0/kgsl/kgsl-3d0/frequencies",
+            "cat /sys/devices/platform/*.qcom,kgsl-3d0/kgsl/kgsl-3d0/available_frequencies",
+            "cat /sys/devices/platform/*.qcom,kgsl-3d0/kgsl/kgsl-3d0/devfreq/available_frequencies"
+        )
+
+        for (command in probeCommands) {
+            val output = try {
+                shellRepository.execForOutput(command)
+            } catch (securityException: SecurityException) {
+                Log.w(TAG, "GPU runtime frequency probe blocked: $command", securityException)
+                return@withContext emptyList()
+            } catch (_: Exception) {
+                emptyList()
+            }
+
+            val parsed = parseRuntimeFrequencyOutput(output)
+            if (parsed.isNotEmpty()) {
+                return@withContext parsed
+            }
+        }
+
+        emptyList()
+    }
+
     fun chooseTarget(dtb: Dtb) {
         // Imported DTBs have negative IDs and their files are NOT at {id}.dts.
         // Look up the actual path from the import registry.
@@ -630,6 +665,28 @@ open class DeviceRepository @Inject constructor(
             }
         }
         return null
+    }
+
+    private fun parseRuntimeFrequencyOutput(lines: List<String>): List<Long> {
+        if (lines.isEmpty()) return emptyList()
+
+        return lines.asSequence()
+            .flatMap { line ->
+                line.replace(",", " ")
+                    .split(Regex("\\s+"))
+                    .asSequence()
+            }
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .mapNotNull { token ->
+                if (token.startsWith("0x", ignoreCase = true)) {
+                    token.substring(2).toLongOrNull(16)
+                } else {
+                    token.toLongOrNull()
+                }
+            }
+            .filter { it > 0L }
+            .toList()
     }
 
     private fun readFileToString(file: File): String = BufferedReader(FileReader(file)).use { it.readText() }

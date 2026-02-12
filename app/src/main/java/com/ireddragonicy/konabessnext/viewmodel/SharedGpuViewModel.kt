@@ -11,6 +11,7 @@ import com.ireddragonicy.konabessnext.model.Level
 import com.ireddragonicy.konabessnext.model.LevelUiModel
 import com.ireddragonicy.konabessnext.model.Opp
 import com.ireddragonicy.konabessnext.model.UiText
+import com.ireddragonicy.konabessnext.repository.DeviceRepositoryInterface
 import com.ireddragonicy.konabessnext.repository.GpuRepository
 import com.ireddragonicy.konabessnext.utils.DtsEditorDebug
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -19,6 +20,7 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.math.abs
 import javax.inject.Inject
 
 /**
@@ -37,6 +39,7 @@ import javax.inject.Inject
 class SharedGpuViewModel @Inject constructor(
     private val application: Application,
     private val repository: GpuRepository,
+    private val deviceRepository: DeviceRepositoryInterface,
     private val chipRepository: com.ireddragonicy.konabessnext.repository.ChipRepository
 ) : AndroidViewModel(application) {
 
@@ -63,6 +66,10 @@ class SharedGpuViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.Lazily, "")
     val bins: StateFlow<List<Bin>> = repository.bins
     val opps: StateFlow<List<Opp>> = repository.opps
+    private val _detectedActiveBinIndex = MutableStateFlow(-1)
+    val detectedActiveBinIndex: StateFlow<Int> = _detectedActiveBinIndex.asStateFlow()
+    private val _runtimeGpuFrequencies = MutableStateFlow<List<Long>>(emptyList())
+    val runtimeGpuFrequencies: StateFlow<List<Long>> = _runtimeGpuFrequencies.asStateFlow()
 
     // Preview / Transient State
     private val _binOffsets = MutableStateFlow<Map<Int, Float>>(emptyMap())
@@ -104,6 +111,8 @@ class SharedGpuViewModel @Inject constructor(
         DtsEditorDebug.dumpCounters()
         DtsEditorDebug.resetCounters()
         _binOffsets.value = emptyMap()
+        _detectedActiveBinIndex.value = -1
+        _runtimeGpuFrequencies.value = emptyList()
         _viewMode.value = ViewMode.MAIN_EDITOR
     }
 
@@ -125,6 +134,8 @@ class SharedGpuViewModel @Inject constructor(
                         repository.bins.drop(1).first()
                     }
                 }
+
+                detectActiveBinIndex(repository.bins.value)
 
                 _isLoading.value = false
                 _workbenchState.value = WorkbenchState.Ready
@@ -267,6 +278,102 @@ class SharedGpuViewModel @Inject constructor(
 
     // --- Logic Helpers ---
 
+    suspend fun detectActiveBinIndex(parsedBins: List<Bin>) {
+        if (parsedBins.isEmpty()) {
+            _detectedActiveBinIndex.value = -1
+            _runtimeGpuFrequencies.value = emptyList()
+            return
+        }
+
+        val runtimeFrequencies = try {
+            deviceRepository.getRunTimeGpuFrequencies()
+        } catch (_: Exception) {
+            emptyList()
+        }
+
+        val normalizedRuntime = normalizeFrequencyList(runtimeFrequencies)
+        _runtimeGpuFrequencies.value = normalizedRuntime
+        if (normalizedRuntime.isEmpty()) {
+            _detectedActiveBinIndex.value = -1
+            return
+        }
+
+        var bestMatchIndex = -1
+        var bestMatchScore = 0.0
+        var bestSizeDelta = Int.MAX_VALUE
+
+        parsedBins.forEachIndexed { index, bin ->
+            val binFrequencies = normalizeFrequencyList(bin.levels.map { it.frequency })
+            if (binFrequencies.isEmpty()) return@forEachIndexed
+
+            val score = scoreBinMatch(normalizedRuntime, binFrequencies)
+            val sizeDelta = abs(normalizedRuntime.size - binFrequencies.size)
+            if (score > bestMatchScore || (score == bestMatchScore && sizeDelta < bestSizeDelta)) {
+                bestMatchScore = score
+                bestMatchIndex = index
+                bestSizeDelta = sizeDelta
+            }
+        }
+
+        _detectedActiveBinIndex.value = if (bestMatchScore >= ACTIVE_BIN_MIN_SCORE) {
+            bestMatchIndex
+        } else {
+            -1
+        }
+    }
+
+    private fun normalizeFrequencyList(values: List<Long>): List<Long> {
+        val positiveValues = values.filter { it > 0L }
+        if (positiveValues.isEmpty()) return emptyList()
+
+        val normalizedToHz = normalizeToHz(positiveValues)
+        return normalizedToHz.distinct().sortedDescending()
+    }
+
+    private fun normalizeToHz(values: List<Long>): List<Long> {
+        val maxValue = values.maxOrNull() ?: return values
+        return if (maxValue in 1L until 10_000_000L) {
+            values.map { it * 1_000L }
+        } else {
+            values
+        }
+    }
+
+    private fun scoreBinMatch(runtimeFrequencies: List<Long>, binFrequencies: List<Long>): Double {
+        if (runtimeFrequencies.isEmpty() || binFrequencies.isEmpty()) return 0.0
+        if (runtimeFrequencies == binFrequencies || runtimeFrequencies == binFrequencies.asReversed()) return 1.0
+
+        val runtimeSet = runtimeFrequencies.toSet()
+        val binSet = binFrequencies.toSet()
+        if (runtimeSet == binSet) return 0.98
+
+        val overlapCount = runtimeSet.intersect(binSet).size
+        val unionCount = runtimeSet.union(binSet).size
+        val jaccard = if (unionCount == 0) 0.0 else overlapCount.toDouble() / unionCount.toDouble()
+        val runtimeCoverage = overlapCount.toDouble() / runtimeSet.size.toDouble()
+        val binCoverage = overlapCount.toDouble() / binSet.size.toDouble()
+        val fuzzyCoverage = fuzzyCoverage(runtimeFrequencies, binFrequencies)
+
+        return (jaccard * 0.55) +
+            (runtimeCoverage * 0.25) +
+            (binCoverage * 0.10) +
+            (fuzzyCoverage * 0.10)
+    }
+
+    private fun fuzzyCoverage(runtimeFrequencies: List<Long>, binFrequencies: List<Long>): Double {
+        if (runtimeFrequencies.isEmpty() || binFrequencies.isEmpty()) return 0.0
+        val matchedCount = runtimeFrequencies.count { runtimeFreq ->
+            binFrequencies.any { binFreq -> isFrequencyClose(runtimeFreq, binFreq) }
+        }
+        return matchedCount.toDouble() / runtimeFrequencies.size.toDouble()
+    }
+
+    private fun isFrequencyClose(leftHz: Long, rightHz: Long): Boolean {
+        val diff = abs(leftHz - rightHz)
+        val relativeTolerance = (maxOf(leftHz, rightHz) * 0.01).toLong()
+        return diff <= ABSOLUTE_FREQ_TOLERANCE_HZ || diff <= relativeTolerance
+    }
+
     private fun mapBinsToUiModels(bins: List<Bin>, offsets: Map<Int, Float> = emptyMap(), oppList: List<Opp> = emptyList()): Map<Int, List<LevelUiModel>> {
         val context = application.applicationContext
         return bins.mapIndexed { i, bin ->
@@ -334,4 +441,9 @@ class SharedGpuViewModel @Inject constructor(
     private val _workbenchState = MutableStateFlow<WorkbenchState>(WorkbenchState.Loading)
     val workbenchState = _workbenchState.asStateFlow()
     sealed class WorkbenchState { object Loading : WorkbenchState(); object Ready : WorkbenchState(); data class Error(val msg: String) : WorkbenchState() }
+
+    private companion object {
+        const val ACTIVE_BIN_MIN_SCORE = 0.80
+        const val ABSOLUTE_FREQ_TOLERANCE_HZ = 2_000_000L
+    }
 }

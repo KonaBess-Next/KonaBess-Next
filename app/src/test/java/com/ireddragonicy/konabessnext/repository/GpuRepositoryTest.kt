@@ -306,6 +306,7 @@ class FakeDeviceRepository : DeviceRepositoryInterface {
     override var dtsPath: String? = "fake_path.dts"
     override fun tryRestoreLastChipset(): Boolean = false
     override fun getDtsFile(): File = File("fake_path.dts")
+    override suspend fun getRunTimeGpuFrequencies(): List<Long> = emptyList()
 }
 
 class FakeFileDataSource : FileDataSource {

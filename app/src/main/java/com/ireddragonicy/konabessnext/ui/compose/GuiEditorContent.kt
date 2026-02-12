@@ -22,6 +22,8 @@ fun GuiEditorContent(
     
     // EXPERT OPTIMIZATION: Consume the unified state from ViewModel
     val binListState by sharedViewModel.binListState.collectAsState()
+    val detectedActiveBinIndex by sharedViewModel.detectedActiveBinIndex.collectAsState()
+    val runtimeGpuFrequencies by sharedViewModel.runtimeGpuFrequencies.collectAsState()
     
     val bins by sharedViewModel.bins.collectAsState()
     val binUiModels by sharedViewModel.binUiModels.collectAsState()
@@ -94,6 +96,8 @@ fun GuiEditorContent(
                         GpuBinList(
                             state = binListState,
                             chipDef = currentChip,
+                            activeBinIndex = detectedActiveBinIndex,
+                            runtimeGpuFrequencies = runtimeGpuFrequencies,
                             onBinClick = { gpuFrequencyViewModel.selectedBinIndex.value = it },
                             onBack = { gpuFrequencyViewModel.navigationStep.value = 0 },
                             onReload = { sharedViewModel.loadData() }

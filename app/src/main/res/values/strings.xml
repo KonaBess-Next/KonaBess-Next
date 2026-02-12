@@ -299,6 +299,9 @@
     <string name="try_redetecting">Try re-detecting chipsets or use Deep Scan.</string>
     <string name="reload_data">Reload Data</string>
     <string name="bin_id_format">Bin %1$d</string>
+    <string name="active_bin_badge">Active</string>
+    <string name="gpu_bin_help_title">Why Multiple Bins?</string>
+    <string name="gpu_bin_help_icon_desc">Multi-bin help</string>
     
     <string name="import_from_file_desc">Load configuration from a file</string>
     <string name="export_to_file_desc">Save configuration to a file</string>
