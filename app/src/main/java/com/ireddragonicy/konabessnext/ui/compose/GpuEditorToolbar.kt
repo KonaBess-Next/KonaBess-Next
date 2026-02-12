@@ -2,6 +2,9 @@ package com.ireddragonicy.konabessnext.ui.compose
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -13,11 +16,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.graphicsLayer
 import com.ireddragonicy.konabessnext.R
+import com.ireddragonicy.konabessnext.model.dts.DtsError
+import com.ireddragonicy.konabessnext.model.dts.Severity
 import com.ireddragonicy.konabessnext.viewmodel.SharedGpuViewModel
 
 /**
@@ -311,8 +318,43 @@ fun SearchAndToolsBar(
     onCopyAll: () -> Unit,
     onReformat: (() -> Unit)? = null,
     lintErrorCount: Int = 0,
+    lintErrors: List<DtsError> = emptyList(),
+    onLintErrorClick: (DtsError) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    var showLintSheet by remember { mutableStateOf(false) }
+    val lintSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sortedLintErrors = remember(lintErrors) {
+        lintErrors.sortedWith(
+            compareBy<DtsError> { it.line }
+                .thenBy { it.column }
+                .thenBy { if (it.severity == Severity.ERROR) 0 else 1 }
+        )
+    }
+    val errorCount = remember(sortedLintErrors) { sortedLintErrors.count { it.severity == Severity.ERROR } }
+    val warningCount = remember(sortedLintErrors) { sortedLintErrors.count { it.severity == Severity.WARNING } }
+
+    if (showLintSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showLintSheet = false },
+            sheetState = lintSheetState,
+            shape = androidx.compose.foundation.shape.RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+            containerColor = MaterialTheme.colorScheme.surface,
+            tonalElevation = 0.dp
+        ) {
+            LintIssuesBottomSheet(
+                issues = sortedLintErrors,
+                errorCount = errorCount,
+                warningCount = warningCount,
+                onIssueClick = { issue ->
+                    showLintSheet = false
+                    onLintErrorClick(issue)
+                },
+                onClose = { showLintSheet = false }
+            )
+        }
+    }
+
     Surface(
         modifier = modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surfaceVariant,
@@ -381,18 +423,174 @@ fun SearchAndToolsBar(
                 }
             }
 
-            // Lint Error Badge
+            // Lint diagnostics quick navigator (right of wrench/reformat icon)
             if (lintErrorCount > 0) {
-                Badge(
-                    containerColor = MaterialTheme.colorScheme.error,
-                    contentColor = MaterialTheme.colorScheme.onError
+                BadgedBox(
+                    badge = {
+                        Badge(
+                            containerColor = MaterialTheme.colorScheme.error,
+                            contentColor = MaterialTheme.colorScheme.onError
+                        ) {
+                            Text(
+                                text = lintErrorCount.toString(),
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                        }
+                    }
                 ) {
-                    Text(
-                        text = lintErrorCount.toString(),
-                        style = MaterialTheme.typography.labelSmall
+                    IconButton(onClick = { showLintSheet = true }) {
+                        Icon(
+                            imageVector = Icons.Rounded.ErrorOutline,
+                            contentDescription = "Lint issues",
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LintIssuesBottomSheet(
+    issues: List<DtsError>,
+    errorCount: Int,
+    warningCount: Int,
+    onIssueClick: (DtsError) -> Unit,
+    onClose: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
+            .imePadding()
+            .padding(bottom = 16.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Surface(
+                modifier = Modifier.size(40.dp),
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.errorContainer
+            ) {
+                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                    Icon(
+                        imageVector = Icons.Rounded.ErrorOutline,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onErrorContainer
                     )
                 }
             }
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Lint Issues",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "$errorCount errors • $warningCount warnings",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "Tap an issue to jump to source",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            Surface(
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp),
+                color = MaterialTheme.colorScheme.secondaryContainer
+            ) {
+                Text(
+                    text = issues.size.toString(),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                )
+            }
+        }
+
+        Spacer(Modifier.height(12.dp))
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f))
+
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 460.dp),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            itemsIndexed(issues) { _, issue ->
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onIssueClick(issue) },
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                    tonalElevation = 0.dp,
+                    shadowElevation = 0.dp
+                ) {
+                    ListItem(
+                        headlineContent = {
+                            Text(
+                                text = issue.message,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        },
+                        supportingContent = {
+                            Text(
+                                text = "Line ${issue.line + 1}, Column ${issue.column + 1}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        },
+                        leadingContent = {
+                            Icon(
+                                imageVector = if (issue.severity == Severity.ERROR) {
+                                    Icons.Rounded.ErrorOutline
+                                } else {
+                                    Icons.Rounded.Warning
+                                },
+                                contentDescription = null,
+                                tint = if (issue.severity == Severity.ERROR) {
+                                    MaterialTheme.colorScheme.error
+                                } else {
+                                    MaterialTheme.colorScheme.tertiary
+                                }
+                            )
+                        },
+                        trailingContent = {
+                            Icon(
+                                imageVector = Icons.Rounded.ChevronRight,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.outline
+                            )
+                        },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                    )
+                }
+            }
+        }
+
+        Spacer(Modifier.height(4.dp))
+        OutlinedButton(
+            onClick = onClose,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp),
+            shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp)
+        ) {
+            Text("Close")
         }
     }
 }

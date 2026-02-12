@@ -17,8 +17,10 @@ fun UnifiedDtsEditorScreen(
 ) {
     val searchState by textViewModel.searchState.collectAsState()
     val lintErrorCount by textViewModel.lintErrorCount.collectAsState()
+    val lintErrors by textViewModel.lintErrors.collectAsState()
     val foldSessionKey by textViewModel.dtsEditorSessionKey.collectAsState()
     val editorState = textViewModel.dtsEditorState
+    var navigationRequest by remember { mutableStateOf<EditorNavigationRequest?>(null) }
     val persistedCollapsedFolds = remember(foldSessionKey) {
         textViewModel.getCollapsedFolds(foldSessionKey)
     }
@@ -85,7 +87,14 @@ fun UnifiedDtsEditorScreen(
             onPrev = { textViewModel.previousSearchResult() },
             onCopyAll = { clipboardManager.setText(AnnotatedString(editorState.getText())) },
             onReformat = { textViewModel.reformatCode() },
-            lintErrorCount = lintErrorCount
+            lintErrorCount = lintErrorCount,
+            lintErrors = lintErrors,
+            onLintErrorClick = { error ->
+                navigationRequest = EditorNavigationRequest(
+                    line = error.line,
+                    column = error.column
+                )
+            }
         )
 
         DtsEditor(
@@ -97,6 +106,7 @@ fun UnifiedDtsEditorScreen(
             searchQuery = searchState.query,
             searchResultIndex = searchState.currentIndex,
             searchResults = searchState.results.map { LineSearchResult(it.lineIndex) },
+            navigationRequest = navigationRequest,
             lintErrorsByLine = textViewModel.lintErrorsByLine,
             listState = listState
         )

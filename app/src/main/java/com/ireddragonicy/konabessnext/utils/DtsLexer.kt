@@ -26,10 +26,25 @@ data class Token(val type: TokenType, val value: String, val line: Int, val col:
  *  - Correct `/` disambiguation (preprocessor vs root-node name).
  */
 class DtsLexer(private val input: String) {
+    data class LexBudget(
+        val maxCharsScanned: Int = Int.MAX_VALUE,
+        val timeBudgetMs: Long? = null,
+        val checkIntervalChars: Int = DEFAULT_CHECK_INTERVAL
+    )
+
+    data class LexOptions(
+        val checkCancelled: (() -> Unit)? = null,
+        val budget: LexBudget? = null
+    )
+
     private val len = input.length
     private var pos = 0
     private var line = 1
     private var col = 1
+    private var options: LexOptions = DEFAULT_OPTIONS
+    private var tokenizeStartNs = 0L
+    private var nextCheckpointPos = 0
+    private var budgetExceeded = false
 
     // ---- Low-level helpers --------------------------------------------------
 
@@ -53,7 +68,9 @@ class DtsLexer(private val input: String) {
     /** Advance `count` characters, updating line/col. */
     private fun skip(count: Int) {
         var remaining = count
-        while (remaining > 0 && pos < len) {
+        while (remaining > 0 && pos < len && !budgetExceeded) {
+            checkpoint()
+            if (budgetExceeded) return
             val c = input[pos++]
             if (c == '\n') { line++; col = 1 } else { col++ }
             remaining--
@@ -63,7 +80,9 @@ class DtsLexer(private val input: String) {
     // ---- Whitespace / comment skipping (hot-path) ---------------------------
 
     private fun skipWhitespace() {
-        while (pos < len) {
+        while (pos < len && !budgetExceeded) {
+            checkpoint()
+            if (budgetExceeded) return
             val c = input[pos]
             when {
                 c == ' ' || c == '\t' || c == '\r' -> { pos++; col++ }
@@ -77,7 +96,9 @@ class DtsLexer(private val input: String) {
 
     private fun skipBlockComment() {
         skip(2) // /*
-        while (pos < len) {
+        while (pos < len && !budgetExceeded) {
+            checkpoint()
+            if (budgetExceeded) return
             if (input[pos] == '*' && pos + 1 < len && input[pos + 1] == '/') {
                 skip(2)
                 return
@@ -89,18 +110,35 @@ class DtsLexer(private val input: String) {
 
     private fun skipLineComment() {
         pos += 2; col += 2
-        while (pos < len && input[pos] != '\n') { pos++; col++ }
+        while (pos < len && input[pos] != '\n' && !budgetExceeded) {
+            checkpoint()
+            if (budgetExceeded) return
+            pos++; col++
+        }
     }
 
     // ---- Tokenisation -------------------------------------------------------
 
-    fun tokenize(): List<Token> {
+    fun tokenize(): List<Token> = tokenize(DEFAULT_OPTIONS)
+
+    fun tokenize(options: LexOptions): List<Token> {
+        this.options = options
+        this.pos = 0
+        this.line = 1
+        this.col = 1
+        this.tokenizeStartNs = System.nanoTime()
+        this.nextCheckpointPos = 0
+        this.budgetExceeded = false
+
         // Rough estimate: one token every ~6 chars gives a good initial capacity
         val tokens = ArrayList<Token>(len / 6 + 16)
 
-        while (pos < len) {
+        while (pos < len && !budgetExceeded) {
+            checkpoint()
+            if (budgetExceeded) break
+
             skipWhitespace()
-            if (pos >= len) break
+            if (pos >= len || budgetExceeded) break
 
             val startLine = line
             val startCol = col
@@ -150,13 +188,17 @@ class DtsLexer(private val input: String) {
         return tokens
     }
 
+    fun wasBudgetExceeded(): Boolean = budgetExceeded
+
     // ---- Token readers (substring-based for speed) --------------------------
 
     private fun readString(startLine: Int, startCol: Int): Token {
         advance() // opening "
         val startPos = pos
         var hasEscape = false
-        while (pos < len) {
+        while (pos < len && !budgetExceeded) {
+            checkpoint()
+            if (budgetExceeded) break
             val c = input[pos]
             if (c == '"') { break }
             if (c == '\\') { hasEscape = true; skip(2); continue }
@@ -164,7 +206,7 @@ class DtsLexer(private val input: String) {
             pos++
         }
         val raw = input.substring(startPos, pos)
-        if (pos < len) advance() // closing "
+        if (pos < len && input[pos] == '"') advance() // closing "
 
         // Fast path: no escapes → raw substring is the value
         val value = if (!hasEscape) raw else unescapeString(raw)
@@ -188,7 +230,11 @@ class DtsLexer(private val input: String) {
 
     private fun readIdentifierFast(startLine: Int, startCol: Int): Token {
         val startPos = pos
-        while (pos < len && isIdentChar(input[pos])) { pos++; col++ }
+        while (pos < len && isIdentChar(input[pos]) && !budgetExceeded) {
+            checkpoint()
+            if (budgetExceeded) break
+            pos++; col++
+        }
         return Token(TokenType.IDENTIFIER, input.substring(startPos, pos), startLine, startCol)
     }
 
@@ -196,15 +242,27 @@ class DtsLexer(private val input: String) {
         val startPos = pos
         if (input[pos] == '0' && pos + 1 < len && (input[pos + 1] == 'x' || input[pos + 1] == 'X')) {
             pos += 2; col += 2
-            while (pos < len && isHex(input[pos])) { pos++; col++ }
+            while (pos < len && isHex(input[pos]) && !budgetExceeded) {
+                checkpoint()
+                if (budgetExceeded) break
+                pos++; col++
+            }
             return Token(TokenType.HEX_LITERAL, input.substring(startPos, pos), startLine, startCol)
         }
-        while (pos < len && input[pos] in '0'..'9') { pos++; col++ }
+        while (pos < len && input[pos] in '0'..'9' && !budgetExceeded) {
+            checkpoint()
+            if (budgetExceeded) break
+            pos++; col++
+        }
 
         // DTS byte arrays frequently use hex bytes without 0x prefix (e.g. [1d 1d]).
         // Preserve those as a single hex token instead of splitting into "1" and "d".
         val suffixStart = pos
-        while (pos < len && (input[pos] in 'a'..'f' || input[pos] in 'A'..'F')) { pos++; col++ }
+        while (pos < len && (input[pos] in 'a'..'f' || input[pos] in 'A'..'F') && !budgetExceeded) {
+            checkpoint()
+            if (budgetExceeded) break
+            pos++; col++
+        }
         if (pos > suffixStart) {
             return Token(TokenType.HEX_LITERAL, input.substring(startPos, pos), startLine, startCol)
         }
@@ -215,20 +273,49 @@ class DtsLexer(private val input: String) {
     private fun readRef(startLine: Int, startCol: Int): Token {
         val startPos = pos
         advance() // &
-        while (pos < len && isRefChar(input[pos])) { pos++; col++ }
+        while (pos < len && isRefChar(input[pos]) && !budgetExceeded) {
+            checkpoint()
+            if (budgetExceeded) break
+            pos++; col++
+        }
         return Token(TokenType.REF, input.substring(startPos, pos), startLine, startCol)
     }
 
     private fun readPreprocessor(startLine: Int, startCol: Int): Token {
         val startPos = pos
         advance() // / or #
-        while (pos < len) {
+        while (pos < len && !budgetExceeded) {
+            checkpoint()
+            if (budgetExceeded) break
             val c = input[pos]
             if (c == ' ' || c == '\t' || c == '\n' || c == '\r' ||
                 c == ';' || c == '=' || c == '{' || c == '}' || c == '<' || c == '>') break
             pos++; col++
         }
         return Token(TokenType.PREPROCESSOR, input.substring(startPos, pos), startLine, startCol)
+    }
+
+    private fun checkpoint() {
+        val budget = options.budget
+        val interval = (budget?.checkIntervalChars ?: DEFAULT_CHECK_INTERVAL).coerceAtLeast(1)
+        if (pos < nextCheckpointPos) return
+        nextCheckpointPos = pos + interval
+
+        options.checkCancelled?.invoke()
+
+        if (budget != null) {
+            if (pos >= budget.maxCharsScanned.coerceAtLeast(1)) {
+                budgetExceeded = true
+                return
+            }
+            val timeBudgetMs = budget.timeBudgetMs
+            if (timeBudgetMs != null && timeBudgetMs >= 0L) {
+                val elapsedNs = System.nanoTime() - tokenizeStartNs
+                if (elapsedNs >= timeBudgetMs * 1_000_000L) {
+                    budgetExceeded = true
+                }
+            }
+        }
     }
 
     // ---- Character classification (inlined for hot loops) -------------------
@@ -248,4 +335,9 @@ class DtsLexer(private val input: String) {
     @Suppress("NOTHING_TO_INLINE")
     private inline fun isRefChar(c: Char): Boolean =
         isIdentChar(c) || c == '{' || c == '}' || c == '/'
+
+    companion object {
+        private const val DEFAULT_CHECK_INTERVAL = 1024
+        private val DEFAULT_OPTIONS = LexOptions()
+    }
 }

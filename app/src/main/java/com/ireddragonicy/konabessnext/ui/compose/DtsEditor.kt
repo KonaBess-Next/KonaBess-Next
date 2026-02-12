@@ -84,6 +84,11 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 
 data class LineSearchResult(val lineIndex: Int)
+data class EditorNavigationRequest(
+    val line: Int,
+    val column: Int,
+    val requestId: Long = System.nanoTime()
+)
 
 private const val IME_SENTINEL = "\u200B"
 private const val TRIPLE_TAP_WINDOW_MS = 350L
@@ -368,6 +373,7 @@ fun DtsEditor(
     searchQuery: String = "",
     searchResultIndex: Int = -1,
     searchResults: List<LineSearchResult> = emptyList(),
+    navigationRequest: EditorNavigationRequest? = null,
     lintErrorsByLine: SnapshotStateMap<Int, List<DtsError>> = remember { mutableStateMapOf() },
     listState: LazyListState = rememberLazyListState(),
     modifier: Modifier = Modifier
@@ -737,6 +743,25 @@ fun DtsEditor(
             val targetVisible = visibleIndexFor(targetLine)
             listState.animateScrollToItem(targetVisible)
         }
+    }
+
+    LaunchedEffect(navigationRequest?.requestId, visibleLineIndices) {
+        val request = navigationRequest ?: return@LaunchedEffect
+        if (editorState.lines.isEmpty()) return@LaunchedEffect
+
+        val targetLine = request.line.coerceIn(0, editorState.lines.lastIndex)
+        val expanded = expandCollapsedForLine(targetLine)
+        if (expanded) {
+            delay(16)
+        }
+
+        val targetColumn = request.column.coerceIn(0, editorState.lines[targetLine].length)
+        editorState.moveCursor(targetLine, targetColumn)
+        expandAnchor = editorState.cursor
+        focusRequester.requestFocus()
+
+        val targetVisible = visibleIndexFor(targetLine)
+        listState.animateScrollToItem(targetVisible)
     }
 
     LaunchedEffect(editorState.cursor.line, visibleLineIndices) {

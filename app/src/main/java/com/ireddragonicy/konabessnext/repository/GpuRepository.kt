@@ -162,7 +162,17 @@ open class GpuRepository @Inject constructor(
                 delay(1500) // PERF: debounce tree parse — only runs after 1.5s of no edits
                 val startTime = System.nanoTime()
                 val fullText = newLines.joinToString("\n")
-                val tree = DtsTreeHelper.parse(fullText)
+                val checkCancelled = { ensureActive() }
+                val tokens = com.ireddragonicy.konabessnext.utils.DtsLexer(fullText).tokenize(
+                    com.ireddragonicy.konabessnext.utils.DtsLexer.LexOptions(
+                        checkCancelled = checkCancelled
+                    )
+                )
+                val tree = com.ireddragonicy.konabessnext.utils.DtsParser(tokens).parse(
+                    com.ireddragonicy.konabessnext.utils.DtsParser.ParseOptions(
+                        checkCancelled = checkCancelled
+                    )
+                )
                 val durationMs = (System.nanoTime() - startTime) / 1_000_000
                 _parsedTree.value = tree
                 DtsEditorDebug.logTreeParseJobComplete(durationMs, countNodes(tree))

@@ -3,6 +3,7 @@ package com.ireddragonicy.konabessnext.utils
 import com.ireddragonicy.konabessnext.model.dts.DtsNode
 import com.ireddragonicy.konabessnext.model.dts.DtsProperty
 import java.util.Stack
+import kotlinx.coroutines.CancellationException
 
 object DtsTreeHelper {
 
@@ -21,6 +22,8 @@ object DtsTreeHelper {
             val tokens = lexer.tokenize()
             val parser = DtsParser(tokens)
             return parser.parse()
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             e.printStackTrace()
             // Fallback or returned failed root?
