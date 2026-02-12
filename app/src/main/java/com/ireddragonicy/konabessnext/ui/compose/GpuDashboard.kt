@@ -1,5 +1,10 @@
 package com.ireddragonicy.konabessnext.ui.compose
 
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -22,6 +27,8 @@ fun GpuDashboard(
 ) {
     val gpuModelName by sharedViewModel.gpuModelName.collectAsState()
     val currentChip by sharedViewModel.currentChip.collectAsState()
+    val workbenchState by sharedViewModel.workbenchState.collectAsState()
+    val isGpuModelLoading = workbenchState is SharedGpuViewModel.WorkbenchState.Loading && gpuModelName.isBlank()
     
     var showRenameDialog by remember { mutableStateOf(false) }
 
@@ -110,10 +117,14 @@ fun GpuDashboard(
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                             )
                             Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = gpuModelName.ifEmpty { "Unknown Model" },
-                                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
-                            )
+                            if (isGpuModelLoading) {
+                                GpuModelLoadingSkeleton()
+                            } else {
+                                Text(
+                                    text = gpuModelName.ifEmpty { "Unknown Model" },
+                                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+                                )
+                            }
                         }
                         IconButton(onClick = { showRenameDialog = true }) {
                             Icon(Icons.Rounded.Edit, contentDescription = "Rename GPU")
@@ -160,4 +171,26 @@ fun GpuDashboard(
             }
         }
     }
+}
+
+@Composable
+private fun GpuModelLoadingSkeleton(modifier: Modifier = Modifier) {
+    val transition = rememberInfiniteTransition(label = "GpuModelNameShimmer")
+    val animatedAlpha by transition.animateFloat(
+        initialValue = 0.28f,
+        targetValue = 0.62f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 820),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "GpuModelNameShimmerAlpha"
+    )
+
+    Surface(
+        modifier = modifier
+            .height(30.dp)
+            .fillMaxWidth(0.56f),
+        shape = RoundedCornerShape(10.dp),
+        color = MaterialTheme.colorScheme.onSurface.copy(alpha = animatedAlpha)
+    ) {}
 }

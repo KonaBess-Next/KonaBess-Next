@@ -86,6 +86,8 @@ open class GpuRepository @Inject constructor(
     // FIX: Single Job for tree parsing — cancels previous before starting new one.
     // Previously used `CoroutineScope(Dispatchers.Default).launch` which LEAKED scopes.
     private var treeParseJob: Job? = null
+    private val gpuModelLineRegex = Regex("""^\s*qcom,gpu-model\s*=\s*"(.*?)"\s*;.*$""")
+    private val chipIdLineRegex = Regex("""^\s*qcom,chipid\s*=\s*(.+?)\s*;.*$""")
 
     // --- Core Operations ---
 
@@ -468,6 +470,9 @@ open class GpuRepository @Inject constructor(
     }
 
     fun getGpuModelName(): String {
+        val fastName = extractGpuModelNameFast(_dtsLines.value)
+        if (fastName.isNotEmpty()) return fastName
+
         val root = ensureParsedTree() ?: return ""
         val modelNode = gpuDomainManager.findNodeContainingProperty(root, "qcom,gpu-model")
         val model = modelNode?.getProperty("qcom,gpu-model")?.originalValue?.trim()
@@ -479,6 +484,36 @@ open class GpuRepository @Inject constructor(
         val chipIdRaw = chipIdNode?.getProperty("qcom,chipid")?.originalValue ?: return ""
         val chipId = parseSingleCellLong(chipIdRaw) ?: return ""
         return mapChipIdToGpuName(chipId)
+    }
+
+    fun extractGpuModelNameFast(lines: List<String>): String {
+        for (line in lines) {
+            if (!line.contains("qcom,gpu-model")) continue
+            val matched = gpuModelLineRegex.matchEntire(line)
+            if (matched != null) {
+                return matched.groupValues[1]
+                    .trim()
+                    .replace("\\\"", "\"")
+            }
+
+            val firstQuote = line.indexOf('"')
+            if (firstQuote >= 0) {
+                val secondQuote = line.indexOf('"', firstQuote + 1)
+                if (secondQuote > firstQuote) {
+                    return line.substring(firstQuote + 1, secondQuote)
+                        .trim()
+                        .replace("\\\"", "\"")
+                }
+            }
+        }
+
+        for (line in lines) {
+            if (!line.contains("qcom,chipid")) continue
+            val matched = chipIdLineRegex.matchEntire(line) ?: continue
+            val chipId = parseSingleCellLong(matched.groupValues[1]) ?: continue
+            return mapChipIdToGpuName(chipId)
+        }
+        return ""
     }
     
     private fun mapChipIdToGpuName(chipid: Long): String {
@@ -501,25 +536,25 @@ open class GpuRepository @Inject constructor(
         val normalized = normalizeGpuModelName(newName)
         if (normalized.isEmpty()) return
 
-        val root = ensureParsedTree()
-        if (root != null) {
-            val modelNode = gpuDomainManager.findNodeContainingProperty(root, "qcom,gpu-model")
-            if (modelNode != null) {
-                modelNode.setProperty("qcom,gpu-model", "\"$normalized\"")
-                commitTreeChanges("Renamed GPU to ${normalized.replace("\\\"", "\"")}")
-                return
-            }
+        val currentLines = _dtsLines.value
+        // Prefer raw line replacement first to preserve original DTS formatting/comments.
+        // AST generation can normalize indentation/structure and create noisy "all lines changed" diffs.
+        val patched = replaceGpuModelInRawLines(currentLines, normalized)
+        if (patched != null) {
+            updateContent(
+                patched,
+                description = "Renamed GPU to ${normalized.replace("\\\"", "\"")}",
+                reparseTree = true
+            )
+            _structuralChange.tryEmit(Unit)
+            return
         }
 
-        // Fallback if the AST path cannot locate qcom,gpu-model.
-        val currentLines = _dtsLines.value
-        val patched = replaceGpuModelInRawLines(currentLines, normalized) ?: return
-        updateContent(
-            patched,
-            description = "Renamed GPU to ${normalized.replace("\\\"", "\"")}",
-            reparseTree = true
-        )
-        _structuralChange.tryEmit(Unit)
+        // Fallback only when raw line path cannot locate qcom,gpu-model.
+        val root = ensureParsedTree() ?: return
+        val modelNode = gpuDomainManager.findNodeContainingProperty(root, "qcom,gpu-model") ?: return
+        modelNode.setProperty("qcom,gpu-model", "\"$normalized\"")
+        commitTreeChanges("Renamed GPU to ${normalized.replace("\\\"", "\"")}")
     }
 
     private fun normalizeGpuModelName(input: String): String {

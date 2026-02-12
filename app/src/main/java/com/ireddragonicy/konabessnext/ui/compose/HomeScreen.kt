@@ -29,7 +29,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.activity.compose.BackHandler
 import android.net.Uri
+import com.ireddragonicy.konabessnext.utils.BinDiffResult
 import com.ireddragonicy.konabessnext.viewmodel.*
+import kotlinx.coroutines.launch
 
 @Composable
 fun HomeScreen(
@@ -165,6 +167,11 @@ fun GpuEditorMainContent(
     var activeSheet by remember { mutableStateOf(WorkbenchSheetType.NONE) }
     var manualSetupIndex by remember { mutableStateOf<Int?>(null) }
     var showInactiveInstallDialog by remember { mutableStateOf(false) }
+    var showDiffSheet by remember { mutableStateOf(false) }
+    var pendingDiffAction by remember { mutableStateOf<DiffCommitAction?>(null) }
+    var isDiffLoading by remember { mutableStateOf(false) }
+    var diffResults by remember { mutableStateOf<List<BinDiffResult>>(emptyList()) }
+    val scope = rememberCoroutineScope()
 
     // Sheets
     val detectionState by deviceViewModel.detectionState.collectAsState()
@@ -254,6 +261,44 @@ fun GpuEditorMainContent(
         if (uri != null) deviceViewModel.exportBootImage(context, uri)
     }
 
+    val dismissDiffSheet = {
+        showDiffSheet = false
+        pendingDiffAction = null
+        isDiffLoading = false
+        diffResults = emptyList()
+    }
+
+    val requestDiffPreview: (DiffCommitAction) -> Unit = { action ->
+        pendingDiffAction = action
+        showDiffSheet = true
+        scope.launch {
+            isDiffLoading = true
+            diffResults = sharedViewModel.calculateDiff()
+            isDiffLoading = false
+        }
+    }
+
+    val confirmDiffAction = {
+        when (pendingDiffAction) {
+            DiffCommitAction.SAVE -> gpuFrequencyViewModel.save(true)
+            DiffCommitAction.EXPORT_IMAGE -> exportImgLauncher.launch("boot_repack.img")
+            DiffCommitAction.FLASH_DEVICE -> onStartRepack()
+            DiffCommitAction.INSTALL_INACTIVE_SLOT -> showInactiveInstallDialog = true
+            null -> Unit
+        }
+        dismissDiffSheet()
+    }
+
+    if (showDiffSheet && pendingDiffAction != null) {
+        DtsDiffViewer(
+            action = pendingDiffAction!!,
+            diffResults = diffResults,
+            isLoading = isDiffLoading,
+            onDismissRequest = dismissDiffSheet,
+            onConfirm = confirmDiffAction
+        )
+    }
+
     GpuWorkbenchSheets(
         sheetType = activeSheet,
         onDismiss = { activeSheet = WorkbenchSheetType.NONE },
@@ -295,6 +340,7 @@ fun GpuEditorMainContent(
                 currentViewMode = currentMode,
                 showChipsetSelector = true,
                 onSave = { gpuFrequencyViewModel.save(true) },
+                onRequireDiffConfirmation = requestDiffPreview,
                 onUndo = { gpuFrequencyViewModel.undo() },
                 onRedo = { gpuFrequencyViewModel.redo() },
                 onShowHistory = { activeSheet = WorkbenchSheetType.HISTORY },

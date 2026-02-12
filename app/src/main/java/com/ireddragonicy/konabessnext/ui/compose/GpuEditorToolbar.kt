@@ -41,6 +41,7 @@ fun GpuEditorToolbar(
     currentViewMode: SharedGpuViewModel.ViewMode,
     showChipsetSelector: Boolean = false,
     onSave: () -> Unit,
+    onRequireDiffConfirmation: ((DiffCommitAction) -> Unit)? = null,
     onUndo: () -> Unit,
     onRedo: () -> Unit,
     onShowHistory: () -> Unit,
@@ -91,7 +92,7 @@ fun GpuEditorToolbar(
                 Button(
                     onClick = { 
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        onSave() 
+                        onSave()
                     },
                     colors = ButtonDefaults.buttonColors(
                         containerColor = saveContainerColor,
@@ -261,7 +262,11 @@ fun GpuEditorToolbar(
                             DropdownMenuItem(
                                 text = { Text("Install to Inactive Slot (OTA)") },
                                 onClick = {
-                                    onInstallToInactiveSlot()
+                                    if (onRequireDiffConfirmation != null) {
+                                        onRequireDiffConfirmation(DiffCommitAction.INSTALL_INACTIVE_SLOT)
+                                    } else {
+                                        onInstallToInactiveSlot()
+                                    }
                                     showBuildMenu = false
                                 },
                                 leadingIcon = { Icon(Icons.Rounded.SystemUpdate, null) }
@@ -277,7 +282,11 @@ fun GpuEditorToolbar(
                             DropdownMenuItem(
                                 text = { Text(if (isRootMode) "Export .img File" else "Repack & Export .img") },
                                 onClick = { 
-                                    onExportImg() 
+                                    if (onRequireDiffConfirmation != null) {
+                                        onRequireDiffConfirmation(DiffCommitAction.EXPORT_IMAGE)
+                                    } else {
+                                        onExportImg()
+                                    }
                                     showBuildMenu = false 
                                 },
                                 leadingIcon = { Icon(Icons.Rounded.Save, null) }
@@ -288,7 +297,11 @@ fun GpuEditorToolbar(
                                 DropdownMenuItem(
                                     text = { Text("Flash to Device") },
                                     onClick = { 
-                                        onFlashClick() 
+                                        if (onRequireDiffConfirmation != null) {
+                                            onRequireDiffConfirmation(DiffCommitAction.FLASH_DEVICE)
+                                        } else {
+                                            onFlashClick()
+                                        }
                                         showBuildMenu = false 
                                     },
                                     leadingIcon = { Icon(Icons.Rounded.FlashOn, null) },

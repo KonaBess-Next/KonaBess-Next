@@ -13,6 +13,9 @@ import com.ireddragonicy.konabessnext.model.Opp
 import com.ireddragonicy.konabessnext.model.UiText
 import com.ireddragonicy.konabessnext.repository.DeviceRepositoryInterface
 import com.ireddragonicy.konabessnext.repository.GpuRepository
+import com.ireddragonicy.konabessnext.utils.BinDiffResult
+import com.ireddragonicy.konabessnext.utils.BinDiffUtil
+import com.ireddragonicy.konabessnext.utils.DtsChangeDiffUtil
 import com.ireddragonicy.konabessnext.utils.DtsEditorDebug
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
@@ -48,13 +51,13 @@ class SharedGpuViewModel @Inject constructor(
     private val _viewMode = MutableStateFlow(ViewMode.MAIN_EDITOR)
     val viewMode: StateFlow<ViewMode> = _viewMode.asStateFlow()
 
-    @OptIn(kotlinx.coroutines.FlowPreview::class)
     val gpuModelName: StateFlow<String> = repository.dtsLines
-        .debounce(2000)
-        .map { repository.getGpuModelName() }
+        .map { lines ->
+            repository.extractGpuModelNameFast(lines)
+        }
         .distinctUntilChanged()
         .flowOn(Dispatchers.Default)
-        .stateIn(viewModelScope, SharingStarted.Lazily, "")
+        .stateIn(viewModelScope, SharingStarted.Eagerly, "")
 
     fun updateGpuModelName(newName: String) {
         repository.updateGpuModelName(newName)
@@ -74,6 +77,10 @@ class SharedGpuViewModel @Inject constructor(
     // Preview / Transient State
     private val _binOffsets = MutableStateFlow<Map<Int, Float>>(emptyMap())
     val binOffsets = _binOffsets.asStateFlow()
+    private val _originalBins = MutableStateFlow<List<Bin>>(emptyList())
+    val originalBins: StateFlow<List<Bin>> = _originalBins.asStateFlow()
+    private val _originalDtsLines = MutableStateFlow<List<String>>(emptyList())
+    val originalDtsLines: StateFlow<List<String>> = _originalDtsLines.asStateFlow()
 
     val isDirty = repository.isDirty
     val canUndo = repository.canUndo
@@ -111,6 +118,8 @@ class SharedGpuViewModel @Inject constructor(
         DtsEditorDebug.dumpCounters()
         DtsEditorDebug.resetCounters()
         _binOffsets.value = emptyMap()
+        _originalBins.value = emptyList()
+        _originalDtsLines.value = emptyList()
         _detectedActiveBinIndex.value = -1
         _runtimeGpuFrequencies.value = emptyList()
         _viewMode.value = ViewMode.MAIN_EDITOR
@@ -135,6 +144,8 @@ class SharedGpuViewModel @Inject constructor(
                     }
                 }
 
+                _originalDtsLines.value = repository.dtsLines.value.toList()
+                _originalBins.value = deepCopyBins(repository.bins.value)
                 detectActiveBinIndex(repository.bins.value)
 
                 _isLoading.value = false
@@ -160,6 +171,27 @@ class SharedGpuViewModel @Inject constructor(
 
     fun updateOppVoltage(frequency: Long, newVolt: Long) {
         repository.updateOppVoltage(frequency, newVolt)
+    }
+
+    suspend fun calculateDiff(includeUnchanged: Boolean = false): List<BinDiffResult> {
+        val originalSnapshot = deepCopyBins(_originalBins.value)
+        val currentSnapshot = deepCopyBins(repository.bins.value)
+        val originalLines = _originalDtsLines.value.toList()
+        val currentLines = repository.dtsLines.value.toList()
+        return withContext(Dispatchers.Default) {
+            val semanticBinDiff = BinDiffUtil.calculateDiff(
+                originalBins = originalSnapshot,
+                currentBins = currentSnapshot,
+                includeUnchanged = includeUnchanged
+            )
+            val comprehensiveDiff = ArrayList<BinDiffResult>(semanticBinDiff.size + 1)
+            DtsChangeDiffUtil.calculateGeneralDiff(
+                originalLines = originalLines,
+                currentLines = currentLines
+            )?.let { comprehensiveDiff.add(it) }
+            comprehensiveDiff.addAll(semanticBinDiff)
+            comprehensiveDiff
+        }
     }
 
     fun undo() = repository.undo()
@@ -380,6 +412,10 @@ class SharedGpuViewModel @Inject constructor(
             val offsetMhz = offsets[bin.id] ?: 0f
             i to bin.levels.mapIndexedNotNull { j, lvl -> parseLevelToUi(j, lvl, context, offsetMhz, oppList) }
         }.toMap()
+    }
+
+    private fun deepCopyBins(source: List<Bin>): List<Bin> {
+        return source.map { it.copyBin() }
     }
 
     @Suppress("unused")

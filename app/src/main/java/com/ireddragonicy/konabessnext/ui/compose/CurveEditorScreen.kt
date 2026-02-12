@@ -28,7 +28,9 @@ import com.github.mikephil.charting.data.LineData
 import com.github.mikephil.charting.data.LineDataSet
 import com.github.mikephil.charting.formatter.ValueFormatter
 import com.github.mikephil.charting.highlight.Highlight
+import com.ireddragonicy.konabessnext.utils.BinDiffResult
 import com.ireddragonicy.konabessnext.viewmodel.SharedGpuViewModel
+import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 enum class AxisLockMode {
@@ -63,6 +65,11 @@ fun CurveEditorScreen(
     var showBinDialog by remember { mutableStateOf(false) }
     var activeSheet by remember { mutableStateOf(WorkbenchSheetType.NONE) }
     var axisLockMode by remember { mutableStateOf(AxisLockMode.FREE) }
+    var showDiffSheet by remember { mutableStateOf(false) }
+    var pendingDiffAction by remember { mutableStateOf<DiffCommitAction?>(null) }
+    var isDiffLoading by remember { mutableStateOf(false) }
+    var diffResults by remember { mutableStateOf<List<BinDiffResult>>(emptyList()) }
+    val scope = rememberCoroutineScope()
 
     // Global Offset State (now from ViewModel)
     val binOffsets by sharedViewModel.binOffsets.collectAsState()
@@ -104,6 +111,47 @@ fun CurveEditorScreen(
     val onSurfaceColor = MaterialTheme.colorScheme.onSurface.toArgb()
     val surfaceColor = MaterialTheme.colorScheme.surface.toArgb()
     val gridColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f).toArgb()
+
+    val dismissDiffSheet = {
+        showDiffSheet = false
+        pendingDiffAction = null
+        isDiffLoading = false
+        diffResults = emptyList()
+    }
+
+    val requestDiffPreview: (DiffCommitAction) -> Unit = { action ->
+        pendingDiffAction = action
+        showDiffSheet = true
+        scope.launch {
+            isDiffLoading = true
+            diffResults = sharedViewModel.calculateDiff()
+            isDiffLoading = false
+        }
+    }
+
+    val confirmDiffAction = {
+        when (pendingDiffAction) {
+            DiffCommitAction.SAVE -> {
+                sharedViewModel.applyGlobalOffset(currentBinId, globalOffset.toInt())
+                sharedViewModel.save()
+            }
+            DiffCommitAction.EXPORT_IMAGE -> onExportImg()
+            DiffCommitAction.FLASH_DEVICE -> onRepack()
+            DiffCommitAction.INSTALL_INACTIVE_SLOT -> onInstallToInactiveSlot()
+            null -> Unit
+        }
+        dismissDiffSheet()
+    }
+
+    if (showDiffSheet && pendingDiffAction != null) {
+        DtsDiffViewer(
+            action = pendingDiffAction!!,
+            diffResults = diffResults,
+            isLoading = isDiffLoading,
+            onDismissRequest = dismissDiffSheet,
+            onConfirm = confirmDiffAction
+        )
+    }
     
     // History Sheet (Reusable)
     GpuWorkbenchSheets(
@@ -191,6 +239,7 @@ fun CurveEditorScreen(
                     sharedViewModel.applyGlobalOffset(currentBinId, globalOffset.toInt())
                     sharedViewModel.save() 
                 },
+                onRequireDiffConfirmation = requestDiffPreview,
                 onUndo = { sharedViewModel.undo() },
                 onRedo = { sharedViewModel.redo() },
                 onShowHistory = { activeSheet = WorkbenchSheetType.HISTORY },
