@@ -43,7 +43,6 @@ object GzipUtils {
     }
     
     @JvmStatic
-    @Throws(IOException::class)
     fun uncompress(bytes: ByteArray?): String? {
         if (bytes == null || bytes.isEmpty()) return null
         
@@ -62,7 +61,12 @@ object GzipUtils {
             out.toString(StandardCharsets.UTF_8.name())
         } catch (e: Exception) {
             // If gzip fails, try as Base64 encoded gzip string
-            uncompress(String(bytes, StandardCharsets.ISO_8859_1))
+            try {
+                uncompress(String(bytes, StandardCharsets.ISO_8859_1))
+            } catch (e2: Exception) {
+                // Neither raw gzip nor Base64-encoded gzip — return null
+                null
+            }
         }
     }
 }
