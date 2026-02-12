@@ -4,18 +4,86 @@ import android.app.Activity
 import com.ireddragonicy.konabessnext.model.Bin
 import com.ireddragonicy.konabessnext.model.Level
 
-
+import com.ireddragonicy.konabessnext.model.dts.DtsNode
 import com.ireddragonicy.konabessnext.utils.DtsHelper
-import java.util.regex.Pattern
+import com.ireddragonicy.konabessnext.utils.DtsTreeHelper
 
 /**
  * Handles level and bin manipulation operations.
- * Optimized for performance using direct string parsing where possible.
+ * Refactored to use AST parsing for robust property modification.
  */
 object LevelOperations {
 
-    // Pre-compiled regex for complex replacements only
-    private val PWR_LEVEL_REGEX = Pattern.compile("(qcom,(?:initial|ca-target)-pwrlevel\\s*=\\s*<)(0x[0-9a-fA-F]+|\\d+)(>;)")
+    // ===== AST Helper =====
+
+    private const val WRAPPER_NODE_NAME = "temp_wrapper"
+
+    /**
+     * Wraps raw property lines in a temporary dummy node so the DTS parser can parse them.
+     *
+     * `Bin.header` contains only the body *inside* a node (properties, no outer node wrapper).
+     */
+    private fun parsePropertiesToNode(lines: List<String>): DtsNode {
+        val rawContent = lines.joinToString("\n")
+        val wrappedContent = "$WRAPPER_NODE_NAME {\n$rawContent\n};"
+
+        val root = DtsTreeHelper.parse(wrappedContent)
+        return root.getChild(WRAPPER_NODE_NAME)
+            ?: throw IllegalStateException("Failed to find wrapper node '$WRAPPER_NODE_NAME' after parse")
+    }
+
+    /**
+     * Extract the property lines *inside* [WRAPPER_NODE_NAME] from a generated DTS string.
+     *
+     * DtsTreeHelper.generate always prepends `/dts-v1/;`, so we locate the wrapper node region
+     * and return only its inner lines.
+     */
+    private fun unwrapGeneratedNodeToPropertyLines(generated: String): List<String> {
+        val lines = generated.lines()
+
+        val openIdx = lines.indexOfFirst { it.trim() == "$WRAPPER_NODE_NAME {" }
+        if (openIdx == -1) return emptyList()
+
+        val closeRel = lines.subList(openIdx + 1, lines.size).indexOfFirst { it.trim() == "};" }
+        val closeIdx = if (closeRel == -1) -1 else (openIdx + 1 + closeRel)
+        if (closeIdx == -1 || closeIdx <= openIdx) return emptyList()
+
+        return lines
+            .subList(openIdx + 1, closeIdx)
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+    }
+
+    /**
+     * Round-trips [lines] through the AST, applies [modifier], regenerates, then unwraps back
+     * into the `Bin.header` format.
+     *
+     * Safety: Any parse/generate failure results in a no-op to preserve data integrity.
+     */
+    private fun modifyHeaderProperties(lines: ArrayList<String>, modifier: (DtsNode) -> Boolean) {
+        if (lines.isEmpty()) return
+
+        val originalSnapshot = ArrayList(lines)
+
+        try {
+            val wrapperNode = parsePropertiesToNode(lines)
+            val changed = modifier(wrapperNode)
+            if (!changed) return
+
+            val generated = DtsTreeHelper.generate(wrapperNode)
+            val newLines = unwrapGeneratedNodeToPropertyLines(generated)
+
+            // If we couldn't unwrap reliably, keep the original header as-is.
+            if (newLines.isEmpty()) return
+
+            lines.clear()
+            lines.addAll(newLines)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            lines.clear()
+            lines.addAll(originalSnapshot)
+        }
+    }
 
     // ===== Cloning Operations =====
 
@@ -43,29 +111,28 @@ object LevelOperations {
     // ===== Level Offset Operations =====
 
     private fun safeOffsetHeaderValue(headerLines: ArrayList<String>, key: String, offset: Int) {
-        for (i in headerLines.indices) {
-            val line = headerLines[i]
-            if (line.contains(key)) {
-                val matcher = PWR_LEVEL_REGEX.matcher(line)
-                if (matcher.find()) {
-                    try {
-                        val prefix = matcher.group(1)
-                        val valueStr = matcher.group(2)
-                        val suffix = matcher.group(3)
+        modifyHeaderProperties(headerLines) { node ->
+            val prop = node.getProperty(key) ?: return@modifyHeaderProperties false
 
-                        val currentValue = if (valueStr?.startsWith("0x") == true) {
-                            valueStr.substring(2).toLong(16)
-                        } else {
-                            valueStr?.toLong() ?: 0L
-                        }
+            // Construct a valid statement for DtsHelper to parse.
+            val currentVal = DtsHelper.extractLongValue("${prop.name} = ${prop.originalValue};")
+            if (currentVal == -1L) return@modifyHeaderProperties false
 
-                        val newValue = (currentValue + offset).coerceAtLeast(0)
-                        headerLines[i] = "$prefix$newValue$suffix"
-                        return
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    }
-                }
+            val newVal = (currentVal + offset).coerceAtLeast(0)
+
+            // Preserve original formatting choice: hex if value started as <0x...>
+            val isHex = prop.originalValue.trim().startsWith("<0x", ignoreCase = true)
+            val newValueStr = if (isHex) {
+                "<0x${java.lang.Long.toHexString(newVal)}>"
+            } else {
+                "<$newVal>"
+            }
+
+            if (prop.originalValue != newValueStr) {
+                prop.originalValue = newValueStr
+                true
+            } else {
+                false
             }
         }
     }
@@ -86,13 +153,13 @@ object LevelOperations {
     fun patchThrottleLevel(bins: ArrayList<Bin>?) {
         if (bins == null) return
         for (bin in bins) {
-            for (i in bin.header.indices) {
-                if (bin.header[i].contains("qcom,throttle-pwrlevel")) {
-                    val parts = bin.header[i].split("=")
-                    if (parts.isNotEmpty()) {
-                        bin.header[i] = "${parts[0].trim()} = <0>;"
-                    }
-                    break
+            modifyHeaderProperties(bin.header) { node ->
+                val prop = node.getProperty("qcom,throttle-pwrlevel") ?: return@modifyHeaderProperties false
+                if (prop.originalValue != "<0>") {
+                    prop.originalValue = "<0>"
+                    true
+                } else {
+                    false
                 }
             }
         }
