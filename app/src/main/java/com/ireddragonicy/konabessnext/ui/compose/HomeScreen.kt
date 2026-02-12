@@ -317,8 +317,8 @@ fun GpuEditorMainContent(
                             gpuFrequencyViewModel,
                             onOpenCurveEditor = { binId -> activeCurveEditorBinId = binId }
                         )
-                        SharedGpuViewModel.ViewMode.TEXT_ADVANCED -> UnifiedDtsEditorScreen(sharedViewModel)
-                        SharedGpuViewModel.ViewMode.VISUAL_TREE -> VisualTreeContent(sharedViewModel)
+                        SharedGpuViewModel.ViewMode.TEXT_ADVANCED -> UnifiedDtsEditorScreen()
+                        SharedGpuViewModel.ViewMode.VISUAL_TREE -> VisualTreeContent()
                     }
                 }
             }

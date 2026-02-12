@@ -27,7 +27,7 @@ class RawDtsEditorActivity : AppCompatActivity() {
         setContentView(ComposeView(this).apply {
             setContent {
                 KonaBessTheme {
-                    RawDtsScreen(sharedViewModel)
+                    RawDtsScreen()
                 }
             }
         })

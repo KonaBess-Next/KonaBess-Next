@@ -3,7 +3,8 @@ package com.ireddragonicy.konabessnext.ui.compose
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.*
-import com.ireddragonicy.konabessnext.viewmodel.SharedGpuViewModel
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.ireddragonicy.konabessnext.viewmodel.TextEditorViewModel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -11,20 +12,22 @@ import androidx.compose.ui.text.AnnotatedString
 import kotlin.math.abs
 
 @Composable
-fun UnifiedDtsEditorScreen(sharedViewModel: SharedGpuViewModel) {
-    val searchState by sharedViewModel.searchState.collectAsState()
-    val lintErrorCount by sharedViewModel.lintErrorCount.collectAsState()
-    val foldSessionKey by sharedViewModel.dtsEditorSessionKey.collectAsState()
-    val editorState = sharedViewModel.dtsEditorState
+fun UnifiedDtsEditorScreen(
+    textViewModel: TextEditorViewModel = hiltViewModel()
+) {
+    val searchState by textViewModel.searchState.collectAsState()
+    val lintErrorCount by textViewModel.lintErrorCount.collectAsState()
+    val foldSessionKey by textViewModel.dtsEditorSessionKey.collectAsState()
+    val editorState = textViewModel.dtsEditorState
     val persistedCollapsedFolds = remember(foldSessionKey) {
-        sharedViewModel.getCollapsedFolds(foldSessionKey)
+        textViewModel.getCollapsedFolds(foldSessionKey)
     }
     @Suppress("DEPRECATION")
     val clipboardManager = LocalClipboardManager.current
     
     // Read initial persisted scroll once; then sync back with throttling.
-    val initialTextScrollIdx = remember { sharedViewModel.textScrollIndex.value }
-    val initialTextScrollOff = remember { sharedViewModel.textScrollOffset.value }
+    val initialTextScrollIdx = remember { textViewModel.textScrollIndex.value }
+    val initialTextScrollOff = remember { textViewModel.textScrollOffset.value }
     
     // Text Editor Scroll State (Persisted)
     val listState = rememberLazyListState(
@@ -42,11 +45,11 @@ fun UnifiedDtsEditorScreen(sharedViewModel: SharedGpuViewModel) {
                 val shouldPersist =
                     index != lastCommittedIndex || abs(offset - lastCommittedOffset) >= 24
                 if (shouldPersist) {
-                    if (sharedViewModel.textScrollIndex.value != index) {
-                        sharedViewModel.textScrollIndex.value = index
+                    if (textViewModel.textScrollIndex.value != index) {
+                        textViewModel.textScrollIndex.value = index
                     }
-                    if (sharedViewModel.textScrollOffset.value != offset) {
-                        sharedViewModel.textScrollOffset.value = offset
+                    if (textViewModel.textScrollOffset.value != offset) {
+                        textViewModel.textScrollOffset.value = offset
                     }
                     lastCommittedIndex = index
                     lastCommittedOffset = offset
@@ -62,11 +65,11 @@ fun UnifiedDtsEditorScreen(sharedViewModel: SharedGpuViewModel) {
                 if (!scrolling) {
                     val index = listState.firstVisibleItemIndex
                     val offset = listState.firstVisibleItemScrollOffset
-                    if (sharedViewModel.textScrollIndex.value != index) {
-                        sharedViewModel.textScrollIndex.value = index
+                    if (textViewModel.textScrollIndex.value != index) {
+                        textViewModel.textScrollIndex.value = index
                     }
-                    if (sharedViewModel.textScrollOffset.value != offset) {
-                        sharedViewModel.textScrollOffset.value = offset
+                    if (textViewModel.textScrollOffset.value != offset) {
+                        textViewModel.textScrollOffset.value = offset
                     }
                 }
             }
@@ -77,24 +80,24 @@ fun UnifiedDtsEditorScreen(sharedViewModel: SharedGpuViewModel) {
             query = searchState.query,
             matchCount = searchState.results.size,
             currentMatchIndex = searchState.currentIndex,
-            onQueryChange = { sharedViewModel.search(it) },
-            onNext = { sharedViewModel.nextSearchResult() },
-            onPrev = { sharedViewModel.previousSearchResult() },
+            onQueryChange = { textViewModel.search(it) },
+            onNext = { textViewModel.nextSearchResult() },
+            onPrev = { textViewModel.previousSearchResult() },
             onCopyAll = { clipboardManager.setText(AnnotatedString(editorState.getText())) },
-            onReformat = { sharedViewModel.reformatCode() },
+            onReformat = { textViewModel.reformatCode() },
             lintErrorCount = lintErrorCount
         )
 
         DtsEditor(
             editorState = editorState,
-            onLinesChanged = { sharedViewModel.updateFromEditorLines(it, "Raw Edit") },
+            onLinesChanged = { textViewModel.updateFromEditorLines(it, "Raw Edit") },
             foldSessionKey = foldSessionKey,
             persistedCollapsedFolds = persistedCollapsedFolds,
-            onFoldStateChanged = { sharedViewModel.updateCollapsedFolds(foldSessionKey, it) },
+            onFoldStateChanged = { textViewModel.updateCollapsedFolds(foldSessionKey, it) },
             searchQuery = searchState.query,
             searchResultIndex = searchState.currentIndex,
             searchResults = searchState.results.map { LineSearchResult(it.lineIndex) },
-            lintErrorsByLine = sharedViewModel.lintErrorsByLine,
+            lintErrorsByLine = textViewModel.lintErrorsByLine,
             listState = listState
         )
     }

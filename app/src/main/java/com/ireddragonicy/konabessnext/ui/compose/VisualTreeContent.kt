@@ -9,8 +9,9 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.ireddragonicy.konabessnext.model.dts.DtsNode
-import com.ireddragonicy.konabessnext.viewmodel.SharedGpuViewModel
+import com.ireddragonicy.konabessnext.viewmodel.VisualTreeViewModel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -18,18 +19,21 @@ import androidx.compose.ui.text.AnnotatedString
 import kotlin.math.abs
 
 @Composable
-fun VisualTreeContent(sharedViewModel: SharedGpuViewModel) {
+fun VisualTreeContent(
+    treeViewModel: VisualTreeViewModel = hiltViewModel()
+) {
     // Use Cached Tree from VM to persist object state (isExpanded flags)
-    val rootNode by sharedViewModel.parsedTree.collectAsState()
+    val rootNode by treeViewModel.parsedTree.collectAsState()
+    val dtsContent by treeViewModel.dtsContent.collectAsState(initial = "")
     @Suppress("DEPRECATION")
     val clipboardManager = LocalClipboardManager.current
     
     // Tree view keeps local query to avoid triggering line-search pipeline.
-    var treeQuery by rememberSaveable { mutableStateOf(sharedViewModel.searchState.value.query) }
+    var treeQuery by rememberSaveable { mutableStateOf("") }
     
     // Read initial persisted scroll once; then sync back with throttling.
-    val initialScrollIndex = remember { sharedViewModel.treeScrollIndex.value }
-    val initialScrollOffset = remember { sharedViewModel.treeScrollOffset.value }
+    val initialScrollIndex = remember { treeViewModel.treeScrollIndex.value }
+    val initialScrollOffset = remember { treeViewModel.treeScrollOffset.value }
     
     // Initialize LazyListState with persistent values
     val listState = rememberLazyListState(
@@ -47,11 +51,11 @@ fun VisualTreeContent(sharedViewModel: SharedGpuViewModel) {
                 val shouldPersist =
                     index != lastCommittedIndex || abs(offset - lastCommittedOffset) >= 24
                 if (shouldPersist) {
-                    if (sharedViewModel.treeScrollIndex.value != index) {
-                        sharedViewModel.treeScrollIndex.value = index
+                    if (treeViewModel.treeScrollIndex.value != index) {
+                        treeViewModel.treeScrollIndex.value = index
                     }
-                    if (sharedViewModel.treeScrollOffset.value != offset) {
-                        sharedViewModel.treeScrollOffset.value = offset
+                    if (treeViewModel.treeScrollOffset.value != offset) {
+                        treeViewModel.treeScrollOffset.value = offset
                     }
                     lastCommittedIndex = index
                     lastCommittedOffset = offset
@@ -67,11 +71,11 @@ fun VisualTreeContent(sharedViewModel: SharedGpuViewModel) {
                 if (!scrolling) {
                     val index = listState.firstVisibleItemIndex
                     val offset = listState.firstVisibleItemScrollOffset
-                    if (sharedViewModel.treeScrollIndex.value != index) {
-                        sharedViewModel.treeScrollIndex.value = index
+                    if (treeViewModel.treeScrollIndex.value != index) {
+                        treeViewModel.treeScrollIndex.value = index
                     }
-                    if (sharedViewModel.treeScrollOffset.value != offset) {
-                        sharedViewModel.treeScrollOffset.value = offset
+                    if (treeViewModel.treeScrollOffset.value != offset) {
+                        treeViewModel.treeScrollOffset.value = offset
                     }
                 }
             }
@@ -107,7 +111,7 @@ fun VisualTreeContent(sharedViewModel: SharedGpuViewModel) {
                         treeCurrentIndex = if (treeCurrentIndex - 1 < 0) treeMatchCount - 1 else treeCurrentIndex - 1
                     }
                 },
-                onCopyAll = { clipboardManager.setText(AnnotatedString(sharedViewModel.dtsContent.value)) }
+                onCopyAll = { clipboardManager.setText(AnnotatedString(dtsContent)) }
             )
 
             DtsTreeScreen(
@@ -116,7 +120,7 @@ fun VisualTreeContent(sharedViewModel: SharedGpuViewModel) {
                 searchQuery = treeQuery,
                 searchMatchIndex = treeCurrentIndex,
                 onNodeToggle = { path, expanded ->
-                    sharedViewModel.toggleNodeExpansion(path, expanded)
+                    treeViewModel.toggleNodeExpansion(path, expanded)
                 },
                 onSearchMatchesChanged = { count ->
                     treeMatchCount = count
@@ -125,7 +129,7 @@ fun VisualTreeContent(sharedViewModel: SharedGpuViewModel) {
                         treeCurrentIndex = if (count > 0) 0 else -1
                     }
                 },
-                onTreeModified = { sharedViewModel.syncTreeToText() }
+                onTreeModified = { treeViewModel.syncTreeToText() }
             )
         }
     }

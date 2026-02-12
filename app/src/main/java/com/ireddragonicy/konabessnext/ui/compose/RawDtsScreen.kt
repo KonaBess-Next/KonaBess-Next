@@ -5,27 +5,32 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import com.ireddragonicy.konabessnext.viewmodel.SharedGpuViewModel
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.ireddragonicy.konabessnext.viewmodel.TextEditorViewModel
+import com.ireddragonicy.konabessnext.viewmodel.VisualTreeViewModel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlin.math.abs
 
 @Composable
-fun RawDtsScreen(viewModel: SharedGpuViewModel) {
-    val searchState by viewModel.searchState.collectAsState()
-    val foldSessionKey by viewModel.dtsEditorSessionKey.collectAsState()
-    val editorState = viewModel.dtsEditorState
+fun RawDtsScreen(
+    textViewModel: TextEditorViewModel = hiltViewModel(),
+    treeViewModel: VisualTreeViewModel = hiltViewModel()
+) {
+    val searchState by textViewModel.searchState.collectAsState()
+    val foldSessionKey by textViewModel.dtsEditorSessionKey.collectAsState()
+    val editorState = textViewModel.dtsEditorState
     val persistedCollapsedFolds = remember(foldSessionKey) {
-        viewModel.getCollapsedFolds(foldSessionKey)
+        textViewModel.getCollapsedFolds(foldSessionKey)
     }
     
     // Read initial persisted positions once; then sync back with throttling.
-    val initialTextScrollIdx = remember { viewModel.textScrollIndex.value }
-    val initialTextScrollOff = remember { viewModel.textScrollOffset.value }
-    val initialTreeScrollIdx = remember { viewModel.treeScrollIndex.value }
-    val initialTreeScrollOff = remember { viewModel.treeScrollOffset.value }
+    val initialTextScrollIdx = remember { textViewModel.textScrollIndex.value }
+    val initialTextScrollOff = remember { textViewModel.textScrollOffset.value }
+    val initialTreeScrollIdx = remember { treeViewModel.treeScrollIndex.value }
+    val initialTreeScrollOff = remember { treeViewModel.treeScrollOffset.value }
 
-    val parsedTree by viewModel.parsedTree.collectAsState()
+    val parsedTree by treeViewModel.parsedTree.collectAsState()
     
     // View Mode (Local switch for standalone activity)
     var isVisualMode by remember { mutableStateOf(false) }
@@ -46,11 +51,11 @@ fun RawDtsScreen(viewModel: SharedGpuViewModel) {
                 val shouldPersist =
                     index != lastCommittedIndex || abs(offset - lastCommittedOffset) >= 24
                 if (shouldPersist) {
-                    if (viewModel.textScrollIndex.value != index) {
-                        viewModel.textScrollIndex.value = index
+                    if (textViewModel.textScrollIndex.value != index) {
+                        textViewModel.textScrollIndex.value = index
                     }
-                    if (viewModel.textScrollOffset.value != offset) {
-                        viewModel.textScrollOffset.value = offset
+                    if (textViewModel.textScrollOffset.value != offset) {
+                        textViewModel.textScrollOffset.value = offset
                     }
                     lastCommittedIndex = index
                     lastCommittedOffset = offset
@@ -65,11 +70,11 @@ fun RawDtsScreen(viewModel: SharedGpuViewModel) {
                 if (!scrolling) {
                     val index = textListState.firstVisibleItemIndex
                     val offset = textListState.firstVisibleItemScrollOffset
-                    if (viewModel.textScrollIndex.value != index) {
-                        viewModel.textScrollIndex.value = index
+                    if (textViewModel.textScrollIndex.value != index) {
+                        textViewModel.textScrollIndex.value = index
                     }
-                    if (viewModel.textScrollOffset.value != offset) {
-                        viewModel.textScrollOffset.value = offset
+                    if (textViewModel.textScrollOffset.value != offset) {
+                        textViewModel.textScrollOffset.value = offset
                     }
                 }
             }
@@ -91,11 +96,11 @@ fun RawDtsScreen(viewModel: SharedGpuViewModel) {
                 val shouldPersist =
                     index != lastCommittedIndex || abs(offset - lastCommittedOffset) >= 24
                 if (shouldPersist) {
-                    if (viewModel.treeScrollIndex.value != index) {
-                        viewModel.treeScrollIndex.value = index
+                    if (treeViewModel.treeScrollIndex.value != index) {
+                        treeViewModel.treeScrollIndex.value = index
                     }
-                    if (viewModel.treeScrollOffset.value != offset) {
-                        viewModel.treeScrollOffset.value = offset
+                    if (treeViewModel.treeScrollOffset.value != offset) {
+                        treeViewModel.treeScrollOffset.value = offset
                     }
                     lastCommittedIndex = index
                     lastCommittedOffset = offset
@@ -110,11 +115,11 @@ fun RawDtsScreen(viewModel: SharedGpuViewModel) {
                 if (!scrolling) {
                     val index = treeListState.firstVisibleItemIndex
                     val offset = treeListState.firstVisibleItemScrollOffset
-                    if (viewModel.treeScrollIndex.value != index) {
-                        viewModel.treeScrollIndex.value = index
+                    if (treeViewModel.treeScrollIndex.value != index) {
+                        treeViewModel.treeScrollIndex.value = index
                     }
-                    if (viewModel.treeScrollOffset.value != offset) {
-                        viewModel.treeScrollOffset.value = offset
+                    if (treeViewModel.treeScrollOffset.value != offset) {
+                        treeViewModel.treeScrollOffset.value = offset
                     }
                 }
             }
@@ -143,7 +148,7 @@ fun RawDtsScreen(viewModel: SharedGpuViewModel) {
                 searchQuery = searchState.query,
                 searchMatchIndex = treeCurrentIndex,
                 onNodeToggle = { path, expanded -> 
-                    viewModel.toggleNodeExpansion(path, expanded) 
+                    treeViewModel.toggleNodeExpansion(path, expanded) 
                 },
                 onSearchMatchesChanged = { count ->
                     treeMatchCount = count
@@ -151,19 +156,19 @@ fun RawDtsScreen(viewModel: SharedGpuViewModel) {
                         treeCurrentIndex = if (count > 0) 0 else -1
                     }
                 },
-                onTreeModified = { viewModel.syncTreeToText() }
+                onTreeModified = { treeViewModel.syncTreeToText() }
             )
         } else {
             DtsEditor(
                 editorState = editorState,
-                onLinesChanged = { viewModel.updateFromEditorLines(it, "Raw Edit") },
+                onLinesChanged = { textViewModel.updateFromEditorLines(it, "Raw Edit") },
                 foldSessionKey = foldSessionKey,
                 persistedCollapsedFolds = persistedCollapsedFolds,
-                onFoldStateChanged = { viewModel.updateCollapsedFolds(foldSessionKey, it) },
+                onFoldStateChanged = { textViewModel.updateCollapsedFolds(foldSessionKey, it) },
                 searchQuery = searchState.query,
                 searchResultIndex = searchState.currentIndex,
                 searchResults = emptyList(),
-                lintErrorsByLine = viewModel.lintErrorsByLine,
+                lintErrorsByLine = textViewModel.lintErrorsByLine,
                 listState = textListState
             )
         }
