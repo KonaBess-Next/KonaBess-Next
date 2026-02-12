@@ -70,6 +70,10 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
+import androidx.compose.ui.zIndex
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import com.ireddragonicy.konabessnext.editor.EditorSession
 import com.ireddragonicy.konabessnext.editor.highlight.ComposeHighlighter
 import com.ireddragonicy.konabessnext.editor.text.DtsEditorState
@@ -387,6 +391,8 @@ fun DtsEditor(
     var expandAnchor by remember(editorState) { mutableStateOf<TextCursor?>(editorState.cursor) }
     val currentSelection = editorState.selection
     val hasExpandedSelection = currentSelection?.isCollapsed == false
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val clipboardManager = LocalClipboardManager.current
     var foldModel by remember { mutableStateOf(FoldModel.EMPTY) }
     val collapsedStarts = remember { mutableStateMapOf<Int, Int>() }
     val visibleLineIndices by remember(editorState.lines.size, collapsedStarts, foldModel) {
@@ -431,6 +437,62 @@ fun DtsEditor(
 
     fun refreshVisibleHighlights() {
         EditorSession.update(editorState.copyLines(), searchQuery, highlightScope)
+    }
+
+    fun getSelectedText(): String? {
+        val sel = editorState.selection ?: return null
+        if (sel.isCollapsed) return null
+        val start = sel.normalizedStart
+        val end = sel.normalizedEnd
+        val lines = editorState.lines
+        if (start.line == end.line) {
+            val text = lines[start.line].text
+            return text.substring(
+                start.column.coerceIn(0, text.length),
+                end.column.coerceIn(0, text.length)
+            )
+        }
+        val sb = StringBuilder()
+        sb.append(lines[start.line].text.substring(start.column.coerceIn(0, lines[start.line].length)))
+        for (i in (start.line + 1) until end.line) {
+            sb.append('\n')
+            sb.append(lines[i].text)
+        }
+        sb.append('\n')
+        sb.append(lines[end.line].text.substring(0, end.column.coerceIn(0, lines[end.line].length)))
+        return sb.toString()
+    }
+
+    fun copySelection() {
+        val text = getSelectedText() ?: return
+        clipboardManager.setText(AnnotatedString(text))
+    }
+
+    fun cutSelection() {
+        val text = getSelectedText() ?: return
+        clipboardManager.setText(AnnotatedString(text))
+        editorState.deleteBackward()
+        expandAnchor = editorState.cursor
+        refreshVisibleHighlights()
+    }
+
+    fun pasteFromClipboard() {
+        val pasteText = clipboardManager.getText()?.text ?: return
+        if (pasteText.isEmpty()) return
+        val normalized = pasteText.replace("\r\n", "\n").replace('\r', '\n')
+        editorState.insertText(normalized)
+        expandAnchor = editorState.cursor
+        refreshVisibleHighlights()
+    }
+
+    fun selectAllText() {
+        if (editorState.lines.isEmpty()) return
+        val lastLine = editorState.lines.lastIndex
+        val lastCol = editorState.lines[lastLine].length
+        editorState.setSelection(
+            start = TextCursor(0, 0),
+            end = TextCursor(lastLine, lastCol)
+        )
     }
 
     fun expandCollapsedForLine(targetLine: Int): Boolean {
@@ -850,6 +912,12 @@ fun DtsEditor(
                         lineIndex = actualLineIndex,
                         lineLength = line.length
                     )
+                    val normalizedSel = currentSelection?.takeIf { !it.isCollapsed }
+                    val showStartHandle = normalizedSel != null &&
+                        normalizedSel.normalizedStart.line == actualLineIndex
+                    val showEndHandle = normalizedSel != null &&
+                        normalizedSel.normalizedEnd.line == actualLineIndex
+
                     EditorLineRow(
                         lineNumber = actualLineIndex + 1,
                         content = line.text,
@@ -867,6 +935,8 @@ fun DtsEditor(
                             null
                         },
                         selectionRange = lineSelectionRange,
+                        showStartHandle = showStartHandle,
+                        showEndHandle = showEndHandle,
                         searchQuery = searchQuery,
                         cachedHighlight = highlightCache[actualLineIndex],
                         errors = errorsForLine,
@@ -874,6 +944,7 @@ fun DtsEditor(
                             editorState.moveCursor(actualLineIndex, offset)
                             expandAnchor = editorState.cursor
                             focusRequester.requestFocus()
+                            keyboardController?.show()
                         },
                         onWordSelect = { offset ->
                             val selectedWord = wordSelection(line.text, offset)
@@ -883,6 +954,7 @@ fun DtsEditor(
                             )
                             expandAnchor = TextCursor(actualLineIndex, offset.coerceIn(0, line.length))
                             focusRequester.requestFocus()
+                            keyboardController?.show()
                         },
                         onLineSelect = { offset ->
                             val selectedLine = lineSelection(line.text)
@@ -892,8 +964,47 @@ fun DtsEditor(
                             )
                             expandAnchor = TextCursor(actualLineIndex, offset.coerceIn(0, line.length))
                             focusRequester.requestFocus()
+                            keyboardController?.show()
                         }
                     )
+                }
+            }
+
+            // Floating selection toolbar (Copy / Cut / Paste / Select All)
+            if (hasExpandedSelection) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = if (stickyHeaderPath.isNotEmpty()) 36.dp else 4.dp)
+                        .zIndex(20f)
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        shadowElevation = 8.dp,
+                        tonalElevation = 3.dp
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(0.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            TextButton(onClick = {
+                                cutSelection()
+                                resetIme()
+                            }) { Text("Cut", fontSize = 14.sp) }
+                            TextButton(onClick = {
+                                copySelection()
+                            }) { Text("Copy", fontSize = 14.sp) }
+                            TextButton(onClick = {
+                                pasteFromClipboard()
+                                resetIme()
+                            }) { Text("Paste", fontSize = 14.sp) }
+                            TextButton(onClick = {
+                                selectAllText()
+                            }) { Text("Select All", fontSize = 14.sp) }
+                        }
+                    }
                 }
             }
 
@@ -954,6 +1065,8 @@ private fun EditorLineRow(
     foldMarker: FoldMarker,
     onToggleFold: (() -> Unit)?,
     selectionRange: TextRange?,
+    showStartHandle: Boolean = false,
+    showEndHandle: Boolean = false,
     searchQuery: String,
     cachedHighlight: AnnotatedString?,
     errors: List<DtsError>?,
@@ -976,8 +1089,10 @@ private fun EditorLineRow(
         )
     }
 
+    val hasHandle = showStartHandle || showEndHandle
     val activeBackground = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f)
     val caretColor = MaterialTheme.colorScheme.primary
+    val handleColor = MaterialTheme.colorScheme.primary
     val errorGutterBg = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f)
     val warningGutterBg = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f)
     val normalGutterBg = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
@@ -1115,18 +1230,51 @@ private fun EditorLineRow(
             modifier = Modifier
                 .weight(1f)
                 .defaultMinSize(minHeight = 24.dp)
-                .padding(start = 12.dp, end = 8.dp, top = 2.dp, bottom = 2.dp)
+                .padding(start = 12.dp, end = 8.dp, top = 2.dp, bottom = if (hasHandle) 14.dp else 2.dp)
                 .drawBehind {
-                    if (!showCaret) return@drawBehind
                     val layout = textLayoutResult ?: return@drawBehind
-                    val safeColumn = caretColumn.coerceIn(0, content.length)
-                    val rect = layout.getCursorRect(safeColumn)
-                    drawLine(
-                        color = caretColor,
-                        start = Offset(rect.left, rect.top),
-                        end = Offset(rect.left, rect.bottom),
-                        strokeWidth = 2f
-                    )
+                    // Draw caret
+                    if (showCaret) {
+                        val safeColumn = caretColumn.coerceIn(0, content.length)
+                        val rect = layout.getCursorRect(safeColumn)
+                        drawLine(
+                            color = caretColor,
+                            start = Offset(rect.left, rect.top),
+                            end = Offset(rect.left, rect.bottom),
+                            strokeWidth = 2f
+                        )
+                    }
+                    // Draw selection handles (teardrop style)
+                    if (showStartHandle) {
+                        val col = selectionRange?.start?.coerceIn(0, content.length) ?: 0
+                        val rect = layout.getCursorRect(col)
+                        drawLine(
+                            color = handleColor,
+                            start = Offset(rect.left, rect.top),
+                            end = Offset(rect.left, rect.bottom + 2.dp.toPx()),
+                            strokeWidth = 2.5f
+                        )
+                        drawCircle(
+                            color = handleColor,
+                            radius = 5.dp.toPx(),
+                            center = Offset(rect.left, rect.bottom + 7.dp.toPx())
+                        )
+                    }
+                    if (showEndHandle) {
+                        val col = selectionRange?.end?.coerceIn(0, content.length) ?: content.length
+                        val rect = layout.getCursorRect(col)
+                        drawLine(
+                            color = handleColor,
+                            start = Offset(rect.left, rect.top),
+                            end = Offset(rect.left, rect.bottom + 2.dp.toPx()),
+                            strokeWidth = 2.5f
+                        )
+                        drawCircle(
+                            color = handleColor,
+                            radius = 5.dp.toPx(),
+                            center = Offset(rect.left, rect.bottom + 7.dp.toPx())
+                        )
+                    }
                 }
                 .pointerInput(content, renderedText) {
                     detectTapGestures(
@@ -1160,6 +1308,17 @@ private fun EditorLineRow(
                             } ?: content.length
                             onWordSelect(offset)
                             lastDoubleTapTimestamp = android.os.SystemClock.uptimeMillis()
+                        },
+                        onLongPress = { tapPosition ->
+                            val offset = textLayoutResult?.let { layout ->
+                                try {
+                                    layout.getOffsetForPosition(Offset(tapPosition.x, tapPosition.y))
+                                        .coerceIn(0, content.length)
+                                } catch (_: Exception) {
+                                    content.length
+                                }
+                            } ?: content.length
+                            onWordSelect(offset)
                         }
                     )
                 }

@@ -3,6 +3,8 @@ package com.ireddragonicy.konabessnext.repository
 import com.ireddragonicy.konabessnext.core.interfaces.AssetDataSource
 import com.ireddragonicy.konabessnext.core.interfaces.FileDataSource
 import com.ireddragonicy.konabessnext.core.interfaces.SystemPropertySource
+import com.ireddragonicy.konabessnext.core.model.AppError
+import com.ireddragonicy.konabessnext.core.model.DomainResult
 import com.ireddragonicy.konabessnext.core.processor.BootImageProcessor
 import com.ireddragonicy.konabessnext.model.ChipDefinition
 import com.ireddragonicy.konabessnext.model.Dtb
@@ -132,64 +134,80 @@ open class DeviceRepository @Inject constructor(
         )
     }
 
-    suspend fun importExternalDts(inputStream: InputStream, filename: String): Dtb {
-        val timestamp = System.currentTimeMillis()
-        val sanitizedName = filename.replace(Regex("[^a-zA-Z0-9._-]"), "_")
-            .removeSuffix(".dts").removeSuffix(".dtb").removeSuffix(".txt")
-        savedDtsDir.mkdirs()
-        val rawFile = File(savedDtsDir, "raw_temp_$timestamp")
-        withContext(Dispatchers.IO) {
+    suspend fun importExternalDts(inputStream: InputStream, filename: String): DomainResult<Dtb> = withContext(Dispatchers.IO) {
+        try {
+            val timestamp = System.currentTimeMillis()
+            val sanitizedName = filename.replace(Regex("[^a-zA-Z0-9._-]"), "_")
+                .removeSuffix(".dts").removeSuffix(".dtb").removeSuffix(".txt")
+            savedDtsDir.mkdirs()
+            val rawFile = File(savedDtsDir, "raw_temp_$timestamp")
             FileOutputStream(rawFile).use { output -> inputStream.copyTo(output) }
-        }
 
-        if (!rawFile.exists() || rawFile.length() == 0L) {
-            rawFile.delete()
-            throw IOException("Failed to read file — 0 bytes received. Check file permissions.")
-        }
-
-        // Detect if the file is a binary DTB or text DTS/TXT
-        val importedFile = withContext(Dispatchers.IO) {
-            val dtsFile = File(savedDtsDir, "${sanitizedName}_$timestamp.dts")
-            if (isDtbBinary(rawFile)) {
-                val dtcPath = getBinaryPath("dtc")
-                shellRepository.execAndCheck("$dtcPath -I dtb -O dts \"${rawFile.absolutePath}\" -o \"${dtsFile.absolutePath}\"")
+            if (!rawFile.exists() || rawFile.length() == 0L) {
                 rawFile.delete()
-                if (dtsFile.exists() && dtsFile.length() > 0) {
-                    dtsFile
-                } else {
-                    rawFile.renameTo(dtsFile)
-                    dtsFile
+                return@withContext DomainResult.Failure(
+                    AppError.IoError("Failed to read file - 0 bytes received. Check file permissions.")
+                )
+            }
+
+            // Detect if the file is a binary DTB or text DTS/TXT
+            val dtsFile = File(savedDtsDir, "${sanitizedName}_$timestamp.dts")
+            val importedFile = if (isDtbBinary(rawFile)) {
+                val dtcPath = getBinaryPath("dtc")
+                val command = "\"$dtcPath\" -I dtb -O dts \"${rawFile.absolutePath}\" -o \"${dtsFile.absolutePath}\""
+                val convertResult = shellRepository.execAndCheck(command)
+                rawFile.delete()
+                if (!convertResult) {
+                    return@withContext DomainResult.Failure(
+                        AppError.ShellError("Failed to convert imported DTB to DTS. Check shell tooling.", command)
+                    )
                 }
+                if (!dtsFile.exists() || dtsFile.length() == 0L) {
+                    return@withContext DomainResult.Failure(
+                        AppError.ParsingError("DTB conversion produced an empty DTS output.")
+                    )
+                }
+                dtsFile
             } else {
-                rawFile.renameTo(dtsFile)
+                if (!rawFile.renameTo(dtsFile)) {
+                    return@withContext DomainResult.Failure(
+                        AppError.IoError("Failed to stage imported DTS file for parsing.")
+                    )
+                }
                 dtsFile
             }
-        }
 
-        // Use sequential negative IDs to distinguish from physical DTBs (0..n)
-        importCounter++
-        val virtualId = -importCounter
-        
-        val content = withContext(Dispatchers.IO) { importedFile.readText() }
-        
-        // Use DtsScanner smart detection to analyze
-        val scanResult = DtsScanner.scanContent(content, virtualId)
-        val def = if (scanResult.isValid) {
-            DtsScanner.toChipDefinition(scanResult)
-        } else {
-            createGenericPlaceholder(virtualId, content, scanResult.detectedModel ?: "Imported (Unknown)")
-        }
+            // Use sequential negative IDs to distinguish from physical DTBs (0..n)
+            importCounter++
+            val virtualId = -importCounter
 
-        val dtb = Dtb(virtualId, def)
-        dtbs.add(dtb)
-        _dtsPath = importedFile.absolutePath
-        importedDtsPaths[virtualId] = importedFile.absolutePath
-        chipRepository.setCurrentChip(def)
-        currentDtb = dtb
-        prepared = (def.strategyType.isNotEmpty())
-        saveLastChipset(virtualId, def.id)
-        
-        return dtb
+            val content = importedFile.readText()
+
+            // Use DtsScanner smart detection to analyze
+            val scanResult = DtsScanner.scanContent(content, virtualId)
+            val def = if (scanResult.isValid) {
+                DtsScanner.toChipDefinition(scanResult)
+            } else {
+                createGenericPlaceholder(virtualId, content, scanResult.detectedModel ?: "Imported (Unknown)")
+            }
+
+            val dtb = Dtb(virtualId, def)
+            dtbs.add(dtb)
+            _dtsPath = importedFile.absolutePath
+            importedDtsPaths[virtualId] = importedFile.absolutePath
+            chipRepository.setCurrentChip(def)
+            currentDtb = dtb
+            prepared = (def.strategyType.isNotEmpty())
+            saveLastChipset(virtualId, def.id)
+
+            DomainResult.Success(dtb)
+        } catch (e: IOException) {
+            DomainResult.Failure(AppError.IoError(e.message ?: "Failed to import external DTS file.", e))
+        } catch (e: IllegalArgumentException) {
+            DomainResult.Failure(AppError.ParsingError(e.message ?: "Failed to parse imported DTS content."))
+        } catch (e: Exception) {
+            DomainResult.Failure(AppError.UnknownError(e.message ?: "Import failed", e))
+        }
     }
 
     /**
@@ -324,27 +342,41 @@ open class DeviceRepository @Inject constructor(
         return File(filesDir, name).absolutePath
     }
 
-    suspend fun setupEnv() = withContext(Dispatchers.IO) {
-        if (chipRepository.definitions.value.isEmpty()) chipRepository.loadDefinitions()
-
-        // Prefer binaries from nativeLibraryDir (bundled via jniLibs, proper SELinux context)
-        val nativeLibAvailable = REQUIRED_BINARIES.all { binary ->
-            File(nativeLibDir, "lib${binary}.so").exists()
-        }
-
-        if (!nativeLibAvailable) {
-            // Fallback: extract from assets (legacy path, works in root mode)
-            Log.d(TAG, "setupEnv: extracting binaries from assets")
-            for (binary in REQUIRED_BINARIES) {
-                val file = File(filesDir, binary)
-                if (file.exists()) file.delete()
-                exportResource(binary, file.absolutePath)
-                file.setExecutable(true, false)
-                file.setReadable(true, false)
+    suspend fun setupEnv(): DomainResult<Unit> = withContext(Dispatchers.IO) {
+        try {
+            if (chipRepository.definitions.value.isEmpty()) {
+                chipRepository.loadDefinitions()
             }
-        }
-        if (isRootMode) {
-            shellRepository.execAndCheck("chmod -R 755 $filesDir")
+
+            // Prefer binaries from nativeLibraryDir (bundled via jniLibs, proper SELinux context)
+            val nativeLibAvailable = REQUIRED_BINARIES.all { binary ->
+                File(nativeLibDir, "lib${binary}.so").exists()
+            }
+
+            if (!nativeLibAvailable) {
+                // Fallback: extract from assets (legacy path, works in root mode)
+                Log.d(TAG, "setupEnv: extracting binaries from assets")
+                for (binary in REQUIRED_BINARIES) {
+                    val file = File(filesDir, binary)
+                    if (file.exists()) file.delete()
+                    exportResource(binary, file.absolutePath)
+                    file.setExecutable(true, false)
+                    file.setReadable(true, false)
+                }
+            }
+            if (isRootMode) {
+                val command = "chmod -R 755 $filesDir"
+                if (!shellRepository.execAndCheck(command)) {
+                    return@withContext DomainResult.Failure(
+                        AppError.ShellError("Failed to set executable permissions for environment setup.", command)
+                    )
+                }
+            }
+            DomainResult.Success(Unit)
+        } catch (e: IOException) {
+            DomainResult.Failure(AppError.IoError(e.message ?: "Failed to initialize working environment.", e))
+        } catch (e: Exception) {
+            DomainResult.Failure(AppError.UnknownError(e.message ?: "Environment setup failed.", e))
         }
     }
 
@@ -377,12 +409,11 @@ open class DeviceRepository @Inject constructor(
         }
     }
 
-    private fun getInactiveSlotSuffix(): String {
+    private fun getInactiveSlotSuffixOrNull(): String? {
         return when (getCurrent("slot").trim()) {
             "_a", "a" -> "_b"
             "_b", "b" -> "_a"
-            "" -> throw IllegalStateException("Could not determine A/B slot status")
-            else -> throw IllegalStateException("This device does not report a valid A/B slot suffix")
+            else -> null
         }
     }
     
@@ -453,31 +484,59 @@ open class DeviceRepository @Inject constructor(
         }
     }
 
-    suspend fun getBootImage() = withContext(Dispatchers.IO) {
-        try { getBootImageByType("vendor_boot"); bootName = "vendor_boot" }
-        catch (e: Exception) { getBootImageByType("boot"); bootName = "boot" }
+    suspend fun getBootImage(): DomainResult<Unit> = withContext(Dispatchers.IO) {
+        if (!isRootMode || !shellRepository.isRootAvailable()) {
+            return@withContext DomainResult.Failure(AppError.RootAccessError())
+        }
+
+        val vendorBootResult = getBootImageByType("vendor_boot")
+        if (vendorBootResult is DomainResult.Success) {
+            bootName = "vendor_boot"
+            return@withContext DomainResult.Success(Unit)
+        }
+
+        val bootResult = getBootImageByType("boot")
+        if (bootResult is DomainResult.Success) {
+            bootName = "boot"
+            return@withContext DomainResult.Success(Unit)
+        }
+
+        val vendorError = (vendorBootResult as? DomainResult.Failure)?.error?.message ?: "Unknown vendor_boot failure"
+        val bootError = (bootResult as? DomainResult.Failure)?.error?.message ?: "Unknown boot failure"
+        DomainResult.Failure(
+            AppError.ShellError("Failed to extract boot images.\nvendor_boot: $vendorError\nboot: $bootError")
+        )
     }
 
     /**
      * Import a boot image from an InputStream (non-root mode).
      * Copies the stream content to filesDir/boot.img for processing.
      */
-    suspend fun importBootImage(inputStream: InputStream, filename: String) = withContext(Dispatchers.IO) {
-        // Clean up ALL working artifacts first — old files may be root-owned
-        // from a previous root-mode session and can't be overwritten directly.
-        cleanWorkingFiles()
+    suspend fun importBootImage(inputStream: InputStream, filename: String): DomainResult<Unit> = withContext(Dispatchers.IO) {
+        try {
+            // Clean up ALL working artifacts first — old files may be root-owned
+            // from a previous root-mode session and can't be overwritten directly.
+            cleanWorkingFiles()
 
-        val bootImgFile = File(filesDir, "boot.img")
-        FileOutputStream(bootImgFile).use { output ->
-            val bytesCopied = inputStream.copyTo(output)
-            Log.d(TAG, "importBootImage: copied $bytesCopied bytes from $filename")
+            val bootImgFile = File(filesDir, "boot.img")
+            FileOutputStream(bootImgFile).use { output ->
+                val bytesCopied = inputStream.copyTo(output)
+                Log.d(TAG, "importBootImage: copied $bytesCopied bytes from $filename")
+            }
+            if (!bootImgFile.exists() || bootImgFile.length() == 0L) {
+                return@withContext DomainResult.Failure(
+                    AppError.IoError("Failed to import boot image - 0 bytes received.")
+                )
+            }
+            // Determine boot name from filename hint
+            bootName = if (filename.contains("vendor", ignoreCase = true)) "vendor_boot" else "boot"
+            Log.d(TAG, "importBootImage: ${bootImgFile.length()} bytes, bootName=$bootName")
+            DomainResult.Success(Unit)
+        } catch (e: IOException) {
+            DomainResult.Failure(AppError.IoError(e.message ?: "Failed to import boot image.", e))
+        } catch (e: Exception) {
+            DomainResult.Failure(AppError.UnknownError(e.message ?: "Failed to import boot image.", e))
         }
-        if (!bootImgFile.exists() || bootImgFile.length() == 0L) {
-            throw IOException("Failed to import boot image — 0 bytes received.")
-        }
-        // Determine boot name from filename hint
-        bootName = if (filename.contains("vendor", ignoreCase = true)) "vendor_boot" else "boot"
-        Log.d(TAG, "importBootImage: ${bootImgFile.length()} bytes, bootName=$bootName")
     }
 
     /**
@@ -493,142 +552,258 @@ open class DeviceRepository @Inject constructor(
         }
     }
 
-    private suspend fun getBootImageByType(type: String) {
+    private suspend fun getBootImageByType(type: String): DomainResult<Unit> {
         val bootImgPath = "$filesDir/boot.img"
         val partition = "/dev/block/bootdevice/by-name/$type${getCurrent("slot")}"
-        if (!shellRepository.execAndCheck("dd if=$partition of=$bootImgPath && chmod 644 $bootImgPath")) throw IOException("Failed to get $type image.")
+        val command = "dd if=$partition of=$bootImgPath && chmod 644 $bootImgPath"
+        if (!shellRepository.execAndCheck(command)) {
+            return DomainResult.Failure(
+                AppError.ShellError("Failed to get $type image from $partition.", command)
+            )
+        }
+        return DomainResult.Success(Unit)
     }
 
-    suspend fun writeBootImage() = withContext(Dispatchers.IO) {
-        val newBootPath = "$filesDir/boot_new.img"
-        val partition = "/dev/block/by-name/$bootName${getCurrent("slot")}"
-        
-        verifyPartitionSize(partition, newBootPath)
-        
-        shellRepository.execAndCheck("dd if=$newBootPath of=$partition")
-    }
-
-    suspend fun installToInactiveSlot(shouldBackup: Boolean): String = withContext(Dispatchers.IO) {
-        if (!isRootMode) throw IllegalStateException("Root access required")
-        val newImg = File(filesDir, "boot_new.img")
-        if (!newImg.exists() || newImg.length() == 0L) {
-            throw IOException("Repacked image not found. Please 'Build > Repack' first.")
-        }
-
-        val resolvedBootName = bootName
-            ?: throw IllegalStateException("Boot partition type unknown. Please import/detect first.")
-        val targetSlot = getInactiveSlotSuffix()
-        val targetPartition = "/dev/block/by-name/${resolvedBootName}${targetSlot}"
-
-        if (!shellRepository.execAndCheck("[ -e '$targetPartition' ]")) {
-            throw IOException("Target partition $targetPartition does not exist")
-        }
-
-        val sb = StringBuilder()
-
-        if (shouldBackup) {
-            val timestamp = System.currentTimeMillis()
-            val backupDir = "/sdcard/Download"
-            val backupPath = "$backupDir/boot_backup_${resolvedBootName}${targetSlot}_$timestamp.img"
-
-            if (!shellRepository.execAndCheck("mkdir -p '$backupDir'")) {
-                throw IOException("Failed to prepare backup directory at $backupDir")
+    suspend fun writeBootImage(): DomainResult<Unit> = withContext(Dispatchers.IO) {
+        try {
+            if (!isRootMode || !shellRepository.isRootAvailable()) {
+                return@withContext DomainResult.Failure(AppError.RootAccessError())
             }
 
-            val backupResult = shellRepository.execAndCheck("dd if='$targetPartition' of='$backupPath'")
-            if (!backupResult) throw IOException("Failed to backup inactive slot")
-            sb.append("Backup saved to: $backupPath\n")
+            val resolvedBootName = bootName
+                ?: return@withContext DomainResult.Failure(
+                    AppError.BootImageError("Boot partition type unknown. Please import or detect first.")
+                )
+
+            val newBootPath = "$filesDir/boot_new.img"
+            val partition = "/dev/block/by-name/$resolvedBootName${getCurrent("slot")}"
+
+            when (val verifyResult = verifyPartitionSize(partition, newBootPath)) {
+                is DomainResult.Failure -> return@withContext verifyResult
+                is DomainResult.Success -> Unit
+            }
+
+            val command = "dd if=$newBootPath of=$partition"
+            val writeSuccess = shellRepository.execAndCheck(command)
+            if (!writeSuccess) {
+                return@withContext DomainResult.Failure(
+                    AppError.ShellError("Failed to write repacked image to active slot.", command)
+                )
+            }
+
+            DomainResult.Success(Unit)
+        } catch (e: IOException) {
+            DomainResult.Failure(AppError.IoError(e.message ?: "Failed to write boot image.", e))
+        } catch (e: Exception) {
+            DomainResult.Failure(AppError.UnknownError(e.message ?: "Failed to write boot image.", e))
         }
-
-        verifyPartitionSize(targetPartition, newImg.absolutePath)
-        val flashResult = shellRepository.execAndCheck("dd if='${newImg.absolutePath}' of='$targetPartition'")
-        if (!flashResult) throw IOException("Failed to write to $targetPartition")
-
-        sb.append("Successfully installed to inactive slot ($targetSlot).")
-        return@withContext sb.toString()
     }
 
-    private suspend fun verifyPartitionSize(partitionPath: String, imagePath: String) {
-        val imageSize = File(imagePath).length()
-        if (imageSize == 0L) throw IOException("New boot image is empty or not found at $imagePath")
+    suspend fun installToInactiveSlot(shouldBackup: Boolean): DomainResult<String> = withContext(Dispatchers.IO) {
+        try {
+            if (!isRootMode || !shellRepository.isRootAvailable()) {
+                return@withContext DomainResult.Failure(AppError.RootAccessError())
+            }
 
-        val output = shellRepository.execForOutput("blockdev --getsize64 $partitionPath")
+            val newImg = File(filesDir, "boot_new.img")
+            if (!newImg.exists() || newImg.length() == 0L) {
+                return@withContext DomainResult.Failure(
+                    AppError.IoError("Repacked image not found. Please 'Build > Repack' first.")
+                )
+            }
+
+            val resolvedBootName = bootName
+                ?: return@withContext DomainResult.Failure(
+                    AppError.BootImageError("Boot partition type unknown. Please import or detect first.")
+                )
+            val targetSlot = getInactiveSlotSuffixOrNull()
+                ?: return@withContext DomainResult.Failure(
+                    AppError.BootImageError("Could not determine inactive slot on this device.")
+                )
+            val targetPartition = "/dev/block/by-name/${resolvedBootName}${targetSlot}"
+
+            val existsCommand = "[ -e '$targetPartition' ]"
+            if (!shellRepository.execAndCheck(existsCommand)) {
+                return@withContext DomainResult.Failure(
+                    AppError.ShellError("Target partition $targetPartition does not exist.", existsCommand)
+                )
+            }
+
+            val sb = StringBuilder()
+
+            if (shouldBackup) {
+                val timestamp = System.currentTimeMillis()
+                val backupDir = "/sdcard/Download"
+                val backupPath = "$backupDir/boot_backup_${resolvedBootName}${targetSlot}_$timestamp.img"
+
+                val mkdirCommand = "mkdir -p '$backupDir'"
+                if (!shellRepository.execAndCheck(mkdirCommand)) {
+                    return@withContext DomainResult.Failure(
+                        AppError.ShellError("Failed to prepare backup directory at $backupDir", mkdirCommand)
+                    )
+                }
+
+                val backupCommand = "dd if='$targetPartition' of='$backupPath'"
+                val backupResult = shellRepository.execAndCheck(backupCommand)
+                if (!backupResult) {
+                    return@withContext DomainResult.Failure(
+                        AppError.ShellError("Failed to back up inactive slot partition.", backupCommand)
+                    )
+                }
+                sb.append("Backup saved to: $backupPath\n")
+            }
+
+            when (val verifyResult = verifyPartitionSize(targetPartition, newImg.absolutePath)) {
+                is DomainResult.Failure -> return@withContext verifyResult
+                is DomainResult.Success -> Unit
+            }
+
+            val flashCommand = "dd if='${newImg.absolutePath}' of='$targetPartition'"
+            val flashResult = shellRepository.execAndCheck(flashCommand)
+            if (!flashResult) {
+                return@withContext DomainResult.Failure(
+                    AppError.ShellError("Failed to write to $targetPartition", flashCommand)
+                )
+            }
+
+            sb.append("Successfully installed to inactive slot ($targetSlot).")
+            DomainResult.Success(sb.toString())
+        } catch (e: IOException) {
+            DomainResult.Failure(AppError.IoError(e.message ?: "Failed to install image to inactive slot.", e))
+        } catch (e: Exception) {
+            DomainResult.Failure(AppError.UnknownError(e.message ?: "Inactive slot install failed.", e))
+        }
+    }
+
+    private suspend fun verifyPartitionSize(partitionPath: String, imagePath: String): DomainResult<Unit> {
+        val imageSize = File(imagePath).length()
+        if (imageSize == 0L) {
+            return DomainResult.Failure(
+                AppError.IoError("New boot image is empty or not found at $imagePath")
+            )
+        }
+
+        val command = "blockdev --getsize64 $partitionPath"
+        val output = shellRepository.execForOutput(command)
         val partitionSizeStr = output.firstOrNull()?.trim()
-        val partitionSize = partitionSizeStr?.toLongOrNull() 
-            ?: throw IOException("Failed to get partition size for $partitionPath. Output: $output")
+        val partitionSize = partitionSizeStr?.toLongOrNull()
+            ?: return DomainResult.Failure(
+                AppError.ShellError("Failed to get partition size for $partitionPath. Output: $output", command)
+            )
 
         if (imageSize > partitionSize) {
-            throw IOException("Build failed: Image size ($imageSize bytes) exceeds partition size ($partitionSize bytes).")
+            return DomainResult.Failure(
+                AppError.IoError(
+                    "Build failed: Image size ($imageSize bytes) exceeds partition size ($partitionSize bytes)."
+                )
+            )
         }
+        return DomainResult.Success(Unit)
     }
     
     fun getBootImageFile(): File = File("$filesDir/boot.img")
 
-    suspend fun checkDevice() = withContext(Dispatchers.IO) {
-        if (isRootMode && !shellRepository.isRootAvailable()) {
-            userMessageManager.emitError("Root Access Required", "This application requires root access to function. Please grant root permissions.")
-            return@withContext
-        }
-        // setupEnv is already called by the caller (detectChipset/importBootImage)
-        dtbs.clear()
-        if (isRootMode) {
-            shellRepository.execAndCheck("chmod -R 777 $filesDir")
-        }
-        
-        val runningModel = if (isRootMode) getRunningDeviceTreeModel() else ""
-        val runningCompatibles = if (isRootMode) getRunningCompatibleStrings() else emptyList()
-        activeDtbId = -1
-        
-        val count = getDtbCount()
-        for (i in 0 until count) {
-            val dtsFile = File(filesDir, "$i.dts")
-            if (!dtsFile.exists()) continue
-            
-            try {
-                val content = readFileToString(dtsFile)
-                
-                val dtsModel = MODEL_PROPERTY.matcher(content).let { if (it.find()) sanitizeString(it.group(1) ?: "") else "" }
-                val dtsCompatibles = mutableListOf<String>()
-                val compMatcher = Pattern.compile("\"([^\"]+)\"").matcher(COMPATIBLE_PROPERTY.matcher(content).let { if (it.find()) it.group(1) ?: "" else "" })
-                while (compMatcher.find()) { dtsCompatibles.add(compMatcher.group(1) ?: "") }
-
-                if (activeDtbId == -1) {
-                    if (runningCompatibles.intersect(dtsCompatibles.toSet()).isNotEmpty()) {
-                        activeDtbId = i
-                    } else if (runningModel.isNotEmpty() && dtsModel.isNotEmpty() && (dtsModel.contains(runningModel, true) || runningModel.contains(dtsModel, true))) {
-                        activeDtbId = i
-                    }
-                }
-                
-                val chipId = detectChipType(content)
-                val def = if (chipId != null) {
-                    // Found in hardcoded definitions
-                    chipRepository.getChipById(chipId) ?: createGenericPlaceholder(i, content, dtsModel)
-                } else {
-                    // Not in definitions.json → use smart detection
-                    Log.d(TAG, "DTB $i not in definitions, running smart detection...")
-                    val scanResult = DtsScanner.scanContent(content, i)
-                    Log.d(TAG, "Smart detect DTB $i: valid=${scanResult.isValid}, " +
-                        "strategy=${scanResult.recommendedStrategy}, bins=${scanResult.binCount}, " +
-                        "levels=${scanResult.levelCount}, voltType=${scanResult.voltageType}, " +
-                        "confidence=${scanResult.confidence}")
-                    
-                    if (scanResult.isValid) {
-                        // Smart detection succeeded — create a proper working ChipDefinition
-                        val smartDef = DtsScanner.toChipDefinition(scanResult)
-                        // Save it so it persists across sessions
-                        saveCustomDefinition(smartDef)
-                        smartDef
-                    } else {
-                        createGenericPlaceholder(i, content, dtsModel)
-                    }
-                }
-                dtbs.add(Dtb(i, def))
-            } catch (e: Exception) {
-                Log.e(TAG, "Error checking DTB $i: ${e.message}")
+    suspend fun checkDevice(): DomainResult<List<Dtb>> = withContext(Dispatchers.IO) {
+        try {
+            if (isRootMode && !shellRepository.isRootAvailable()) {
+                userMessageManager.emitError(
+                    "Root Access Required",
+                    "This application requires root access to function. Please grant root permissions."
+                )
+                return@withContext DomainResult.Failure(AppError.RootAccessError())
             }
+            // setupEnv is already called by the caller (detectChipset/importBootImage)
+            dtbs.clear()
+            if (isRootMode) {
+                val command = "chmod -R 777 $filesDir"
+                if (!shellRepository.execAndCheck(command)) {
+                    return@withContext DomainResult.Failure(
+                        AppError.ShellError("Failed to prepare DTB working directory permissions.", command)
+                    )
+                }
+            }
+
+            val runningModel = if (isRootMode) getRunningDeviceTreeModel() else ""
+            val runningCompatibles = if (isRootMode) getRunningCompatibleStrings() else emptyList()
+            activeDtbId = -1
+
+            val count = getDtbCount()
+            var parseFailures = 0
+            for (i in 0 until count) {
+                val dtsFile = File(filesDir, "$i.dts")
+                if (!dtsFile.exists()) continue
+
+                try {
+                    val content = readFileToString(dtsFile)
+
+                    val dtsModel = MODEL_PROPERTY.matcher(content).let { if (it.find()) sanitizeString(it.group(1) ?: "") else "" }
+                    val dtsCompatibles = mutableListOf<String>()
+                    val compMatcher = Pattern.compile("\"([^\"]+)\"")
+                        .matcher(COMPATIBLE_PROPERTY.matcher(content).let { if (it.find()) it.group(1) ?: "" else "" })
+                    while (compMatcher.find()) {
+                        dtsCompatibles.add(compMatcher.group(1) ?: "")
+                    }
+
+                    if (activeDtbId == -1) {
+                        if (runningCompatibles.intersect(dtsCompatibles.toSet()).isNotEmpty()) {
+                            activeDtbId = i
+                        } else if (runningModel.isNotEmpty() && dtsModel.isNotEmpty() &&
+                            (dtsModel.contains(runningModel, true) || runningModel.contains(dtsModel, true))
+                        ) {
+                            activeDtbId = i
+                        }
+                    }
+
+                    val chipId = detectChipType(content)
+                    val def = if (chipId != null) {
+                        // Found in hardcoded definitions
+                        chipRepository.getChipById(chipId) ?: createGenericPlaceholder(i, content, dtsModel)
+                    } else {
+                        // Not in definitions.json → use smart detection
+                        Log.d(TAG, "DTB $i not in definitions, running smart detection...")
+                        val scanResult = DtsScanner.scanContent(content, i)
+                        Log.d(
+                            TAG, "Smart detect DTB $i: valid=${scanResult.isValid}, " +
+                                "strategy=${scanResult.recommendedStrategy}, bins=${scanResult.binCount}, " +
+                                "levels=${scanResult.levelCount}, voltType=${scanResult.voltageType}, " +
+                                "confidence=${scanResult.confidence}"
+                        )
+
+                        if (scanResult.isValid) {
+                            // Smart detection succeeded — create a proper working ChipDefinition
+                            val smartDef = DtsScanner.toChipDefinition(scanResult)
+                            // Save it so it persists across sessions
+                            saveCustomDefinition(smartDef)
+                            smartDef
+                        } else {
+                            createGenericPlaceholder(i, content, dtsModel)
+                        }
+                    }
+                    dtbs.add(Dtb(i, def))
+                } catch (e: Exception) {
+                    parseFailures++
+                    Log.e(TAG, "Error checking DTB $i: ${e.message}")
+                }
+            }
+            if (activeDtbId == -1 && count == 1) {
+                activeDtbId = 0
+            }
+
+            if (dtbs.isEmpty()) {
+                val errorMessage = if (parseFailures > 0) {
+                    "Unable to parse DTB entries. Verify boot image/device tree format."
+                } else {
+                    "No DTBs found in the current working image."
+                }
+                return@withContext DomainResult.Failure(AppError.ParsingError(errorMessage))
+            }
+
+            DomainResult.Success(ArrayList(dtbs))
+        } catch (e: IOException) {
+            DomainResult.Failure(AppError.IoError(e.message ?: "Device check failed due to I/O.", e))
+        } catch (e: Exception) {
+            DomainResult.Failure(AppError.UnknownError(e.message ?: "Device check failed.", e))
         }
-        if (activeDtbId == -1 && count == 1) activeDtbId = 0
     }
 
     private fun createGenericPlaceholder(index: Int, content: String, modelName: String): ChipDefinition {
@@ -691,14 +866,33 @@ open class DeviceRepository @Inject constructor(
 
     private fun readFileToString(file: File): String = BufferedReader(FileReader(file)).use { it.readText() }
 
-    suspend fun bootImage2dts() = withContext(Dispatchers.IO) {
-        dtbType = bootImageProcessor.unpackBootImage(filesDir, getBinaryPath("magiskboot"))
-        dtbNum = bootImageProcessor.splitAndConvertDtbs(filesDir, getBinaryPath("dtc"), dtbType!!)
+    suspend fun bootImage2dts(): DomainResult<Unit> = withContext(Dispatchers.IO) {
+        try {
+            dtbType = bootImageProcessor.unpackBootImage(filesDir, getBinaryPath("magiskboot"))
+            dtbNum = bootImageProcessor.splitAndConvertDtbs(filesDir, getBinaryPath("dtc"), dtbType!!)
+            DomainResult.Success(Unit)
+        } catch (e: IOException) {
+            DomainResult.Failure(AppError.IoError(e.message ?: "Failed to unpack and convert boot image.", e))
+        } catch (e: Exception) {
+            DomainResult.Failure(AppError.BootImageError(e.message ?: "Boot image processing failed.", e))
+        }
     }
     
-    suspend fun dts2bootImage(): File = withContext(Dispatchers.IO) {
-        bootImageProcessor.repackBootImage(filesDir, getBinaryPath("magiskboot"), getBinaryPath("dtc"), dtbNum, dtbType)
-        File(filesDir, "boot_new.img")
+    suspend fun dts2bootImage(): DomainResult<File> = withContext(Dispatchers.IO) {
+        try {
+            bootImageProcessor.repackBootImage(filesDir, getBinaryPath("magiskboot"), getBinaryPath("dtc"), dtbNum, dtbType)
+            val output = File(filesDir, "boot_new.img")
+            if (!output.exists() || output.length() == 0L) {
+                return@withContext DomainResult.Failure(
+                    AppError.IoError("Repacked image was not created. Check disk space and input DTS files.")
+                )
+            }
+            DomainResult.Success(output)
+        } catch (e: IOException) {
+            DomainResult.Failure(AppError.IoError(e.message ?: "Failed to repack boot image.", e))
+        } catch (e: Exception) {
+            DomainResult.Failure(AppError.BootImageError(e.message ?: "Boot image repack failed.", e))
+        }
     }
 
     private fun saveLastChipset(dtbId: Int, chipType: String) {
