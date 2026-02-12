@@ -1,6 +1,6 @@
 plugins {
     id 'com.android.application'
-    id 'org.jetbrains.kotlin.android'
+    // org.jetbrains.kotlin.android removed — AGP 9.0 built-in Kotlin
     id 'org.jetbrains.kotlin.plugin.compose'
     id 'com.google.devtools.ksp'
     id 'com.google.dagger.hilt.android'
@@ -13,6 +13,7 @@ android {
     
     buildFeatures {
         buildConfig = true
+        compose = true
     }
 
     defaultConfig {
@@ -86,11 +87,6 @@ android {
         }
     }
     
-    // Disable PNG crunching for all build types (images are already optimized)
-    aaptOptions {
-        cruncherEnabled = false
-    }
-    
     // Packaging options (new DSL replaces deprecated packagingOptions)
     packaging {
         jniLibs {
@@ -116,9 +112,10 @@ android {
         }
     }
     
-    // Compress assets with maximum compression
+    // Android resources configuration
     androidResources {
         noCompress = []  // Allow compression of all files
+        cruncherEnabled = false  // Images already optimized
     }
     
     compileOptions {
@@ -127,17 +124,8 @@ android {
         targetCompatibility = JavaVersion.VERSION_21
     }
 
-    kotlinOptions {
-        jvmTarget = "21"
-    }
-
-    buildFeatures {
-        compose true
-    }
-
-    composeOptions {
-        kotlinCompilerExtensionVersion '1.5.14'
-    }
+    // kotlinOptions removed — built-in Kotlin defaults jvmTarget to compileOptions.targetCompatibility
+    // composeOptions removed — managed by org.jetbrains.kotlin.plugin.compose
 
     // Allow Android framework classes to return default values in unit tests
     testOptions {
@@ -149,12 +137,17 @@ android {
         checkReleaseBuilds = false
     }
 
-    // Rename output APKs - properly handle ABI splits
-    applicationVariants.all { variant ->
-        variant.outputs.all { output ->
-            def abi = output.getFilter(com.android.build.OutputFile.ABI)
-            def abiName = abi != null ? "-${abi}" : ""
-            outputFileName = "KonaBess-Next${abiName}-${variant.name}.apk"
+}
+
+// AGP 9.0: Use androidComponents API instead of deprecated applicationVariants
+androidComponents {
+    onVariants(selector().all()) { variant ->
+        variant.outputs.forEach { output ->
+            def abiFilter = output.filters.find {
+                it.filterType == com.android.build.api.variant.FilterConfiguration.FilterType.ABI
+            }
+            def abiName = abiFilter != null ? "-${abiFilter.identifier}" : ""
+            output.outputFileName.set("KonaBess-Next${abiName}-${variant.name}.apk")
         }
     }
 }

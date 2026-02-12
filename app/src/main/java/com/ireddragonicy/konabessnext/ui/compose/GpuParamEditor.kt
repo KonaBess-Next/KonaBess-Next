@@ -582,7 +582,7 @@ fun FrequencyEditor(param: ParamItem, onSave: (String, String) -> Unit) {
                     onValueChange = {},
                     readOnly = true,
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = unitsExpanded) },
-                    modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable),
+                    modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
                     singleLine = true
                 )
                 ExposedDropdownMenu(

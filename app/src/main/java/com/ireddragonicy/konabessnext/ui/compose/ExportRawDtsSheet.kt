@@ -8,6 +8,7 @@ import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
+import androidx.compose.material.icons.automirrored.rounded.InsertDriveFile
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -243,7 +244,7 @@ private fun FormatPicker(
                     leadingIcon = {
                         Icon(
                             imageVector = when (format) {
-                                DtsExportFormat.INDIVIDUAL -> Icons.Rounded.InsertDriveFile
+                                DtsExportFormat.INDIVIDUAL -> Icons.AutoMirrored.Rounded.InsertDriveFile
                                 DtsExportFormat.ZIP -> Icons.Rounded.FolderZip
                             },
                             contentDescription = null,
