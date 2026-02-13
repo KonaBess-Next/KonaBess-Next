@@ -153,7 +153,7 @@ class DeviceViewModel @Inject constructor(
                 ?: run {
                     _detectionState.value = null
                     withContext(Dispatchers.Main) {
-                        Toast.makeText(context, "Cannot open file - permission denied", Toast.LENGTH_LONG).show()
+                        Toast.makeText(context, context.getString(R.string.cannot_open_file_permission_denied), Toast.LENGTH_LONG).show()
                     }
                     return@launch
                 }
@@ -170,7 +170,7 @@ class DeviceViewModel @Inject constructor(
                         _dataReloadTrigger.value++
 
                         withContext(Dispatchers.Main) {
-                            Toast.makeText(context, "Import Successful: ${dtb.type.name}", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, context.getString(R.string.import_successful_format, dtb.type.name), Toast.LENGTH_SHORT).show()
                         }
                     }
 
@@ -192,7 +192,7 @@ class DeviceViewModel @Inject constructor(
                 is DomainResult.Failure -> {
                     applyRepackFailure(repackResult.error)
                     withContext(Dispatchers.Main) {
-                        Toast.makeText(context, "Export failed: ${mapAppErrorToMessage(repackResult.error)}", Toast.LENGTH_LONG).show()
+                        Toast.makeText(context, context.getString(R.string.export_failed_format, mapAppErrorToMessage(repackResult.error)), Toast.LENGTH_LONG).show()
                     }
                 }
 
@@ -212,12 +212,12 @@ class DeviceViewModel @Inject constructor(
 
                     if (writeResult.isSuccess) {
                         withContext(Dispatchers.Main) {
-                            Toast.makeText(context, "Export Successful", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, context.getString(R.string.export_successful), Toast.LENGTH_SHORT).show()
                         }
                     } else {
                         val errMsg = writeResult.exceptionOrNull()?.localizedMessage ?: "Unknown export error"
                         withContext(Dispatchers.Main) {
-                            Toast.makeText(context, "Export Failed: $errMsg", Toast.LENGTH_LONG).show()
+                            Toast.makeText(context, context.getString(R.string.export_failed_error_format, errMsg), Toast.LENGTH_LONG).show()
                         }
                     }
                 }
@@ -316,7 +316,7 @@ class DeviceViewModel @Inject constructor(
                         // Boot images need root mode for unpacking
                         _detectionState.value = null
                         withContext(Dispatchers.Main) {
-                            Toast.makeText(context, "Boot images require Root Mode.\nPlease import a .dts or .dtb file.", Toast.LENGTH_LONG).show()
+                            Toast.makeText(context, context.getString(R.string.boot_images_require_root_mode), Toast.LENGTH_LONG).show()
                         }
                     }
                     isBootImage -> importBootImage(context, uri)
@@ -330,7 +330,7 @@ class DeviceViewModel @Inject constructor(
                 Log.e(TAG, "Smart import failed", e)
                 _detectionState.value = null
                 withContext(Dispatchers.Main) {
-                    Toast.makeText(context, "Import failed: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+                    Toast.makeText(context, context.getString(R.string.import_failed_format, e.localizedMessage ?: ""), Toast.LENGTH_LONG).show()
                 }
             }
         }
@@ -348,7 +348,7 @@ class DeviceViewModel @Inject constructor(
                 ?: run {
                     applyDetectionFailure(AppError.IoError("Cannot read file - permission denied"))
                     withContext(Dispatchers.Main) {
-                        Toast.makeText(context, "Import failed: permission denied", Toast.LENGTH_LONG).show()
+                        Toast.makeText(context, context.getString(R.string.import_failed_permission_denied), Toast.LENGTH_LONG).show()
                     }
                     return@launch
                 }
@@ -406,7 +406,7 @@ class DeviceViewModel @Inject constructor(
 
                     finalizeDetection(dtbs)
                     withContext(Dispatchers.Main) {
-                        Toast.makeText(context, "Boot image imported successfully", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, context.getString(R.string.boot_image_imported_successfully), Toast.LENGTH_SHORT).show()
                     }
                 }
             }

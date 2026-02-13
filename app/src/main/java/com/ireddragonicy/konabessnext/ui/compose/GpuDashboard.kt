@@ -15,8 +15,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.ireddragonicy.konabessnext.R
 import com.ireddragonicy.konabessnext.viewmodel.SharedGpuViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -36,12 +38,12 @@ fun GpuDashboard(
         var newName by remember { mutableStateOf(gpuModelName) }
         AlertDialog(
             onDismissRequest = { showRenameDialog = false },
-            title = { Text("Rename GPU") },
+            title = { Text(stringResource(R.string.rename_gpu)) },
             text = {
                 OutlinedTextField(
                     value = newName,
                     onValueChange = { newName = it },
-                    label = { Text("GPU Model Name") },
+                    label = { Text(stringResource(R.string.gpu_model_name)) },
                     singleLine = true
                 )
             },
@@ -50,12 +52,12 @@ fun GpuDashboard(
                     sharedViewModel.updateGpuModelName(newName)
                     showRenameDialog = false 
                 }) {
-                    Text("Save")
+                    Text(stringResource(R.string.save))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showRenameDialog = false }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.cancel))
                 }
             }
         )
@@ -80,13 +82,13 @@ fun GpuDashboard(
                     modifier = Modifier.padding(24.dp)
                 ) {
                     Text(
-                        text = "Current Chipset",
+                        text = stringResource(R.string.current_chipset),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = currentChip?.name ?: "Unknown Chipset",
+                        text = currentChip?.name ?: stringResource(R.string.unknown_chipset),
                         style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold)
                     )
                 }
@@ -112,7 +114,7 @@ fun GpuDashboard(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "GPU Model",
+                                text = stringResource(R.string.gpu_model),
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                             )
@@ -121,13 +123,13 @@ fun GpuDashboard(
                                 GpuModelLoadingSkeleton()
                             } else {
                                 Text(
-                                    text = gpuModelName.ifEmpty { "Unknown Model" },
+                                    text = gpuModelName.ifEmpty { stringResource(R.string.unknown_model) },
                                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
                                 )
                             }
                         }
                         IconButton(onClick = { showRenameDialog = true }) {
-                            Icon(Icons.Rounded.Edit, contentDescription = "Rename GPU")
+                            Icon(Icons.Rounded.Edit, contentDescription = stringResource(R.string.rename_gpu))
                         }
                     }
                 }
@@ -153,11 +155,11 @@ fun GpuDashboard(
                 ) {
                     Column {
                         Text(
-                            text = "Frequency Table",
+                            text = stringResource(R.string.frequency_table),
                             style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
                         )
                         Text(
-                            text = "View and edit frequency bins",
+                            text = stringResource(R.string.view_and_edit_frequency_bins),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
                         )

@@ -82,6 +82,26 @@ The application operates by unpacking the Boot or Vendor Boot image, decompiling
 
 *Refer to the in-app "Help" section for detailed, step-by-step guidance.*
 
+## Localization Workflow
+
+To keep translations maintainable, this project uses **English (`values`) as source of truth**.
+
+- `scripts/check_localization.ps1` / `.bat`
+  - Scans all base files matching `values/strings*.xml`
+  - Checks all locale folders (`values-*`) for missing keys
+  - Generates `localization_report.md`
+
+- `scripts/sync_localization.ps1` / `.bat`
+  - Auto-creates missing locale files (including `strings_lsp.xml`)
+  - Auto-adds missing keys using English text as fallback
+  - Preserves existing translations
+
+Recommended flow:
+1. Add/modify keys in `values/strings*.xml` (English base).
+2. Run localization sync to propagate missing keys.
+3. Translate locale values.
+4. Run localization checker to verify completeness.
+
 ## Why "KonaBess"?
 
 *   **Legacy**: "Kona" is the codename for the Snapdragon 865 platform.

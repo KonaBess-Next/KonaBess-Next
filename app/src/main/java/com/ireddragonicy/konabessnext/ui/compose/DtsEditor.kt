@@ -69,6 +69,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
@@ -83,6 +84,7 @@ import androidx.compose.ui.zIndex
 import androidx.compose.material3.TextButton
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import com.ireddragonicy.konabessnext.R
 import com.ireddragonicy.konabessnext.editor.EditorSession
 import com.ireddragonicy.konabessnext.editor.highlight.ComposeHighlighter
 import com.ireddragonicy.konabessnext.editor.text.DtsEditorState
@@ -1048,17 +1050,17 @@ fun DtsEditor(
                             TextButton(onClick = {
                                 cutSelection()
                                 resetIme()
-                            }) { Text("Cut", fontSize = 14.sp) }
+                            }) { Text(stringResource(R.string.cut), fontSize = 14.sp) }
                             TextButton(onClick = {
                                 copySelection()
-                            }) { Text("Copy", fontSize = 14.sp) }
+                            }) { Text(stringResource(R.string.copy), fontSize = 14.sp) }
                             TextButton(onClick = {
                                 pasteFromClipboard()
                                 resetIme()
-                            }) { Text("Paste", fontSize = 14.sp) }
+                            }) { Text(stringResource(R.string.paste), fontSize = 14.sp) }
                             TextButton(onClick = {
                                 selectAllText()
-                            }) { Text("Select All", fontSize = 14.sp) }
+                            }) { Text(stringResource(R.string.select_all), fontSize = 14.sp) }
                         }
                     }
                 }
@@ -1368,7 +1370,7 @@ private fun EditorLineRow(
                 )
                 if (foldMarker.isCollapsed && foldMarker.hiddenLineCount > 0) {
                     Text(
-                        text = "... ${foldMarker.hiddenLineCount} lines",
+                        text = stringResource(R.string.hidden_lines_format, foldMarker.hiddenLineCount),
                         fontFamily = FontFamily.Monospace,
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),

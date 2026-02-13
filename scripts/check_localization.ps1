@@ -3,7 +3,7 @@
     KonaBess Localization Checker
 .DESCRIPTION
     Professional tool for detecting missing string translations in Android projects.
-    Auto-detects locales and respects translatable="false".
+    Auto-detects locales, scans all strings*.xml files, and respects translatable="false".
 #>
 
 $ErrorActionPreference = 'Stop'
@@ -13,6 +13,7 @@ $ErrorActionPreference = 'Stop'
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProjectRoot = Split-Path -Parent $ScriptDir
 $ResDir = Join-Path $ProjectRoot 'app\src\main\res'
+$BaseValuesDir = Join-Path $ResDir 'values'
 $ReportFile = Join-Path $ProjectRoot 'localization_report.md'
 
 # Colors
@@ -33,9 +34,14 @@ Write-Host "${Cyan}+============================================================
 Write-Host ""
 
 # Check paths
-$BaseFile = Join-Path $ResDir 'values\strings.xml'
-if (-not (Test-Path $BaseFile)) {
-    Write-Host "${Red}Error: Base strings.xml not found at ${BaseFile}${Reset}"
+if (-not (Test-Path $BaseValuesDir)) {
+    Write-Host "${Red}Error: Base values directory not found at ${BaseValuesDir}${Reset}"
+    exit 1
+}
+
+$BaseFiles = Get-ChildItem -Path $BaseValuesDir -File -Filter 'strings*.xml' | Sort-Object Name
+if ($BaseFiles.Count -eq 0) {
+    Write-Host "${Red}Error: No base strings*.xml found in ${BaseValuesDir}${Reset}"
     exit 1
 }
 
@@ -70,11 +76,33 @@ function Get-StringNames {
     return $names
 }
 
-# Extract base strings
-Write-Host "  ${Cyan}[Scanning]${Reset} values/strings.xml (base)..."
-$BaseStrings = Get-StringNames -XmlPath $BaseFile -FilterTranslatable $true
-$BaseCount = $BaseStrings.Count
-Write-Host "  ${Green}+${Reset} Found ${Bold}$BaseCount${Reset} translatable strings"
+# Extract base strings from all base string files
+$BaseStringsByFile = @{}
+$BaseEntries = @()
+
+Write-Host "  ${Cyan}[Scanning]${Reset} values/strings*.xml (base)..."
+foreach ($baseFile in $BaseFiles) {
+    $relative = "values/$($baseFile.Name)"
+    $names = Get-StringNames -XmlPath $baseFile.FullName -FilterTranslatable $true
+    $BaseStringsByFile[$baseFile.Name] = $names
+    foreach ($name in $names) {
+        $BaseEntries += [PSCustomObject]@{
+            File = $baseFile.Name
+            Name = $name
+        }
+    }
+    Write-Host "  ${Green}+${Reset} ${relative}: ${Bold}$($names.Count)${Reset} translatable strings"
+}
+
+$BaseCount = $BaseEntries.Count
+
+if ($BaseCount -eq 0) {
+    Write-Host "${Yellow}No translatable strings found in base files.${Reset}"
+    exit 0
+}
+
+Write-Host ""
+Write-Host "  ${Green}+${Reset} Total base translatable strings: ${Bold}$BaseCount${Reset}"
 Write-Host ""
 
 # Auto-detect locales
@@ -98,26 +126,33 @@ $Results = @()
 
 foreach ($locale in $Locales) {
     $Code = $locale.Code
-    $LocaleFile = Join-Path $ResDir "values-$Code\strings.xml"
-    
-    if (-not (Test-Path $LocaleFile)) {
-        Write-Host "  ${Yellow}[?]${Reset} values-$Code : strings.xml not found"
-        continue
+    Write-Host "  ${Cyan}[Scanning]${Reset} values-$Code/strings*.xml..."
+
+    $TranslatedCount = 0
+    $Missing = @()
+
+    foreach ($baseFile in $BaseFiles) {
+        $baseFileName = $baseFile.Name
+        $baseNames = $BaseStringsByFile[$baseFileName]
+        $localeFile = Join-Path $ResDir "values-$Code\$baseFileName"
+        $localeStrings = Get-StringNames -XmlPath $localeFile -FilterTranslatable $false
+
+        foreach ($baseName in $baseNames) {
+            if ($baseName -in $localeStrings) {
+                $TranslatedCount++
+            }
+            else {
+                $Missing += "${baseFileName}:$baseName"
+            }
+        }
     }
-    
-    Write-Host "  ${Cyan}[Scanning]${Reset} values-$Code/strings.xml..."
-    
-    $LocaleStrings = Get-StringNames -XmlPath $LocaleFile -FilterTranslatable $false
-    
-    # Find missing strings
-    $Missing = $BaseStrings | Where-Object { $_ -notin $LocaleStrings }
+
     $MissingCount = $Missing.Count
-    $FoundCount = $LocaleStrings.Count
+    $FoundCount = $TranslatedCount
     
     # Calculate coverage
     if ($BaseCount -gt 0) {
-        $RealFound = $BaseCount - $MissingCount
-        $Coverage = [math]::Round(($RealFound / $BaseCount) * 100, 1)
+        $Coverage = [math]::Round(($FoundCount / $BaseCount) * 100, 1)
     }
     else {
         $Coverage = 100
@@ -169,7 +204,12 @@ $ReportLines += "> Generated on: $DateStr"
 $ReportLines += ''
 $ReportLines += '## Summary'
 $ReportLines += ''
-$ReportLines += "**Base Language (English):** $BaseCount translatable strings"
+$ReportLines += "**Base Language (English):** $BaseCount translatable strings across $($BaseFiles.Count) files"
+$ReportLines += ''
+$ReportLines += '**Scanned base files:**'
+foreach ($baseFile in $BaseFiles) {
+    $ReportLines += "- ``values/$($baseFile.Name)``"
+}
 $ReportLines += ''
 $ReportLines += '| Locale | Code | Found | Missing | Coverage |'
 $ReportLines += '|--------|------|-------|---------|----------|'
@@ -214,8 +254,8 @@ $ReportLines += '---'
 $ReportLines += ''
 $ReportLines += '## How to Fix'
 $ReportLines += ''
-$ReportLines += '1. Open the corresponding locale file (e.g., ``values-de/strings.xml``)'
-$ReportLines += '2. Add the missing ``<string>`` entries using the keys listed above.'
+$ReportLines += '1. Run ``scripts/sync_localization.ps1`` to auto-add missing keys from English base.'
+$ReportLines += '2. Translate the auto-filled English values in locale files.'
 $ReportLines += '3. Re-run this checker to verify completeness.'
 $ReportLines += ''
 $ReportLines += '---'

@@ -71,6 +71,7 @@ class SettingsViewModel @Inject constructor(
         const val LANGUAGE_GERMAN = "de"
         const val LANGUAGE_CHINESE = "zh-rCN"
         const val LANGUAGE_INDONESIAN = "in"
+        const val LANGUAGE_POLISH = "pl"
     }
 
     init {

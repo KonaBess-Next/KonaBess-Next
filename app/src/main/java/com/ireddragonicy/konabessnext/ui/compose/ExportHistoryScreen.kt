@@ -28,6 +28,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.res.stringResource
+import com.ireddragonicy.konabessnext.R
 import com.ireddragonicy.konabessnext.model.ExportHistoryItem
 import com.ireddragonicy.konabessnext.viewmodel.ImportExportViewModel
 import kotlinx.coroutines.flow.collectLatest
@@ -74,11 +76,11 @@ fun ExportHistoryScreen(
                 IconButton(onClick = onBack) {
                     Icon(
                         painter = androidx.compose.ui.res.painterResource(com.ireddragonicy.konabessnext.R.drawable.ic_arrow_back),
-                        contentDescription = "Back"
+                        contentDescription = stringResource(R.string.back)
                     )
                 }
                 Text(
-                    text = "Export History",
+                    text = stringResource(R.string.export_history),
                     style = MaterialTheme.typography.titleLarge,
                     modifier = Modifier.padding(start = 16.dp)
                 )
@@ -90,7 +92,7 @@ fun ExportHistoryScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "No history yet",
+                        text = stringResource(R.string.no_history_yet),
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -119,8 +121,8 @@ fun ExportHistoryScreen(
     if (showDeleteDialog != null) {
         AlertDialog(
             onDismissRequest = { showDeleteDialog = null },
-            title = { Text("Delete Item") },
-            text = { Text("Are you sure you want to delete this history item?\nThe file will be deleted from storage if it exists.") },
+            title = { Text(stringResource(R.string.confirm_delete_history)) },
+            text = { Text(stringResource(R.string.confirm_delete_history_msg)) },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -129,12 +131,12 @@ fun ExportHistoryScreen(
                     },
                     colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
                 ) {
-                    Text("Delete")
+                    Text(stringResource(R.string.delete))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteDialog = null }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.cancel))
                 }
             }
         )
@@ -145,12 +147,12 @@ fun ExportHistoryScreen(
         var newDesc by remember { mutableStateOf(showEditDialog!!.description) }
         AlertDialog(
             onDismissRequest = { showEditDialog = null },
-            title = { Text("Edit Description") },
+            title = { Text(stringResource(R.string.edit_export)) },
             text = { 
                 OutlinedTextField(
                     value = newDesc,
                     onValueChange = { newDesc = it },
-                    label = { Text("Description") },
+                    label = { Text(stringResource(R.string.edit_description)) },
                     singleLine = true
                 )
             },
@@ -160,12 +162,12 @@ fun ExportHistoryScreen(
                     viewModel.updateHistoryItem(updated)
                     showEditDialog = null
                 }) {
-                    Text("Save")
+                    Text(stringResource(R.string.save))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showEditDialog = null }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.cancel))
                 }
             }
         )
@@ -255,7 +257,7 @@ fun HistoryItemCardModern(
                     )
                     Icon(
                         imageVector = Icons.Rounded.ContentCopy,
-                        contentDescription = "Copy",
+                        contentDescription = stringResource(R.string.copy),
                         modifier = Modifier.size(14.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -277,7 +279,7 @@ fun HistoryItemCardModern(
                     ) {
                         Icon(Icons.Rounded.Check, null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text("Apply")
+                        Text(stringResource(R.string.apply))
                     }
                     
                     OutlinedButton(
@@ -286,16 +288,16 @@ fun HistoryItemCardModern(
                     ) {
                         Icon(Icons.Rounded.Share, null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text("Share")
+                        Text(stringResource(R.string.share))
                     }
                 }
                 
                 Row {
                     IconButton(onClick = onEdit) {
-                        Icon(Icons.Rounded.Edit, "Edit", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Icon(Icons.Rounded.Edit, stringResource(R.string.edit), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     IconButton(onClick = onDelete) {
-                        Icon(Icons.Rounded.Delete, "Delete", tint = MaterialTheme.colorScheme.error)
+                        Icon(Icons.Rounded.Delete, stringResource(R.string.delete), tint = MaterialTheme.colorScheme.error)
                     }
                 }
             }

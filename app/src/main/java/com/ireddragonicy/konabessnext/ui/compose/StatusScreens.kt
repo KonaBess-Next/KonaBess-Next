@@ -51,7 +51,7 @@ fun DetectionPromptScreen(
                 )
 
                 Text(
-                    text = "Detect Chipset",
+                    text = stringResource(R.string.detect_chipset),
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -116,7 +116,7 @@ fun ErrorScreen(
                 )
 
                 Text(
-                    text = "Detection Failed",
+                    text = stringResource(R.string.detection_failed_title),
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onErrorContainer,
@@ -161,7 +161,7 @@ fun ErrorScreen(
                             MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.3f)
                         )
                     ) {
-                        Text("Manual Setup", style = MaterialTheme.typography.labelLarge)
+                        Text(stringResource(R.string.manual_setup), style = MaterialTheme.typography.labelLarge)
                     }
 
                     OutlinedButton(
@@ -179,7 +179,7 @@ fun ErrorScreen(
                     ) {
                         Icon(
                             painter = painterResource(R.drawable.ic_search),
-                            contentDescription = "Smart Scan",
+                            contentDescription = stringResource(R.string.smart_scan),
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -250,7 +250,7 @@ fun NonRootImportScreen(
                 )
 
                 Text(
-                    text = "Import a File",
+                    text = stringResource(R.string.import_a_file),
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSecondaryContainer,
@@ -258,7 +258,7 @@ fun NonRootImportScreen(
                 )
 
                 Text(
-                    text = "Select a boot image or device tree source file to start editing GPU frequency tables.",
+                    text = stringResource(R.string.import_file_description),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f),
                     textAlign = TextAlign.Center,
@@ -267,7 +267,7 @@ fun NonRootImportScreen(
 
                 // Supported formats hint
                 Text(
-                    text = "Supports: boot.img \u2022 vendor_boot.img \u2022 .dtb \u2022 .dts \u2022 .txt",
+                    text = stringResource(R.string.supported_import_formats),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.45f),
                     textAlign = TextAlign.Center,
@@ -289,7 +289,7 @@ fun NonRootImportScreen(
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(Modifier.width(8.dp))
-                    Text("Choose File")
+                    Text(stringResource(R.string.choose_file))
                 }
             }
         }

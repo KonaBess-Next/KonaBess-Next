@@ -14,7 +14,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.ireddragonicy.konabessnext.R
 
 @Composable
 fun LanguageSelectionDialog(
@@ -22,16 +24,17 @@ fun LanguageSelectionDialog(
     onDismiss: () -> Unit,
     onLanguageSelected: (String) -> Unit
 ) {
-    val languages = mapOf(
-        "English" to "en",
-        "Chinese (Simplified)" to "zh-rCN",
-        "German" to "de",
-        "Indonesian" to "in"
+    val languages = listOf(
+        stringResource(R.string.english) to "en",
+        stringResource(R.string.chinese) to "zh-rCN",
+        stringResource(R.string.german) to "de",
+        stringResource(R.string.indonesian) to "in",
+        stringResource(R.string.polish) to "pl"
     )
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Select Language") },
+        title = { Text(stringResource(R.string.select_language)) },
         text = {
             Column {
                 languages.forEach { (name, code) ->
@@ -58,7 +61,7 @@ fun LanguageSelectionDialog(
         },
         confirmButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(stringResource(R.string.cancel))
             }
         }
     )
@@ -70,16 +73,22 @@ fun PaletteSelectionDialog(
     onDismiss: () -> Unit,
     onPaletteSelected: (String) -> Unit
 ) {
-    val palettes = listOf("Dynamic", "Purple", "Blue", "Green", "Pink")
+    val palettes = listOf(
+        stringResource(R.string.palette_dynamic) to "Dynamic",
+        stringResource(R.string.palette_purple_teal) to "Purple",
+        stringResource(R.string.palette_blue_orange) to "Blue",
+        stringResource(R.string.palette_green_red) to "Green",
+        stringResource(R.string.palette_pink_cyan) to "Pink"
+    )
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Select Color Palette") },
+        title = { Text(stringResource(R.string.select_color_palette)) },
         text = {
             Column {
-                palettes.forEach { palette ->
+                palettes.forEach { (label, value) ->
                     Surface(
-                        onClick = { onPaletteSelected(palette) },
+                        onClick = { onPaletteSelected(value) },
                         modifier = Modifier.fillMaxWidth(),
                         color = androidx.compose.ui.graphics.Color.Transparent
                     ) {
@@ -89,11 +98,11 @@ fun PaletteSelectionDialog(
                             verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
                         ) {
                             RadioButton(
-                                selected = (palette == currentColorPalette),
-                                onClick = { onPaletteSelected(palette) }
+                                selected = (value == currentColorPalette),
+                                onClick = { onPaletteSelected(value) }
                             )
                             Spacer(Modifier.width(8.dp))
-                            Text(text = palette)
+                            Text(text = label)
                         }
                     }
                 }
@@ -101,7 +110,7 @@ fun PaletteSelectionDialog(
         },
         confirmButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(stringResource(R.string.cancel))
             }
         }
     )

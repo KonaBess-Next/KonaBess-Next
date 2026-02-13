@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -26,9 +27,9 @@ import java.text.DecimalFormat
 /**
  * Export format options for DTS files.
  */
-enum class DtsExportFormat(val label: String) {
-    INDIVIDUAL("Individual Files"),
-    ZIP("ZIP Archive")
+enum class DtsExportFormat(val labelRes: Int) {
+    INDIVIDUAL(R.string.individual_files),
+    ZIP(R.string.zip_archive)
 }
 
 /**
@@ -168,13 +169,13 @@ private fun DtsSheetHeader(
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Export Raw DTS",
+                    text = stringResource(R.string.export_raw_dts),
                     style = MaterialTheme.typography.titleLarge,
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 if (deviceBrand.isNotEmpty() || deviceModel.isNotEmpty()) {
                     Text(
-                        text = "$deviceBrand $deviceModel".trim(),
+                        text = stringResource(R.string.device_brand_model_format, deviceBrand, deviceModel).trim(),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
@@ -189,7 +190,7 @@ private fun DtsSheetHeader(
                 color = MaterialTheme.colorScheme.secondaryContainer
             ) {
                 Text(
-                    text = "$dtsCount",
+                    text = dtsCount.toString(),
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSecondaryContainer,
@@ -218,7 +219,7 @@ private fun FormatPicker(
             .padding(horizontal = 20.dp)
     ) {
         Text(
-            text = "Export Format",
+            text = stringResource(R.string.export_format),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(start = 4.dp, bottom = 8.dp)
@@ -237,7 +238,7 @@ private fun FormatPicker(
                     onClick = { onSelect(format) },
                     label = {
                         Text(
-                            text = format.label,
+                            text = stringResource(format.labelRes),
                             style = MaterialTheme.typography.labelMedium
                         )
                     },
@@ -291,7 +292,7 @@ private fun DtsFileCard(
             ) {
                 Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                     Text(
-                        text = "${cardIndex + 1}",
+                        text = (cardIndex + 1).toString(),
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSecondaryContainer
@@ -316,7 +317,7 @@ private fun DtsFileCard(
                     if (dtsFileInfo.isActive) {
                         Spacer(Modifier.width(6.dp))
                         StatusChip(
-                            text = "Active",
+                            text = stringResource(R.string.active_bin_badge),
                             containerColor = MaterialTheme.colorScheme.primaryContainer,
                             contentColor = MaterialTheme.colorScheme.onPrimaryContainer
                         )
@@ -324,7 +325,7 @@ private fun DtsFileCard(
                     if (dtsFileInfo.isCurrentlySelected) {
                         Spacer(Modifier.width(4.dp))
                         StatusChip(
-                            text = "Selected",
+                            text = stringResource(R.string.currently_selected),
                             containerColor = MaterialTheme.colorScheme.tertiaryContainer,
                             contentColor = MaterialTheme.colorScheme.onTertiaryContainer
                         )
@@ -349,10 +350,10 @@ private fun DtsFileCard(
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     MetaLabel(Icons.Rounded.Description, formatFileSize(dtsFileInfo.fileSizeBytes))
-                    MetaLabel(Icons.Rounded.DataArray, "${formatNumber(dtsFileInfo.lineCount)} lines")
+                    MetaLabel(Icons.Rounded.DataArray, stringResource(R.string.lines_count_format, formatNumber(dtsFileInfo.lineCount)))
                     MetaLabel(
                         Icons.Rounded.Memory,
-                        if (dtsFileInfo.index >= 0) "DTB ${dtsFileInfo.index}" else "Import"
+                        if (dtsFileInfo.index >= 0) stringResource(R.string.dtb_index_format, dtsFileInfo.index) else stringResource(R.string.import_data)
                     )
                 }
             }
@@ -371,7 +372,7 @@ private fun DtsFileCard(
             ) {
                 Icon(
                     imageVector = Icons.Rounded.FileDownload,
-                    contentDescription = "Export",
+                    contentDescription = stringResource(R.string.export),
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -404,7 +405,7 @@ private fun BottomActions(
                 shape = RoundedCornerShape(14.dp),
                 contentPadding = PaddingValues(vertical = 12.dp)
             ) {
-                Text("Cancel", style = MaterialTheme.typography.labelLarge)
+                Text(stringResource(R.string.cancel), style = MaterialTheme.typography.labelLarge)
             }
 
             Button(
@@ -429,8 +430,8 @@ private fun BottomActions(
                 Spacer(Modifier.width(8.dp))
                 Text(
                     text = when (selectedFormat) {
-                        DtsExportFormat.INDIVIDUAL -> "Export All"
-                        DtsExportFormat.ZIP -> "Export ZIP"
+                        DtsExportFormat.INDIVIDUAL -> stringResource(R.string.export_all)
+                        DtsExportFormat.ZIP -> stringResource(R.string.export_zip)
                     },
                     style = MaterialTheme.typography.labelLarge
                 )
@@ -445,7 +446,7 @@ private fun BottomActions(
             shape = RoundedCornerShape(14.dp),
             contentPadding = PaddingValues(vertical = 12.dp)
         ) {
-            Text("Close", style = MaterialTheme.typography.labelLarge)
+            Text(stringResource(R.string.close), style = MaterialTheme.typography.labelLarge)
         }
     }
 }

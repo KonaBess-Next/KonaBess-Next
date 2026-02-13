@@ -52,8 +52,10 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.ireddragonicy.konabessnext.R
 import com.ireddragonicy.konabessnext.model.dts.DtsNode
 import com.ireddragonicy.konabessnext.model.dts.DtsProperty
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -660,7 +662,7 @@ private fun RowScope.NodeRow(
     if (item.childCount > 0) {
         Spacer(modifier = Modifier.width(6.dp))
         Text(
-            text = "${item.childCount}",
+            text = stringResource(R.string.child_count_format, item.childCount),
             style = style.badgeStyle,
             color = style.badgeColor
         )
@@ -696,7 +698,7 @@ private fun RowScope.PropertyRow(
     Spacer(modifier = Modifier.width(6.dp))
 
     Text(
-        text = "${item.display} = ",
+        text = stringResource(R.string.property_equals_format, item.display),
         style = style.propNameStyle,
         color = style.primaryColor,
         maxLines = 1

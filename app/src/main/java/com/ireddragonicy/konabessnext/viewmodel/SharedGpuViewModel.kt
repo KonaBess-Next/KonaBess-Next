@@ -11,6 +11,7 @@ import com.ireddragonicy.konabessnext.model.Level
 import com.ireddragonicy.konabessnext.model.LevelUiModel
 import com.ireddragonicy.konabessnext.model.Opp
 import com.ireddragonicy.konabessnext.model.UiText
+import com.ireddragonicy.konabessnext.R
 import com.ireddragonicy.konabessnext.repository.DeviceRepositoryInterface
 import com.ireddragonicy.konabessnext.repository.GpuRepository
 import com.ireddragonicy.konabessnext.utils.BinDiffResult
@@ -213,12 +214,12 @@ class SharedGpuViewModel @Inject constructor(
                     }
                 }
                 withContext(Dispatchers.Main) {
-                    Toast.makeText(context, "DTS Saved", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, context.getString(R.string.dts_saved), Toast.LENGTH_SHORT).show()
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
                 withContext(Dispatchers.Main) {
-                    Toast.makeText(context, "Save Failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, context.getString(R.string.save_failed_format, e.message ?: ""), Toast.LENGTH_SHORT).show()
                 }
             }
         }

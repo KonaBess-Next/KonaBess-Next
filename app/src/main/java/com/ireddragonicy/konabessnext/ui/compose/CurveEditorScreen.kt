@@ -16,10 +16,12 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.ireddragonicy.konabessnext.R
 import com.github.mikephil.charting.charts.LineChart
 import com.github.mikephil.charting.components.XAxis
 import com.github.mikephil.charting.components.YAxis
@@ -82,7 +84,7 @@ fun CurveEditorScreen(
     // Fix for Bin Button Label (Sync with GpuBinList logic)
     val context = androidx.compose.ui.platform.LocalContext.current
     val currentBinName = remember(bin, context, currentChip) {
-        if (bin == null) return@remember "Bin $currentBinId"
+        if (bin == null) return@remember context.getString(R.string.bin_id_format, currentBinId)
         val speedBinLine = bin.header.find { it.contains("qcom,speed-bin") }
         val realBinId = if (speedBinLine != null) {
             val extracted = com.ireddragonicy.konabessnext.utils.DtsHelper.extractLongValue(speedBinLine)
@@ -93,7 +95,7 @@ fun CurveEditorScreen(
         try {
             com.ireddragonicy.konabessnext.utils.ChipStringHelper.convertBins(realBinId, context, currentChip)
         } catch (e: Exception) {
-            "Bin $realBinId"
+            context.getString(R.string.bin_id_format, realBinId)
         }
     }
 
@@ -170,7 +172,7 @@ fun CurveEditorScreen(
     if (showBinDialog) {
         AlertDialog(
             onDismissRequest = { showBinDialog = false },
-            title = { Text("Select Frequency Table (Bin)") },
+            title = { Text(stringResource(R.string.select_frequency_table_bin)) },
             text = {
                 val context = androidx.compose.ui.platform.LocalContext.current
                 Column {
@@ -190,7 +192,7 @@ fun CurveEditorScreen(
                             try {
                                 com.ireddragonicy.konabessnext.utils.ChipStringHelper.convertBins(realBinId, context, currentChip)
                             } catch (e: Exception) {
-                                "Bin $realBinId"
+                                context.getString(R.string.bin_id_format, realBinId)
                             }
                         }
 
@@ -218,7 +220,7 @@ fun CurveEditorScreen(
             },
             confirmButton = {
                 TextButton(onClick = { showBinDialog = false }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.cancel))
                 }
             }
         )
@@ -287,7 +289,7 @@ fun CurveEditorScreen(
                         ) {
                             Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(8.dp))
-                            Text("Back")
+                            Text(stringResource(R.string.back))
                         }
     
                         // Bin Selection Button (Right)
@@ -315,16 +317,16 @@ fun CurveEditorScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Lock Axis:", style = MaterialTheme.typography.labelMedium)
+                        Text(stringResource(R.string.lock_axis), style = MaterialTheme.typography.labelMedium)
                         AxisLockMode.values().forEach { mode ->
                             FilterChip(
                                 selected = axisLockMode == mode,
                                 onClick = { axisLockMode = mode },
                                 label = { Text(
                                     when(mode) {
-                                        AxisLockMode.FREE -> "Free"
-                                        AxisLockMode.VERTICAL -> "Vert (Freq)"
-                                        AxisLockMode.HORIZONTAL -> "Horz (Volt)"
+                                        AxisLockMode.FREE -> stringResource(R.string.axis_free)
+                                        AxisLockMode.VERTICAL -> stringResource(R.string.axis_vertical_freq)
+                                        AxisLockMode.HORIZONTAL -> stringResource(R.string.axis_horizontal_volt)
                                     }
                                 ) }
                             )
@@ -350,7 +352,7 @@ fun CurveEditorScreen(
                 ) {
                     Column(Modifier.padding(16.dp).fillMaxSize()) {
                         Text(
-                            text = "Frequency Curve (MHz)",
+                            text = stringResource(R.string.frequency_curve_mhz),
                             style = MaterialTheme.typography.titleMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -396,7 +398,7 @@ fun CurveEditorScreen(
                                         }
                                     }
                                     
-                                    setNoDataText("No Data Available")
+                                    setNoDataText(context.getString(R.string.no_data_available))
                                     setNoDataTextColor(onSurfaceColor)
                                 }
                             },
@@ -539,9 +541,9 @@ fun CurveEditorScreen(
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         Column {
-                            Text("Global Offset", style = MaterialTheme.typography.titleMedium)
+                            Text(stringResource(R.string.global_offset), style = MaterialTheme.typography.titleMedium)
                             Text(
-                                "Shift all frequencies up or down. Tap Save to apply.", 
+                                stringResource(R.string.global_offset_desc), 
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -555,7 +557,7 @@ fun CurveEditorScreen(
                                 onClick = { sharedViewModel.setBinOffset(currentBinId, globalOffset - 10f) },
                                 colors = IconButtonDefaults.filledIconButtonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer, contentColor = MaterialTheme.colorScheme.onSecondaryContainer)
                             ) {
-                                Icon(Icons.Rounded.Remove, contentDescription = "Decrease")
+                                Icon(Icons.Rounded.Remove, contentDescription = stringResource(R.string.decrease))
                             }
                             
                             Slider(
@@ -569,12 +571,12 @@ fun CurveEditorScreen(
                                 onClick = { sharedViewModel.setBinOffset(currentBinId, globalOffset + 10f) },
                                 colors = IconButtonDefaults.filledIconButtonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer, contentColor = MaterialTheme.colorScheme.onSecondaryContainer)
                             ) {
-                                Icon(Icons.Rounded.Add, contentDescription = "Increase")
+                                Icon(Icons.Rounded.Add, contentDescription = stringResource(R.string.increase))
                             }
                         }
                         
                         Text(
-                            text = "${globalOffset.toInt()} MHz",
+                            text = stringResource(R.string.format_mhz, globalOffset.toInt()),
                             style = MaterialTheme.typography.labelLarge,
                             color = if (globalOffset != 0f) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
                             modifier = Modifier.align(Alignment.CenterHorizontally)
@@ -584,7 +586,7 @@ fun CurveEditorScreen(
                 
             } else {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("Bin not found", color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.bin_not_found), color = MaterialTheme.colorScheme.error)
                 }
             }
         }

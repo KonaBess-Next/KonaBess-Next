@@ -18,6 +18,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -236,7 +237,7 @@ fun GpuEditorToolbar(
                     ) {
                         Icon(Icons.Rounded.Build, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text("Build", style = MaterialTheme.typography.labelLarge)
+                        Text(stringResource(R.string.build), style = MaterialTheme.typography.labelLarge)
                     }
 
                     DropdownMenu(
@@ -246,7 +247,7 @@ fun GpuEditorToolbar(
                         val showImageActions = canFlashOrRepack || !isRootMode
 
                         DropdownMenuItem(
-                            text = { Text("Export .dts Source") },
+                            text = { Text(stringResource(R.string.export_dts_source)) },
                             onClick = { 
                                 onExportDts() 
                                 showBuildMenu = false 
@@ -260,7 +261,7 @@ fun GpuEditorToolbar(
 
                         if (isRootMode) {
                             DropdownMenuItem(
-                                text = { Text("Install to Inactive Slot (OTA)") },
+                                text = { Text(stringResource(R.string.install_to_inactive_slot_ota)) },
                                 onClick = {
                                     if (onRequireDiffConfirmation != null) {
                                         onRequireDiffConfirmation(DiffCommitAction.INSTALL_INACTIVE_SLOT)
@@ -280,7 +281,7 @@ fun GpuEditorToolbar(
                             }
                             
                             DropdownMenuItem(
-                                text = { Text(if (isRootMode) "Export .img File" else "Repack & Export .img") },
+                                text = { Text(if (isRootMode) stringResource(R.string.export_img_file) else stringResource(R.string.repack_and_export_img)) },
                                 onClick = { 
                                     if (onRequireDiffConfirmation != null) {
                                         onRequireDiffConfirmation(DiffCommitAction.EXPORT_IMAGE)
@@ -295,7 +296,7 @@ fun GpuEditorToolbar(
                             // Flash to device is only available in root mode
                             if (isRootMode && canFlashOrRepack) {
                                 DropdownMenuItem(
-                                    text = { Text("Flash to Device") },
+                                    text = { Text(stringResource(R.string.flash_to_device)) },
                                     onClick = { 
                                         if (onRequireDiffConfirmation != null) {
                                             onRequireDiffConfirmation(DiffCommitAction.FLASH_DEVICE)
@@ -398,7 +399,7 @@ fun SearchAndToolsBar(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             if (matchCount > 0) {
                                 Text(
-                                    text = "${currentMatchIndex + 1}/$matchCount",
+                                    text = stringResource(R.string.search_result_slash_format, currentMatchIndex + 1, matchCount),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.padding(end = 4.dp)
@@ -414,15 +415,15 @@ fun SearchAndToolsBar(
 
             // Navigation
             IconButton(onClick = onPrev, enabled = matchCount > 0) {
-                Icon(painter = painterResource(R.drawable.ic_arrow_upward), contentDescription = "Prev")
+                Icon(painter = painterResource(R.drawable.ic_arrow_upward), contentDescription = stringResource(R.string.search_previous))
             }
             IconButton(onClick = onNext, enabled = matchCount > 0) {
-                Icon(painter = painterResource(R.drawable.ic_arrow_downward), contentDescription = "Next")
+                Icon(painter = painterResource(R.drawable.ic_arrow_downward), contentDescription = stringResource(R.string.search_next))
             }
 
             // Copy All
             IconButton(onClick = onCopyAll) {
-                Icon(painter = painterResource(R.drawable.ic_content_copy), contentDescription = "Copy All")
+                Icon(painter = painterResource(R.drawable.ic_content_copy), contentDescription = stringResource(R.string.copy_all))
             }
 
             // Reformat Code
@@ -430,7 +431,7 @@ fun SearchAndToolsBar(
                 IconButton(onClick = onReformat) {
                     Icon(
                         imageVector = Icons.Default.Build,
-                        contentDescription = "Reformat Code",
+                        contentDescription = stringResource(R.string.reformat_code),
                         tint = MaterialTheme.colorScheme.primary
                     )
                 }
@@ -454,7 +455,7 @@ fun SearchAndToolsBar(
                     IconButton(onClick = { showLintSheet = true }) {
                         Icon(
                             imageVector = Icons.Rounded.ErrorOutline,
-                            contentDescription = "Lint issues",
+                            contentDescription = stringResource(R.string.lint_issues),
                             tint = MaterialTheme.colorScheme.error
                         )
                     }
@@ -502,17 +503,17 @@ private fun LintIssuesBottomSheet(
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Lint Issues",
+                    text = stringResource(R.string.lint_issues),
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                    text = "$errorCount errors • $warningCount warnings",
+                    text = stringResource(R.string.error_warning_count_format, errorCount, warningCount),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(
-                    text = "Tap an issue to jump to source",
+                    text = stringResource(R.string.tap_issue_to_jump_to_source),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -562,7 +563,7 @@ private fun LintIssuesBottomSheet(
                         },
                         supportingContent = {
                             Text(
-                                text = "Line ${issue.line + 1}, Column ${issue.column + 1}",
+                                text = stringResource(R.string.line_column_format, issue.line + 1, issue.column + 1),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -603,7 +604,7 @@ private fun LintIssuesBottomSheet(
                 .padding(horizontal = 20.dp),
             shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp)
         ) {
-            Text("Close")
+            Text(stringResource(R.string.close))
         }
     }
 }

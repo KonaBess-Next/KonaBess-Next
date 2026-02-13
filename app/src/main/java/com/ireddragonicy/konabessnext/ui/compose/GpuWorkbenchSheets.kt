@@ -13,11 +13,13 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.ireddragonicy.konabessnext.R
 import com.ireddragonicy.konabessnext.model.Dtb
 
 /**
@@ -76,13 +78,13 @@ fun GpuWorkbenchSheets(
 @Composable
 private fun HistorySheetContent(history: List<String>) {
     Text(
-        text = "Edit History",
+        text = stringResource(R.string.history_title),
         style = MaterialTheme.typography.headlineSmall,
         modifier = Modifier.padding(bottom = 16.dp)
     )
     if (history.isEmpty()) {
         Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-            Text("No recent edits", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(stringResource(R.string.no_recent_edits), color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     } else {
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -119,7 +121,7 @@ private fun ChipsetSelectorContent(
     }
 
     Text(
-        text = "Select DTS Index",
+        text = stringResource(R.string.select_dts_index),
         style = MaterialTheme.typography.headlineSmall,
         modifier = Modifier.padding(bottom = 16.dp)
     )
@@ -145,7 +147,7 @@ private fun ChipsetSelectorContent(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("DTS ${dtb.id}", style = MaterialTheme.typography.labelMedium)
+                            Text(stringResource(R.string.dts_index_format, dtb.id), style = MaterialTheme.typography.labelMedium)
                             
                             if (isActive) {
                                 Spacer(Modifier.width(8.dp))
@@ -168,7 +170,7 @@ private fun ChipsetSelectorContent(
                         IconButton(onClick = { onConfigure(dtb.id) }) {
                             Icon(
                                 Icons.Default.Build, 
-                                contentDescription = "Configure", 
+                                contentDescription = stringResource(R.string.configure), 
                                 tint = if (isOfficial) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary
                             )
                         }
@@ -176,7 +178,7 @@ private fun ChipsetSelectorContent(
                             IconButton(onClick = { onDelete(dtb.id) }) {
                                 Icon(
                                     Icons.Default.Delete,
-                                    contentDescription = "Delete",
+                                    contentDescription = stringResource(R.string.delete),
                                     tint = MaterialTheme.colorScheme.error
                                 )
                             }
@@ -194,7 +196,7 @@ private fun ChipsetSelectorContent(
             ) {
                 Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
-                Text("Import DTS")
+                Text(stringResource(R.string.import_dts))
             }
         }
     }

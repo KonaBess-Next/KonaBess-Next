@@ -101,3 +101,6 @@ lint/tmp/
 
 # Localization Report
 localization_report.md
+
+# Hardcoded text scan report
+hardcoded_strings_report.md

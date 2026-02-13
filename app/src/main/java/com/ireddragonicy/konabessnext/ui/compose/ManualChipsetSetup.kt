@@ -14,6 +14,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -89,13 +90,13 @@ fun ManualChipsetSetupScreen(
         Spacer(modifier = Modifier.height(16.dp))
         
         Text(
-            text = "Manual Configuration",
+            text = stringResource(R.string.manual_configuration),
             style = MaterialTheme.typography.headlineSmall,
             color = MaterialTheme.colorScheme.onSurface
         )
         
         Text(
-            text = "Configure parser settings for DTB $dtbIndex",
+            text = stringResource(R.string.configure_parser_settings_for_dtb_format, dtbIndex),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -118,12 +119,12 @@ fun ManualChipsetSetupScreen(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Smart Detect",
+                        text = stringResource(R.string.smart_detect),
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                     Text(
-                        text = if (isScanning) "Scanning DTS structure..." else "Analyze file structure automatically",
+                        text = if (isScanning) stringResource(R.string.scanning_dts_structure) else stringResource(R.string.analyze_file_structure_automatically),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
                     )
@@ -144,7 +145,7 @@ fun ManualChipsetSetupScreen(
                     } else {
                         Icon(
                             painter = painterResource(R.drawable.ic_search),
-                            contentDescription = "Deep Scan",
+                            contentDescription = stringResource(R.string.deep_scan),
                             tint = MaterialTheme.colorScheme.onPrimary
                         )
                     }
@@ -172,7 +173,7 @@ fun ManualChipsetSetupScreen(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(
-                                text = "Detection Results",
+                                text = stringResource(R.string.detection_results),
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold
                             )
@@ -185,7 +186,7 @@ fun ManualChipsetSetupScreen(
                                 shape = MaterialTheme.shapes.small
                             ) {
                                 Text(
-                                    text = "${result.confidence} Confidence",
+                                    text = stringResource(R.string.confidence_format, result.confidence),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onPrimary,
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
@@ -197,7 +198,7 @@ fun ManualChipsetSetupScreen(
 
                         // GPU Info
                         if (result.gpuModel != null || result.chipId != null) {
-                            ScanResultRow("GPU", buildString {
+                            ScanResultRow(stringResource(R.string.gpu_label), buildString {
                                 if (result.gpuModel != null) append(result.gpuModel)
                                 if (result.chipId != null) {
                                     if (result.gpuModel != null) append(" (${result.chipId})")
@@ -207,26 +208,26 @@ fun ManualChipsetSetupScreen(
                         }
 
                         // Strategy & Bins
-                        ScanResultRow("Strategy", "${result.recommendedStrategy} (${result.binCount} bins)")
-                        ScanResultRow("Levels", "${result.levelCount} per bin")
+                        ScanResultRow(stringResource(R.string.strategy), stringResource(R.string.strategy_bins_format, result.recommendedStrategy, result.binCount))
+                        ScanResultRow(stringResource(R.string.levels), stringResource(R.string.levels_per_bin_format, result.levelCount))
 
                         // Voltage Type
-                        ScanResultRow("Voltage", when (result.voltageType) {
-                            VoltageType.OPP_TABLE -> "OPP Table: ${result.voltageTablePattern}"
-                            VoltageType.INLINE_LEVEL -> "Inline (qcom,level)"
-                            VoltageType.NONE -> "None detected"
+                        ScanResultRow(stringResource(R.string.voltage), when (result.voltageType) {
+                            VoltageType.OPP_TABLE -> stringResource(R.string.opp_table_pattern_format, result.voltageTablePattern ?: "")
+                            VoltageType.INLINE_LEVEL -> stringResource(R.string.inline_qcom_level)
+                            VoltageType.NONE -> stringResource(R.string.none_detected)
                         })
 
                         // GPU Node
                         if (result.gpuNodeName != null) {
-                            ScanResultRow("GPU Node", result.gpuNodeName)
+                            ScanResultRow(stringResource(R.string.gpu_node), result.gpuNodeName)
                         }
 
                         // Detected Properties
                         if (result.detectedProperties.isNotEmpty()) {
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                text = "Detected Level Properties:",
+                                text = stringResource(R.string.detected_level_properties),
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -270,19 +271,19 @@ fun ManualChipsetSetupScreen(
         OutlinedTextField(
             value = chipName,
             onValueChange = { chipName = it },
-            label = { Text("Device Name") },
+            label = { Text(stringResource(R.string.device_name)) },
             modifier = Modifier.fillMaxWidth()
         )
         
         Spacer(modifier = Modifier.height(16.dp))
         
-        Text("Structure Strategy", style = MaterialTheme.typography.labelLarge, modifier = Modifier.align(Alignment.Start))
+        Text(stringResource(R.string.structure_strategy), style = MaterialTheme.typography.labelLarge, modifier = Modifier.align(Alignment.Start))
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             RadioButton(selected = strategy == "MULTI_BIN", onClick = { strategy = "MULTI_BIN" })
-            Text("Multi Bin", modifier = Modifier.padding(end = 16.dp))
+            Text(stringResource(R.string.multi_bin), modifier = Modifier.padding(end = 16.dp))
             
             RadioButton(selected = strategy == "SINGLE_BIN", onClick = { strategy = "SINGLE_BIN" })
-            Text("Single Bin")
+            Text(stringResource(R.string.single_bin))
         }
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -290,7 +291,7 @@ fun ManualChipsetSetupScreen(
         OutlinedTextField(
             value = maxLevels,
             onValueChange = { if (it.all { c -> c.isDigit() }) maxLevels = it },
-            label = { Text("Max Levels") },
+            label = { Text(stringResource(R.string.max_levels)) },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             modifier = Modifier.fillMaxWidth()
         )
@@ -300,8 +301,8 @@ fun ManualChipsetSetupScreen(
         OutlinedTextField(
             value = voltagePattern,
             onValueChange = { voltagePattern = it },
-            label = { Text("Voltage Table Pattern (Optional)") },
-            placeholder = { Text("e.g. gpu-opp-table") },
+            label = { Text(stringResource(R.string.voltage_table_pattern_optional)) },
+            placeholder = { Text(stringResource(R.string.gpu_opp_table_example)) },
             modifier = Modifier.fillMaxWidth()
         )
         
@@ -309,13 +310,13 @@ fun ManualChipsetSetupScreen(
         
         Row(verticalAlignment = Alignment.CenterVertically) {
             Checkbox(checked = ignoreVoltTable, onCheckedChange = { ignoreVoltTable = it })
-            Text("Ignore Voltage Table Editing")
+            Text(stringResource(R.string.ignore_voltage_table_editing))
         }
 
         Spacer(modifier = Modifier.height(32.dp))
 
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            TextButton(onClick = onCancel) { Text("Cancel") }
+            TextButton(onClick = onCancel) { Text(stringResource(R.string.cancel)) }
             Spacer(modifier = Modifier.width(8.dp))
             Button(
                 onClick = {
@@ -338,7 +339,7 @@ fun ManualChipsetSetupScreen(
                     onSave(def)
                 }
             ) {
-                Text("Save & Open")
+                Text(stringResource(R.string.save_and_open))
             }
         }
     }

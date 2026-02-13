@@ -23,12 +23,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.activity.compose.BackHandler
 import android.net.Uri
+import com.ireddragonicy.konabessnext.R
 import com.ireddragonicy.konabessnext.utils.BinDiffResult
 import com.ireddragonicy.konabessnext.viewmodel.*
 import kotlinx.coroutines.launch
@@ -221,12 +223,11 @@ fun GpuEditorMainContent(
         AlertDialog(
             onDismissRequest = { showInactiveInstallDialog = false },
             icon = { Icon(Icons.Rounded.SystemUpdate, null) },
-            title = { Text("Install to Inactive Slot") },
+            title = { Text(stringResource(R.string.install_to_inactive_slot)) },
             text = {
                 Column {
                     Text(
-                        "This will flash your current configuration to the inactive slot " +
-                            "(Slot $targetSlot). Use this after an OTA update before rebooting."
+                        stringResource(R.string.install_to_inactive_slot_desc_format, targetSlot)
                     )
                     Spacer(Modifier.height(12.dp))
                     Row(
@@ -234,7 +235,7 @@ fun GpuEditorMainContent(
                         modifier = Modifier.clickable { backupChecked = !backupChecked }
                     ) {
                         Checkbox(checked = backupChecked, onCheckedChange = { backupChecked = it })
-                        Text("Backup target boot image first")
+                        Text(stringResource(R.string.backup_target_boot_image_first))
                     }
                 }
             },
@@ -245,12 +246,12 @@ fun GpuEditorMainContent(
                         showInactiveInstallDialog = false
                     }
                 ) {
-                    Text("Install")
+                    Text(stringResource(R.string.install))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showInactiveInstallDialog = false }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.cancel))
                 }
             }
         )

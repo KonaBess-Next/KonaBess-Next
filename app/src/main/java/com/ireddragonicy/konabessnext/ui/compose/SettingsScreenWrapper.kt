@@ -23,6 +23,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.res.stringResource
+import com.ireddragonicy.konabessnext.R
 import com.ireddragonicy.konabessnext.viewmodel.SettingsViewModel
 
 @Composable
@@ -67,7 +69,7 @@ fun SettingsScreenWrapper(
 
                     // App Name & Version
                     Text(
-                        text = "KonaBess Next",
+                        text = stringResource(R.string.app_name),
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold,
                         textAlign = TextAlign.Center
@@ -83,13 +85,13 @@ fun SettingsScreenWrapper(
                     
                     // Credits
                     Text(
-                        text = "Developed by IRedDragonICY",
+                        text = stringResource(R.string.developed_by_ireddragonicy),
                         style = MaterialTheme.typography.bodyMedium,
                         textAlign = TextAlign.Center
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Based on work by LibXZR",
+                        text = stringResource(R.string.based_on_work_by_libxzr),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center
@@ -106,7 +108,7 @@ fun SettingsScreenWrapper(
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("GitHub Source")
+                        Text(stringResource(R.string.github_source))
                     }
 
                     Spacer(modifier = Modifier.height(8.dp))
@@ -115,7 +117,7 @@ fun SettingsScreenWrapper(
                         onClick = { showHelpDialog = false },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("Close")
+                        Text(stringResource(R.string.close))
                     }
                 }
             }

@@ -43,12 +43,14 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.ireddragonicy.konabessnext.R
 import com.ireddragonicy.konabessnext.utils.BinDiffResult
 import com.ireddragonicy.konabessnext.utils.DiffNode
 import com.ireddragonicy.konabessnext.utils.DiffType
@@ -59,12 +61,12 @@ enum class DiffCommitAction {
     FLASH_DEVICE,
     INSTALL_INACTIVE_SLOT;
 
-    fun confirmText(): String {
+    fun confirmTextRes(): Int {
         return when (this) {
-            SAVE -> "Confirm Save"
-            EXPORT_IMAGE -> "Confirm Export"
-            FLASH_DEVICE -> "Confirm Flash"
-            INSTALL_INACTIVE_SLOT -> "Confirm Install"
+            SAVE -> R.string.confirm_save
+            EXPORT_IMAGE -> R.string.confirm_export
+            FLASH_DEVICE -> R.string.confirm_flash
+            INSTALL_INACTIVE_SLOT -> R.string.confirm_install
         }
     }
 }
@@ -144,24 +146,24 @@ fun DtsDiffViewer(
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
                             imageVector = Icons.Rounded.DoneAll,
-                            contentDescription = "Diff overview",
+                            contentDescription = stringResource(R.string.diff_overview),
                             tint = MaterialTheme.colorScheme.onSecondaryContainer
                         )
                     }
                 }
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Review DTS Changes",
+                        text = stringResource(R.string.review_dts_changes),
                         style = MaterialTheme.typography.titleMedium
                     )
                     Text(
                         text = if (isLoading) {
-                            "Calculating differences..."
+                            stringResource(R.string.calculating_differences)
                         } else {
                             if (effectiveMode == DiffViewMode.GUI) {
-                                "$totalChanges GUI changes across ${activeResults.size} sections"
+                                stringResource(R.string.gui_changes_across_sections_format, totalChanges, activeResults.size)
                             } else {
-                                "$totalChanges DTS format changes"
+                                stringResource(R.string.dts_format_changes_format, totalChanges)
                             }
                         },
                         style = MaterialTheme.typography.bodySmall,
@@ -183,13 +185,13 @@ fun DtsDiffViewer(
                         selected = effectiveMode == DiffViewMode.GUI,
                         onClick = { viewMode = DiffViewMode.GUI },
                         enabled = split.guiResults.isNotEmpty(),
-                        label = { Text("GUI Diff") }
+                        label = { Text(stringResource(R.string.gui_diff)) }
                     )
                     FilterChip(
                         selected = effectiveMode == DiffViewMode.DTS_FORMAT,
                         onClick = { viewMode = DiffViewMode.DTS_FORMAT },
                         enabled = split.dtsFormatResults.isNotEmpty(),
-                        label = { Text("DTS Format Diff") }
+                        label = { Text(stringResource(R.string.dts_format_diff)) }
                     )
                 }
                 Spacer(Modifier.height(10.dp))
@@ -217,9 +219,9 @@ fun DtsDiffViewer(
                     EmptyDiffState(
                         modifier = Modifier.weight(1f),
                         subtitle = if (effectiveMode == DiffViewMode.GUI) {
-                            "No GUI-level changes detected."
+                            stringResource(R.string.no_gui_level_changes_detected)
                         } else {
-                            "No DTS format-level changes detected."
+                            stringResource(R.string.no_dts_format_level_changes_detected)
                         }
                     )
                 }
@@ -251,7 +253,7 @@ fun DtsDiffViewer(
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(14.dp)
                 ) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.cancel))
                 }
                 Button(
                     onClick = onConfirm,
@@ -259,7 +261,7 @@ fun DtsDiffViewer(
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(14.dp)
                 ) {
-                    Text(action.confirmText())
+                    Text(stringResource(action.confirmTextRes()))
                 }
             }
         }
@@ -325,9 +327,9 @@ private fun BinDiffSection(result: BinDiffResult, viewMode: DiffViewMode) {
     ) {
         Text(
             text = if (isGeneralSection) {
-                if (viewMode == DiffViewMode.GUI) "General GUI Changes" else "DTS Format Changes"
+                if (viewMode == DiffViewMode.GUI) stringResource(R.string.general_gui_changes) else stringResource(R.string.dts_format_changes)
             } else {
-                "Bin ${result.binId}"
+                stringResource(R.string.bin_id_format, result.binId)
             },
             style = MaterialTheme.typography.titleSmall,
             color = MaterialTheme.colorScheme.onSurface
@@ -340,6 +342,18 @@ private fun BinDiffSection(result: BinDiffResult, viewMode: DiffViewMode) {
 
 @Composable
 private fun DiffNodeRow(change: DiffNode, isGeneralSection: Boolean) {
+    val semanticsDescription = when (change.type) {
+        DiffType.ADDED -> stringResource(R.string.added_level_semantics_format, change.levelIndex, change.newDescription.orEmpty())
+        DiffType.REMOVED -> stringResource(R.string.removed_level_semantics_format, change.levelIndex, change.oldDescription.orEmpty())
+        DiffType.MODIFIED -> stringResource(
+            R.string.modified_level_semantics_format,
+            change.levelIndex,
+            change.oldDescription.orEmpty(),
+            change.newDescription.orEmpty()
+        )
+        DiffType.UNCHANGED -> stringResource(R.string.unchanged_level_semantics_format, change.levelIndex)
+    }
+
     val rowBackground = when (change.type) {
         DiffType.ADDED -> Color(0x1A4CAF50)
         DiffType.REMOVED -> Color(0x1AF44336)
@@ -363,12 +377,7 @@ private fun DiffNodeRow(change: DiffNode, isGeneralSection: Boolean) {
         modifier = Modifier
             .fillMaxWidth()
             .semantics {
-                contentDescription = when (change.type) {
-                    DiffType.ADDED -> "Added level ${change.levelIndex}: ${change.newDescription.orEmpty()}"
-                    DiffType.REMOVED -> "Removed level ${change.levelIndex}: ${change.oldDescription.orEmpty()}"
-                    DiffType.MODIFIED -> "Modified level ${change.levelIndex}: ${change.oldDescription.orEmpty()} to ${change.newDescription.orEmpty()}"
-                    DiffType.UNCHANGED -> "Unchanged level ${change.levelIndex}"
-                }
+                contentDescription = semanticsDescription
             },
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = rowBackground)
@@ -393,9 +402,9 @@ private fun DiffNodeRow(change: DiffNode, isGeneralSection: Boolean) {
             ) {
                 Text(
                     text = if (isGeneralSection) {
-                        if (change.levelIndex > 0) "Line ${change.levelIndex}" else "Global"
+                        if (change.levelIndex > 0) stringResource(R.string.line_number_format, change.levelIndex) else stringResource(R.string.global_label)
                     } else {
-                        "Level ${change.levelIndex}"
+                        stringResource(R.string.level_format, change.levelIndex.toString())
                     },
                     style = MaterialTheme.typography.labelMedium,
                     color = accentColor,
@@ -405,14 +414,14 @@ private fun DiffNodeRow(change: DiffNode, isGeneralSection: Boolean) {
                 when (change.type) {
                     DiffType.MODIFIED -> {
                         Text(
-                            text = "Before: ${change.oldDescription.orEmpty()}",
+                            text = stringResource(R.string.before_format, change.oldDescription.orEmpty()),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis
                         )
                         Text(
-                            text = "After: ${change.newDescription.orEmpty()}",
+                            text = stringResource(R.string.after_format, change.newDescription.orEmpty()),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurface,
                             fontWeight = FontWeight.Medium,
@@ -451,7 +460,7 @@ private fun DiffNodeRow(change: DiffNode, isGeneralSection: Boolean) {
 @Composable
 private fun EmptyDiffState(
     modifier: Modifier = Modifier,
-    subtitle: String = "Current bins match the original snapshot."
+    subtitle: String
 ) {
     Box(
         modifier = modifier
@@ -465,12 +474,12 @@ private fun EmptyDiffState(
         ) {
             Icon(
                 imageVector = Icons.Rounded.CheckCircleOutline,
-                contentDescription = "No changes detected",
+                contentDescription = stringResource(R.string.no_changes_detected),
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(44.dp)
             )
             Text(
-                text = "No changes detected",
+                text = stringResource(R.string.no_changes_detected),
                 style = MaterialTheme.typography.titleMedium
             )
             Text(

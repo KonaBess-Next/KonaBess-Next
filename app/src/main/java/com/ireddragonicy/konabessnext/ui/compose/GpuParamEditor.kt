@@ -169,7 +169,7 @@ fun GpuParamEditor(
                 }
                 Spacer(Modifier.height(24.dp))
                 Text(
-                    text = "Properties",
+                    text = stringResource(R.string.properties),
                     style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(bottom = 8.dp)
@@ -227,7 +227,7 @@ fun EditParamSheetContent(
             .navigationBarsPadding() // Hande gesture bar
     ) {
         Text(
-            text = "Edit ${param.title}",
+            text = stringResource(R.string.edit_param_format, param.title),
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface
@@ -313,12 +313,12 @@ fun VoltageSelector(param: ParamItem, onSave: (String, String) -> Unit, levels: 
         ) {
             Column {
                 Text(
-                    text = "Current",
+                    text = stringResource(R.string.current),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
                 )
                 Text(
-                    text = if (selectedIndex in levels.indices) levels[selectedIndex] else "Custom",
+                    text = if (selectedIndex in levels.indices) levels[selectedIndex] else stringResource(R.string.custom),
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onPrimaryContainer
@@ -448,7 +448,7 @@ fun VoltageSelector(param: ParamItem, onSave: (String, String) -> Unit, levels: 
 
     // ── Preset List ──
     Text(
-        text = "Presets",
+        text = stringResource(R.string.presets),
         style = MaterialTheme.typography.labelMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(bottom = 6.dp)
@@ -782,9 +782,9 @@ fun HeaderParamBox(
             )
             Text(
                 text = when {
-                    item.rawName.contains("min") -> "Bus Min"
-                    item.rawName.contains("max") -> "Bus Max"
-                    item.rawName.contains("freq") -> "Bus Freq"
+                    item.rawName.contains("min") -> stringResource(R.string.bus_min)
+                    item.rawName.contains("max") -> stringResource(R.string.bus_max)
+                    item.rawName.contains("freq") -> stringResource(R.string.bus_freq)
                     else -> item.title
                 },
                 style = MaterialTheme.typography.labelSmall,
@@ -835,25 +835,25 @@ fun OppVoltageEditableCard(
             Spacer(Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Voltage (OPP Table)",
+                    text = stringResource(R.string.voltage_opp_table),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
                 )
                 Text(
-                    text = "$currentLevelName ($oppVoltage)",
+                    text = stringResource(R.string.voltage_level_with_value_format, currentLevelName, oppVoltage),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSecondaryContainer
                 )
                 Text(
-                    text = "Tap to edit",
+                    text = stringResource(R.string.tap_to_edit),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.primary
                 )
             }
             Icon(
                 imageVector = Icons.Filled.Edit,
-                contentDescription = "Edit voltage",
+                contentDescription = stringResource(R.string.edit_voltage),
                 modifier = Modifier.size(20.dp),
                 tint = MaterialTheme.colorScheme.primary
             )
@@ -937,14 +937,14 @@ fun OppVoltageSelectorContent(
     ) {
         // ── Header ──
         Text(
-            text = "Voltage Level",
+            text = stringResource(R.string.voltage_level),
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface
         )
         Spacer(Modifier.height(4.dp))
         Text(
-            text = "Set the opp-microvolt value. Use the slider, list, or type directly.",
+            text = stringResource(R.string.set_opp_microvolt_value_desc),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -967,12 +967,12 @@ fun OppVoltageSelectorContent(
             ) {
                 Column {
                     Text(
-                        text = "Current",
+                        text = stringResource(R.string.current),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
                     )
                     Text(
-                        text = if (selectedIndex in levelStrings.indices) levelStrings[selectedIndex] else "Custom",
+                        text = if (selectedIndex in levelStrings.indices) levelStrings[selectedIndex] else stringResource(R.string.custom),
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onPrimaryContainer
@@ -1059,7 +1059,7 @@ fun OppVoltageSelectorContent(
                         selectedIndex = -1
                     }
                 },
-                label = { Text("Raw value") },
+                label = { Text(stringResource(R.string.raw_value)) },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(
                     keyboardType = KeyboardType.Number,
@@ -1090,7 +1090,7 @@ fun OppVoltageSelectorContent(
                 ) {
                     Icon(
                         Icons.Filled.KeyboardArrowUp,
-                        contentDescription = "Increase",
+                        contentDescription = stringResource(R.string.increase),
                         modifier = Modifier.size(18.dp)
                     )
                 }
@@ -1106,7 +1106,7 @@ fun OppVoltageSelectorContent(
                 ) {
                     Icon(
                         Icons.Filled.KeyboardArrowDown,
-                        contentDescription = "Decrease",
+                        contentDescription = stringResource(R.string.decrease),
                         modifier = Modifier.size(18.dp)
                     )
                 }
@@ -1117,7 +1117,7 @@ fun OppVoltageSelectorContent(
 
         // ── Preset List ──
         Text(
-            text = "Presets",
+            text = stringResource(R.string.presets),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 6.dp)
@@ -1198,7 +1198,7 @@ fun OppVoltageSelectorContent(
                 modifier = Modifier.weight(1f),
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Text("Cancel")
+                Text(stringResource(R.string.cancel))
             }
             Button(
                 onClick = {
@@ -1209,7 +1209,7 @@ fun OppVoltageSelectorContent(
                 shape = RoundedCornerShape(12.dp),
                 enabled = textFieldValue.toLongOrNull() != null
             ) {
-                Text("Apply")
+                Text(stringResource(R.string.apply))
             }
         }
 

@@ -1,3 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">KonaBess Next</string>
     <string name="environ_setup_failed">Failed when setting up the environment</string>
@@ -142,26 +143,25 @@
     <string name="sd8g3_for_galaxy">Snapdragon 8Gen3 for Galaxy</string>
     <string name="sd8sg3">Snapdragon 8sGen3</string>
     <string name="sd7pg3">Snapdragon 7+Gen3</string>
-     <string name="sdg3xg2">Snapdragon G3x Gen2</string>
-     <string name="sd8e">Snapdragon 8 Elite</string>
-     <string name="sd8e_gen5">Snapdragon 8 Elite Gen5</string>
-     <string name="sd8sg4">Snapdragon 8s Gen 4</string>
-     <string name="sdg3g3">Snapdragon G3 Gen 3</string>
-     <string name="sd_kalamap_qcs">Snapdragon 8 Gen 2 (QCS)</string>
-     <string name="settings">Settings</string>
-     <string name="language">Language</string>
-     <string name="gpu_freq_unit">GPU Frequency Unit</string>
-     <string name="english">English</string>
-     <string name="german">Deutsch</string>
-     <string name="chinese">中文</string>
-     <string name="indonesian">Bahasa Indonesia</string>
+    <string name="sdg3xg2">Snapdragon G3x Gen2</string>
+    <string name="sd8e">Snapdragon 8 Elite</string>
+    <string name="sd8e_gen5">Snapdragon 8 Elite Gen5</string>
+    <string name="sd8sg4">Snapdragon 8s Gen 4</string>
+    <string name="sdg3g3">Snapdragon G3 Gen 3</string>
+    <string name="sd_kalamap_qcs">Snapdragon 8 Gen 2 (QCS)</string>
+    <string name="settings">Settings</string>
+    <string name="language">Language</string>
+    <string name="gpu_freq_unit">GPU Frequency Unit</string>
+    <string name="english">English</string>
+    <string name="german">Deutsch</string>
+    <string name="chinese">中文</string>
+    <string name="indonesian">Bahasa Indonesia</string>
     <string name="polish">Polski</string>
-     <string name="hz">Hz</string>
-     <string name="mhz">MHz</string>
-     <string name="ghz">GHz</string>
-     <string name="preview_gpu_freq_table">Preview GPU Frequency Table</string>
-     <string name="freq_unit_description">Choose how GPU frequencies are displayed</string>
-     <!-- New Navigation Strings -->
+    <string name="hz">Hz</string>
+    <string name="mhz">MHz</string>
+    <string name="ghz">GHz</string>
+    <string name="preview_gpu_freq_table">Preview GPU Frequency Table</string>
+    <string name="freq_unit_description">Choose how GPU frequencies are displayed</string>
     <string name="edit_freq_table">GPU Frequency</string>
     <string name="edit_gpu_freq">Edit GPU Frequency Table</string>
     <string name="edit_gpu_freq_desc">Modify GPU frequencies and voltage levels</string>
@@ -180,8 +180,6 @@
     <string name="gpu_prep_failed">Unable to detect a compatible chipset. Check root access and try again.</string>
     <string name="gpu_prep_retry">Try again</string>
     <string name="export_requires_chipset">Select a chipset in the GPU tab to enable export and backup actions.</string>
-    
-    <!-- Drag & Drop & Theme Strings -->
     <string name="drag_handle">Drag to reorder</string>
     <string name="details">View details</string>
     <string name="delete">Delete</string>
@@ -214,8 +212,6 @@
     <string name="common_off">Off</string>
     <string name="undo">Undo</string>
     <string name="redo">Redo</string>
-    
-    <!-- Export History -->
     <string name="export_history">Export History</string>
     <string name="export_history_desc">View and manage exported configurations</string>
     <string name="no_export_history">No Export History</string>
@@ -248,8 +244,6 @@
     <string name="export_raw_dts">Export Raw DTS</string>
     <string name="export_raw_dts_msg">Export the currently edited Device Tree Source file to storage</string>
     <string name="gpu_curve_editor_title">Curve Editor</string>
-    
-    <!-- Raw DTS Editor -->
     <string name="raw_dts_editor">Raw DTS Editor</string>
     <string name="raw_dts_editor_desc">Advanced text editor for direct DTS file editing</string>
     <string name="raw_dts_editor_warning_title">⚠️ Warning: Advanced Feature</string>
@@ -273,8 +267,6 @@
     <string name="expand_collapse">Expand/Collapse</string>
     <string name="visual_view">Visual View</string>
     <string name="text_view">Text View</string>
-    
-    <!-- DTS Submission to GitHub -->
     <string name="submit_dts_to_github">Submit DTS to GitHub</string>
     <string name="preparing_dts_submission">Preparing Submission</string>
     <string name="extracting_dts_files">Extracting device information and DTS files…</string>
@@ -294,8 +286,6 @@
     <string name="switch_chipset_confirm">Do you want to switch the chipset?</string>
     <string name="select_chipset">Select Chipset</string>
     <string name="edit_parameter">Edit Parameter</string>
-
-    <!-- Extracted Strings -->
     <string name="no_gpu_tables_found">No GPU Frequency Tables Found</string>
     <string name="try_redetecting">Try re-detecting chipsets or use Deep Scan.</string>
     <string name="reload_data">Reload Data</string>
@@ -303,7 +293,6 @@
     <string name="active_bin_badge">Active</string>
     <string name="gpu_bin_help_title">Why Multiple Bins?</string>
     <string name="gpu_bin_help_icon_desc">Multi-bin help</string>
-    
     <string name="import_from_file_desc">Load configuration from a file</string>
     <string name="export_to_file_desc">Save configuration to a file</string>
     <string name="import_from_clipboard_desc">Paste configuration from clipboard</string>
@@ -314,7 +303,6 @@
     <string name="batch_dtb_to_dts_desc">Convert multiple .dtb files to human-readable text</string>
     <string name="converted_files">Converted Files:</string>
     <string name="open_file">Open File</string>
-    
     <string name="save_changes">Save Changes</string>
     <string name="saved">Saved</string>
     <string name="view_mode_gui">GUI</string>
@@ -322,14 +310,12 @@
     <string name="view_mode_tree">Tree</string>
     <string name="chipset">Chipset</string>
     <string name="flash">Flash</string>
-    
     <string name="level_format">Level %1$s</string>
     <string name="saved_successfully">Saved successfully</string>
     <string name="failed_to_load_format">Failed to load: %1$s</string>
     <string name="history_text_edit">Text Edit</string>
     <string name="reorder_frequencies">Reorder frequencies</string>
     <string name="save_failed_format">Save failed: %1$s</string>
-    
     <string name="no_compatible_chipset_found">No compatible chipset found</string>
     <string name="detection_failed_format">Detection failed: %1$s</string>
     <string name="repack_flash_success">Repack and Flash successful. Please reboot.</string>
@@ -343,11 +329,9 @@
     <string name="deep_scan_no_results">Deep Scan: No recognizable GPU structures found.</string>
     <string name="deep_scan_candidates_format">Deep Scan: Found %1$d candidates.</string>
     <string name="deep_scan_failed_format">Deep Scan failed: %1$s</string>
-    
     <string name="format_hz">%1$d Hz</string>
     <string name="format_mhz">%1$d MHz</string>
     <string name="format_ghz">%.2f GHz</string>
-    
     <string name="palette_purple_teal">Purple &amp; Teal</string>
     <string name="palette_blue_orange">Blue &amp; Orange</string>
     <string name="palette_green_red">Green &amp; Red</string>
@@ -363,8 +347,6 @@
     <string name="unknown_short">?</string>
     <string name="raw_value_hint">Raw Value (Dec/Hex)</string>
     <string name="custom_value">Custom Value</string>
-    
-    <!-- Settings Strings -->
     <string name="settings_theme">Theme</string>
     <string name="settings_theme_desc">Choose light, dark, or system theme</string>
     <string name="settings_dynamic_color">Dynamic Color</string>
@@ -378,20 +360,14 @@
     <string name="settings_version_format">Version %1$s</string>
     <string name="settings_color_palette">Color Palette</string>
     <string name="settings_color_palette_desc">Choose your color scheme</string>
-    
-    <!-- Editor Button Strings -->
     <string name="btn_add_freq_top">Add Frequency to Top</string>
     <string name="btn_add_freq_bottom">Add Frequency to Bottom</string>
     <string name="btn_back">Back</string>
     <string name="btn_curve_editor">Curve Editor</string>
-
-
-    <!-- Settings Headers & Updates -->
     <string name="header_appearance">Appearance</string>
     <string name="header_localization">Localization</string>
     <string name="header_behavior">Behavior</string>
     <string name="header_about">About</string>
-    
     <string name="update_channel">Update Channel</string>
     <string name="channel_stable">Stable</string>
     <string name="channel_prerelease">Prerelease</string>
@@ -405,11 +381,8 @@
     <string name="btn_later">Later</string>
     <string name="toast_no_updates">No updates available</string>
     <string name="toast_update_error">Update check failed: %1$s</string>
-    
     <string name="auto_check_updates">Auto-check for Updates</string>
     <string name="auto_check_updates_desc">Check for updates when app starts</string>
-
-    <!-- Added for hardcoded-text localization refactor -->
     <string name="added_level_semantics_format">Added level %1$s</string>
     <string name="after_format">After: %1$s</string>
     <string name="analyze_file_structure_automatically">Analyze file structure automatically</string>

@@ -12,6 +12,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -65,6 +66,7 @@ fun ImportExportScreen(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var textInput by remember { mutableStateOf("") }
     var showDtsExportSheet by remember { mutableStateOf(false) }
+    val context = LocalContext.current
 
     if (importPreview != null) {
         val expandedStates = remember(importPreview) { mutableStateMapOf<Int, Boolean>() }
@@ -72,7 +74,7 @@ fun ImportExportScreen(
         AlertDialog(
             onDismissRequest = onCancelImport,
             icon = { Icon(painter = painterResource(R.drawable.ic_save), contentDescription = null) },
-            title = { Text("Confirm Import", style = MaterialTheme.typography.headlineSmall) },
+            title = { Text(stringResource(R.string.confirm_import), style = MaterialTheme.typography.headlineSmall) },
             text = {
                 Column(
                     verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -84,7 +86,7 @@ fun ImportExportScreen(
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
                             Text(
-                                text = "Chip: ${importPreview.chip}",
+                                text = stringResource(R.string.chip_format, importPreview.chip),
                                 style = MaterialTheme.typography.titleMedium,
                                 color = MaterialTheme.colorScheme.onSecondaryContainer
                             )
@@ -103,7 +105,7 @@ fun ImportExportScreen(
 
                     // Bin Details
                     Text(
-                        text = "Configuration Details",
+                        text = stringResource(R.string.configuration_details),
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.primary
                     )
@@ -126,13 +128,13 @@ fun ImportExportScreen(
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Text(
-                                            text = "Speed Bin ${bin.binId}",
+                                            text = stringResource(R.string.speed_bin_format, bin.binId),
                                             style = MaterialTheme.typography.titleSmall,
                                             color = MaterialTheme.colorScheme.primary
                                         )
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             Badge {
-                                                Text("${bin.frequencies.size} Levels")
+                                                Text(stringResource(R.string.levels_count_format, bin.frequencies.size))
                                             }
                                             Icon(
                                                 painter = painterResource(if (isExpanded) R.drawable.ic_chevron_up else R.drawable.ic_chevron_down),
@@ -154,7 +156,7 @@ fun ImportExportScreen(
                                         )
                                         Spacer(Modifier.width(8.dp))
                                         Text(
-                                            text = "${bin.minFreqMhz} MHz - ${bin.maxFreqMhz} MHz",
+                                            text = stringResource(R.string.frequency_range_mhz_format, bin.minFreqMhz, bin.maxFreqMhz),
                                             style = MaterialTheme.typography.bodyMedium
                                         )
                                     }
@@ -170,7 +172,7 @@ fun ImportExportScreen(
                                             )
                                             Spacer(Modifier.width(8.dp))
                                             Text(
-                                                text = "Voltage Control Enabled",
+                                                text = stringResource(R.string.voltage_control_enabled),
                                                 style = MaterialTheme.typography.bodySmall,
                                                 color = MaterialTheme.colorScheme.tertiary
                                             )
@@ -192,12 +194,12 @@ fun ImportExportScreen(
                                                 horizontalArrangement = Arrangement.SpaceBetween
                                             ) {
                                                 Text(
-                                                    text = "FREQUENCY",
+                                                    text = stringResource(R.string.frequency_header),
                                                     style = MaterialTheme.typography.labelSmall,
                                                     color = MaterialTheme.colorScheme.secondary
                                                 )
                                                 Text(
-                                                    text = "VOLTAGE / LEVEL",
+                                                    text = stringResource(R.string.voltage_level_header),
                                                     style = MaterialTheme.typography.labelSmall,
                                                     color = MaterialTheme.colorScheme.secondary
                                                 )
@@ -214,7 +216,7 @@ fun ImportExportScreen(
                                                         verticalAlignment = Alignment.CenterVertically
                                                     ) {
                                                         Text(
-                                                            text = "${level.freqMhz} MHz",
+                                                            text = stringResource(R.string.format_mhz, level.freqMhz),
                                                             style = MaterialTheme.typography.bodyMedium,
                                                             color = MaterialTheme.colorScheme.onSurface
                                                         )
@@ -242,7 +244,11 @@ fun ImportExportScreen(
                                                                     )
                                                                     Spacer(Modifier.width(4.dp))
                                                                     Text(
-                                                                        text = "${level.busMin ?: "?"}-${level.busMax ?: "?"}",
+                                                                        text = stringResource(
+                                                                            R.string.bus_range_format,
+                                                                            level.busMin?.toString() ?: stringResource(R.string.unknown_short),
+                                                                            level.busMax?.toString() ?: stringResource(R.string.unknown_short)
+                                                                        ),
                                                                         style = MaterialTheme.typography.bodySmall,
                                                                         color = MaterialTheme.colorScheme.outline
                                                                     )
@@ -259,7 +265,7 @@ fun ImportExportScreen(
                                                                     )
                                                                     Spacer(Modifier.width(4.dp))
                                                                     Text(
-                                                                        text = "${level.busFreq}",
+                                                                        text = level.busFreq.toString(),
                                                                         style = MaterialTheme.typography.bodySmall,
                                                                         color = MaterialTheme.colorScheme.outline
                                                                     )
@@ -279,7 +285,7 @@ fun ImportExportScreen(
                         if (importPreview.bins.isEmpty()) {
                             item {
                                 Text(
-                                    text = "No valid frequency tables found in this config.",
+                                    text = stringResource(R.string.no_valid_frequency_tables_in_config),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.error
                                 )
@@ -289,7 +295,7 @@ fun ImportExportScreen(
                         if (importPreview.legacyVoltCount > 0) {
                              item {
                                  Text(
-                                     text = "+ Legacy Voltage Table (${importPreview.legacyVoltCount} entries)",
+                                     text = stringResource(R.string.legacy_voltage_table_entries_format, importPreview.legacyVoltCount),
                                      style = MaterialTheme.typography.labelSmall,
                                      color = MaterialTheme.colorScheme.outline
                                  )
@@ -300,12 +306,12 @@ fun ImportExportScreen(
             },
             confirmButton = {
                 Button(onClick = onConfirmImport) {
-                    Text("Import Config")
+                    Text(stringResource(R.string.import_config))
                 }
             },
             dismissButton = {
                 TextButton(onClick = onCancelImport) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.cancel))
                 }
             }
         )
@@ -323,24 +329,24 @@ fun ImportExportScreen(
     val listItems = remember(isPrepared) {
         buildList {
             // History section
-            add(ImportExportListItem.Header("History"))
-            add(ImportExportListItem.Action(ActionItem(R.drawable.ic_history, "Export History", "View and export edit history", true), 0))
+            add(ImportExportListItem.Header(context.getString(R.string.section_history)))
+            add(ImportExportListItem.Action(ActionItem(R.drawable.ic_history, context.getString(R.string.export_history), context.getString(R.string.export_history_desc), true), 0))
 
             // File Operations section
-            add(ImportExportListItem.Header("File Operations"))
-            add(ImportExportListItem.Action(ActionItem(R.drawable.ic_import_modern, "Import from File", "Load GPU configuration from file", isPrepared), 1))
-            add(ImportExportListItem.Action(ActionItem(R.drawable.ic_save, "Export to File", "Save GPU configuration to file", isPrepared), 2))
+            add(ImportExportListItem.Header(context.getString(R.string.section_file_operations)))
+            add(ImportExportListItem.Action(ActionItem(R.drawable.ic_import_modern, context.getString(R.string.import_from_file), context.getString(R.string.import_from_file_desc), isPrepared), 1))
+            add(ImportExportListItem.Action(ActionItem(R.drawable.ic_save, context.getString(R.string.export_to_file), context.getString(R.string.export_to_file_desc), isPrepared), 2))
 
             // Clipboard section
-            add(ImportExportListItem.Header("Clipboard"))
-            add(ImportExportListItem.Action(ActionItem(R.drawable.ic_clipboard_import, "Import from Clipboard", "Paste configuration from clipboard", isPrepared), 3))
-            add(ImportExportListItem.Action(ActionItem(R.drawable.ic_clipboard_export, "Export to Clipboard", "Copy configuration to clipboard", isPrepared), 4))
+            add(ImportExportListItem.Header(context.getString(R.string.section_clipboard)))
+            add(ImportExportListItem.Action(ActionItem(R.drawable.ic_clipboard_import, context.getString(R.string.import_from_clipboard), context.getString(R.string.import_from_clipboard_desc), isPrepared), 3))
+            add(ImportExportListItem.Action(ActionItem(R.drawable.ic_clipboard_export, context.getString(R.string.export_to_clipboard), context.getString(R.string.export_to_clipboard_desc), isPrepared), 4))
 
             // Advanced section
-            add(ImportExportListItem.Header("Advanced"))
-            add(ImportExportListItem.Action(ActionItem(R.drawable.ic_code, "Export Raw DTS", "Export device tree source", isPrepared), 5))
-            add(ImportExportListItem.Action(ActionItem(R.drawable.ic_backup, "Backup Boot Image", "Create boot image backup", isPrepared), 6))
-            add(ImportExportListItem.Action(ActionItem(R.drawable.ic_code, "Batch DTB to DTS", "Convert multiple DTB files", true), 7))
+            add(ImportExportListItem.Header(context.getString(R.string.section_advanced)))
+            add(ImportExportListItem.Action(ActionItem(R.drawable.ic_code, context.getString(R.string.export_raw_dts), context.getString(R.string.export_raw_dts_desc), isPrepared), 5))
+            add(ImportExportListItem.Action(ActionItem(R.drawable.ic_backup, context.getString(R.string.backup_boot_image), context.getString(R.string.backup_boot_image_desc), isPrepared), 6))
+            add(ImportExportListItem.Action(ActionItem(R.drawable.ic_code, context.getString(R.string.batch_dtb_to_dts), context.getString(R.string.batch_dtb_to_dts_desc), true), 7))
         }
     }
 
@@ -479,7 +485,7 @@ fun ImportExportScreen(
                                     ) {
                                         Icon(
                                             painter = painterResource(R.drawable.ic_clipboard_import),
-                                            contentDescription = "Paste from Clipboard",
+                                            contentDescription = stringResource(R.string.import_from_clipboard),
                                             tint = MaterialTheme.colorScheme.primary,
                                             modifier = Modifier.size(24.dp)
                                         )
