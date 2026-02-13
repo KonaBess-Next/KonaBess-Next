@@ -551,4 +551,8 @@
     <string name="voltage_table_pattern_optional">Voltage table pattern (optional)</string>
     <string name="zip_archive">ZIP archive</string>
     <string name="polish">Polski</string>
+    <string name="settings_amoled_desc">Pure black background in Dark Mode</string>
+    <string name="settings_root_mode">Root Mode</string>
+    <string name="settings_root_mode_desc_on">Using root (su) for boot image extraction &amp; flashing</string>
+    <string name="settings_root_mode_desc_off">Non-root: import/export files manually via SAF</string>
 </resources>

@@ -281,6 +281,7 @@ private fun BinItemCard(
     }
 }
 
+@Composable
 private fun multiBinHelpMarkdown(
     bins: List<Bin>,
     activeBinIndex: Int,
@@ -290,14 +291,14 @@ private fun multiBinHelpMarkdown(
         .map { "qcom,gpu-pwrlevels-${extractRealBinId(it)}" }
         .distinct()
     val dtsNodePreview = buildList {
-        add("`qcom,gpu-pwrlevel-bins {`")
-        add("`compatible = \"qcom,gpu-pwrlevels-bins\";`")
+        add("`${stringResource(R.string.multi_bin_help_dts_node_open)}`")
+        add("`${stringResource(R.string.multi_bin_help_dts_compatible)}`")
         if (nodeNames.isEmpty()) {
-            add("`// no parsed bins yet`")
+            add("`${stringResource(R.string.multi_bin_help_dts_no_bins)}`")
         } else {
             nodeNames.take(4).forEach { add("`$it { ... }`") }
             if (nodeNames.size > 4) {
-                add("`... +${nodeNames.size - 4} more bins`")
+                add("`${stringResource(R.string.multi_bin_help_dts_more_bins_format, nodeNames.size - 4)}`")
             }
         }
     }
@@ -320,39 +321,53 @@ private fun multiBinHelpMarkdown(
         0
     }
     val overlapSummary = if (runtimeSet.isEmpty() || activeSet.isEmpty()) {
-        "n/a"
+        stringResource(R.string.multi_bin_help_na)
     } else {
         "$overlapCount/${runtimeSet.size}"
     }
 
-    val runtimePreview = formatFrequencyPreview(runtimeGpuFrequencies)
-    val activePreview = formatFrequencyPreview(activeBinFrequencies)
+    val runtimePreview = formatFrequencyPreview(
+        values = runtimeGpuFrequencies,
+        unavailableText = stringResource(R.string.multi_bin_help_runtime_unavailable)
+    )
+    val activePreview = formatFrequencyPreview(
+        values = activeBinFrequencies,
+        unavailableText = stringResource(R.string.multi_bin_help_runtime_unavailable)
+    )
     val activeBinSummary = when {
-        activeBin == null -> "Not detected yet"
-        activeBinRealId != null -> "Index $activeBinIndex (Speed Bin $activeBinRealId)"
-        else -> "Index $activeBinIndex"
+        activeBin == null -> stringResource(R.string.multi_bin_help_not_detected)
+        activeBinRealId != null -> stringResource(
+            R.string.multi_bin_help_active_bin_with_speed_format,
+            activeBinIndex,
+            activeBinRealId
+        )
+        else -> stringResource(R.string.multi_bin_help_active_bin_index_format, activeBinIndex)
     }
-    val parsedBinsSummary = if (nodeNames.isEmpty()) "None" else nodeNames.joinToString(", ")
+    val parsedBinsSummary = if (nodeNames.isEmpty()) {
+        stringResource(R.string.multi_bin_help_no_parsed_bins)
+    } else {
+        nodeNames.joinToString(", ")
+    }
 
     return """
-## Why Are There Multiple GPU Bins?
-- Not every chip has identical silicon quality. Vendors keep multiple safe profiles in one DTS.
-- Kernel picks one profile at boot (often tied to fuse/speed-bin data), so editing the wrong bin may have no effect.
+## ${stringResource(R.string.multi_bin_help_heading_main)}
+- ${stringResource(R.string.multi_bin_help_bullet_silicon)}
+- ${stringResource(R.string.multi_bin_help_bullet_kernel_pick)}
 
-## Live DTS Evidence (from your current table)
+## ${stringResource(R.string.multi_bin_help_heading_dts_evidence)}
 ${dtsNodePreview.joinToString("\n") { "- $it" }}
-- Parsed bin nodes now: `$parsedBinsSummary`
+- ${stringResource(R.string.multi_bin_help_label_parsed_nodes)}: `$parsedBinsSummary`
 
-## Live Runtime Evidence (from sysfs)
-- Runtime frequencies read now: `$runtimePreview`
-- Active bin detected: `$activeBinSummary`
-- Active bin frequencies: `$activePreview`
-- Exact overlap runtime vs active bin: `$overlapSummary`
+## ${stringResource(R.string.multi_bin_help_heading_runtime_evidence)}
+- ${stringResource(R.string.multi_bin_help_label_runtime_freq)}: `$runtimePreview`
+- ${stringResource(R.string.multi_bin_help_label_active_bin)}: `$activeBinSummary`
+- ${stringResource(R.string.multi_bin_help_label_active_freq)}: `$activePreview`
+- ${stringResource(R.string.multi_bin_help_label_overlap)}: `$overlapSummary`
     """.trimIndent()
 }
 
-private fun formatFrequencyPreview(values: List<Long>, limit: Int = 8): String {
-    if (values.isEmpty()) return "Unavailable (root/sysfs permission or path issue)"
+private fun formatFrequencyPreview(values: List<Long>, unavailableText: String, limit: Int = 8): String {
+    if (values.isEmpty()) return unavailableText
     val preview = values.take(limit).joinToString(", ")
     return if (values.size > limit) "$preview, ... (${values.size} total)" else preview
 }

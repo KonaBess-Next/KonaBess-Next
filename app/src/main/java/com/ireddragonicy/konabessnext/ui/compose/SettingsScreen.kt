@@ -98,6 +98,22 @@ fun SettingsScreen(
     val helpTitle = androidx.compose.ui.res.stringResource(R.string.settings_help_about)
     val versionTitle = androidx.compose.ui.res.stringResource(R.string.settings_version_format, BuildConfig.VERSION_NAME)
     val amoledTitle = androidx.compose.ui.res.stringResource(R.string.palette_amoled)
+    val amoledDesc = stringResource(R.string.settings_amoled_desc)
+
+    val currentThemeDisplay = when (currentTheme.uppercase()) {
+        "LIGHT" -> stringResource(R.string.theme_light)
+        "DARK" -> stringResource(R.string.theme_dark)
+        else -> stringResource(R.string.theme_system)
+    }
+
+    val currentLanguageDisplay = when (currentLanguage) {
+        "en" -> stringResource(R.string.english)
+        "de" -> stringResource(R.string.german)
+        "zh-rCN" -> stringResource(R.string.chinese)
+        "in" -> stringResource(R.string.indonesian)
+        "pl" -> stringResource(R.string.polish)
+        else -> currentLanguage
+    }
 
     // Updater Strings
     val headerAppearance = stringResource(R.string.header_appearance)
@@ -116,25 +132,25 @@ fun SettingsScreen(
 
     val context = LocalContext.current
 
-    val rootModeTitle = "Root Mode"
-    val rootModeDesc = if (isRootMode) "Using root (su) for boot image extraction & flashing" else "Non-root: import/export files manually via SAF"
+    val rootModeTitle = stringResource(R.string.settings_root_mode)
+    val rootModeDesc = if (isRootMode) stringResource(R.string.settings_root_mode_desc_on) else stringResource(R.string.settings_root_mode_desc_off)
 
-    val settingsItems = remember(currentTheme, currentColorPalette, currentLanguage, currentFreqUnit, isAutoSave, isAmoledMode, themeTitle, updateChannel, isAutoCheckUpdate, updateStatus, isRootMode) {
+    val settingsItems = remember(currentThemeDisplay, currentColorPalette, currentLanguageDisplay, currentFreqUnit, isAutoSave, isAmoledMode, themeTitle, updateChannel, isAutoCheckUpdate, updateStatus, isRootMode, rootModeDesc, amoledDesc) {
         buildList {
             // Appearance section
             add(SettingsListItem.Header(headerAppearance))
-            add(SettingsListItem.Setting(SettingItem.Clickable(Icons.Rounded.DarkMode, themeTitle, themeDesc, currentTheme)))
+            add(SettingsListItem.Setting(SettingItem.Clickable(Icons.Rounded.DarkMode, themeTitle, themeDesc, currentThemeDisplay)))
             add(SettingsListItem.Setting(SettingItem.Toggle(
                 Icons.Rounded.Contrast, // Pure Amoled - Contrast icon fits well
                 amoledTitle, 
-                "Pure black background in Dark Mode", 
+                amoledDesc,
                 isAmoledMode
             )))
             add(SettingsListItem.Setting(SettingItem.Clickable(Icons.Rounded.Palette, paletteTitle, paletteDesc, currentColorPalette)))
 
             // Localization section
             add(SettingsListItem.Header(headerLocalization))
-            add(SettingsListItem.Setting(SettingItem.Clickable(Icons.Rounded.Translate, langTitle, langDesc, currentLanguage)))
+            add(SettingsListItem.Setting(SettingItem.Clickable(Icons.Rounded.Translate, langTitle, langDesc, currentLanguageDisplay)))
             add(SettingsListItem.Setting(SettingItem.Clickable(Icons.Rounded.Speed, freqTitle, freqDesc, currentFreqUnit)))
 
             // Behavior section
