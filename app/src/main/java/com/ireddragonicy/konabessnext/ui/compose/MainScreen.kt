@@ -11,7 +11,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.ireddragonicy.konabessnext.ui.navigation.AppDestinations
 import com.ireddragonicy.konabessnext.viewmodel.*
@@ -32,6 +35,7 @@ fun MainScreen(
 ) {
     val pagerState = rememberPagerState(pageCount = { 3 })
     val scope = rememberCoroutineScope()
+    var isTextSelectionActive by remember { mutableStateOf(false) }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -54,6 +58,7 @@ fun MainScreen(
         HorizontalPager(
             state = pagerState,
             beyondViewportPageCount = 2,
+            userScrollEnabled = !isTextSelectionActive,
             modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding())
         ) { page ->
             when (page) {
@@ -61,7 +66,8 @@ fun MainScreen(
                     deviceViewModel = deviceViewModel,
                     gpuFrequencyViewModel = gpuFrequencyViewModel,
                     sharedViewModel = sharedViewModel,
-                    onStartRepack = onStartRepack
+                    onStartRepack = onStartRepack,
+                    onSelectionDragStateChanged = { isTextSelectionActive = it }
                 )
                 1 -> ImportExportScreenWrapper(
                     deviceViewModel = deviceViewModel,

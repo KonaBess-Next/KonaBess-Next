@@ -3,6 +3,8 @@ package com.ireddragonicy.konabessnext.ui.compose
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -13,6 +15,8 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -34,6 +38,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -59,7 +64,11 @@ import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
@@ -380,11 +389,16 @@ fun DtsEditor(
     navigationRequest: EditorNavigationRequest? = null,
     lintErrorsByLine: SnapshotStateMap<Int, List<DtsError>> = remember { mutableStateMapOf() },
     listState: LazyListState = rememberLazyListState(),
+    onSelectionDragStateChanged: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val highlightScope = rememberCoroutineScope()
     val highlightCache = EditorSession.highlightCache
     val focusRequester = remember { FocusRequester() }
+    val hapticFeedback = LocalHapticFeedback.current
+    var isHandleDragActive by remember { mutableStateOf(false) }
+    var startHandleDragBaseLine by remember { mutableIntStateOf(-1) }
+    var endHandleDragBaseLine by remember { mutableIntStateOf(-1) }
     var imeValue by remember { mutableStateOf(TextFieldValueWithSentinel()) }
     var hasInputFocus by remember { mutableStateOf(false) }
     var skipFirstRevision by remember(editorState) { mutableStateOf(true) }
@@ -886,6 +900,7 @@ fun DtsEditor(
 
             LazyColumn(
                 state = listState,
+                userScrollEnabled = !isHandleDragActive,
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(
                     top = if (stickyHeaderPath.isNotEmpty()) 32.dp else 0.dp,
@@ -913,10 +928,16 @@ fun DtsEditor(
                         lineLength = line.length
                     )
                     val normalizedSel = currentSelection?.takeIf { !it.isCollapsed }
-                    val showStartHandle = normalizedSel != null &&
-                        normalizedSel.normalizedStart.line == actualLineIndex
-                    val showEndHandle = normalizedSel != null &&
-                        normalizedSel.normalizedEnd.line == actualLineIndex
+                    val showStartHandle = if (startHandleDragBaseLine >= 0) {
+                        startHandleDragBaseLine == actualLineIndex
+                    } else {
+                        normalizedSel != null && normalizedSel.normalizedStart.line == actualLineIndex
+                    }
+                    val showEndHandle = if (endHandleDragBaseLine >= 0) {
+                        endHandleDragBaseLine == actualLineIndex
+                    } else {
+                        normalizedSel != null && normalizedSel.normalizedEnd.line == actualLineIndex
+                    }
 
                     EditorLineRow(
                         lineNumber = actualLineIndex + 1,
@@ -965,6 +986,41 @@ fun DtsEditor(
                             expandAnchor = TextCursor(actualLineIndex, offset.coerceIn(0, line.length))
                             focusRequester.requestFocus()
                             keyboardController?.show()
+                        },
+                        onStartHandleDrag = { targetLine, newColumn ->
+                            val sel = currentSelection ?: return@EditorLineRow
+                            val end = sel.normalizedEnd
+                            val clampedLine = targetLine.coerceIn(0, editorState.lines.lastIndex)
+                            val targetLen = editorState.lines.getOrNull(clampedLine)?.length ?: 0
+                            val clampedCol = newColumn.coerceIn(0, targetLen)
+                            val newStart = TextCursor(clampedLine, clampedCol)
+                            if (newStart < end) {
+                                editorState.setSelection(start = newStart, end = end)
+                            }
+                        },
+                        onEndHandleDrag = { targetLine, newColumn ->
+                            val sel = currentSelection ?: return@EditorLineRow
+                            val start = sel.normalizedStart
+                            val clampedLine = targetLine.coerceIn(0, editorState.lines.lastIndex)
+                            val targetLen = editorState.lines.getOrNull(clampedLine)?.length ?: 0
+                            val clampedCol = newColumn.coerceIn(0, targetLen)
+                            val newEnd = TextCursor(clampedLine, clampedCol)
+                            if (newEnd > start) {
+                                editorState.setSelection(start = start, end = newEnd)
+                            }
+                        },
+                        onHandleDragStart = { isStartHandle ->
+                            isHandleDragActive = true
+                            if (isStartHandle) startHandleDragBaseLine = actualLineIndex
+                            else endHandleDragBaseLine = actualLineIndex
+                            onSelectionDragStateChanged(true)
+                            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                        },
+                        onHandleDragEnd = {
+                            isHandleDragActive = false
+                            startHandleDragBaseLine = -1
+                            endHandleDragBaseLine = -1
+                            onSelectionDragStateChanged(false)
                         }
                     )
                 }
@@ -1072,7 +1128,11 @@ private fun EditorLineRow(
     errors: List<DtsError>?,
     onTapOffset: (Int) -> Unit,
     onWordSelect: (Int) -> Unit,
-    onLineSelect: (Int) -> Unit
+    onLineSelect: (Int) -> Unit,
+    onStartHandleDrag: (targetLine: Int, column: Int) -> Unit = { _, _ -> },
+    onEndHandleDrag: (targetLine: Int, column: Int) -> Unit = { _, _ -> },
+    onHandleDragStart: (isStartHandle: Boolean) -> Unit = {},
+    onHandleDragEnd: () -> Unit = {}
 ) {
     val hasError = errors?.any { it.severity == Severity.ERROR } == true
     val hasWarning = !hasError && errors?.any { it.severity == Severity.WARNING } == true
@@ -1127,6 +1187,9 @@ private fun EditorLineRow(
 
     var textLayoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
     var lastDoubleTapTimestamp by remember { mutableLongStateOf(0L) }
+    val density = LocalDensity.current
+    val handleSizeDp = 60.dp
+    val handleSizePx = with(density) { handleSizeDp.toPx() }
 
     Row(
         modifier = Modifier
@@ -1226,123 +1289,260 @@ private fun EditorLineRow(
             }
         }
 
+        // Text content area with overlaid handles
         Box(
             modifier = Modifier
                 .weight(1f)
                 .defaultMinSize(minHeight = 24.dp)
-                .padding(start = 12.dp, end = 8.dp, top = 2.dp, bottom = if (hasHandle) 14.dp else 2.dp)
-                .drawBehind {
-                    val layout = textLayoutResult ?: return@drawBehind
-                    // Draw caret
-                    if (showCaret) {
-                        val safeColumn = caretColumn.coerceIn(0, content.length)
-                        val rect = layout.getCursorRect(safeColumn)
-                        drawLine(
-                            color = caretColor,
-                            start = Offset(rect.left, rect.top),
-                            end = Offset(rect.left, rect.bottom),
-                            strokeWidth = 2f
-                        )
-                    }
-                    // Draw selection handles (teardrop style)
-                    if (showStartHandle) {
-                        val col = selectionRange?.start?.coerceIn(0, content.length) ?: 0
-                        val rect = layout.getCursorRect(col)
-                        drawLine(
-                            color = handleColor,
-                            start = Offset(rect.left, rect.top),
-                            end = Offset(rect.left, rect.bottom + 2.dp.toPx()),
-                            strokeWidth = 2.5f
-                        )
-                        drawCircle(
-                            color = handleColor,
-                            radius = 5.dp.toPx(),
-                            center = Offset(rect.left, rect.bottom + 7.dp.toPx())
-                        )
-                    }
-                    if (showEndHandle) {
-                        val col = selectionRange?.end?.coerceIn(0, content.length) ?: content.length
-                        val rect = layout.getCursorRect(col)
-                        drawLine(
-                            color = handleColor,
-                            start = Offset(rect.left, rect.top),
-                            end = Offset(rect.left, rect.bottom + 2.dp.toPx()),
-                            strokeWidth = 2.5f
-                        )
-                        drawCircle(
-                            color = handleColor,
-                            radius = 5.dp.toPx(),
-                            center = Offset(rect.left, rect.bottom + 7.dp.toPx())
-                        )
-                    }
-                }
-                .pointerInput(content, renderedText) {
-                    detectTapGestures(
-                        onTap = { tapPosition ->
-                            val offset = textLayoutResult?.let { layout ->
-                                try {
-                                    layout.getOffsetForPosition(Offset(tapPosition.x, tapPosition.y))
-                                        .coerceIn(0, content.length)
-                                } catch (_: Exception) {
-                                    content.length
-                                }
-                            } ?: content.length
-                            val now = android.os.SystemClock.uptimeMillis()
-                            val shouldSelectLine =
-                                lastDoubleTapTimestamp != 0L && (now - lastDoubleTapTimestamp) <= TRIPLE_TAP_WINDOW_MS
-                            if (shouldSelectLine) {
-                                onLineSelect(offset)
-                                lastDoubleTapTimestamp = 0L
-                            } else {
-                                onTapOffset(offset)
-                            }
-                        },
-                        onDoubleTap = { tapPosition ->
-                            val offset = textLayoutResult?.let { layout ->
-                                try {
-                                    layout.getOffsetForPosition(Offset(tapPosition.x, tapPosition.y))
-                                        .coerceIn(0, content.length)
-                                } catch (_: Exception) {
-                                    content.length
-                                }
-                            } ?: content.length
-                            onWordSelect(offset)
-                            lastDoubleTapTimestamp = android.os.SystemClock.uptimeMillis()
-                        },
-                        onLongPress = { tapPosition ->
-                            val offset = textLayoutResult?.let { layout ->
-                                try {
-                                    layout.getOffsetForPosition(Offset(tapPosition.x, tapPosition.y))
-                                        .coerceIn(0, content.length)
-                                } catch (_: Exception) {
-                                    content.length
-                                }
-                            } ?: content.length
-                            onWordSelect(offset)
+                .padding(start = 12.dp, end = 8.dp, top = 2.dp, bottom = 2.dp)
+        ) {
+            // Text with caret drawing (no handle drawing here anymore)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .drawBehind {
+                        val layout = textLayoutResult ?: return@drawBehind
+                        if (showCaret) {
+                            val safeColumn = caretColumn.coerceIn(0, content.length)
+                            val rect = layout.getCursorRect(safeColumn)
+                            drawLine(
+                                color = caretColor,
+                                start = Offset(rect.left, rect.top),
+                                end = Offset(rect.left, rect.bottom),
+                                strokeWidth = 2f
+                            )
                         }
+                    }
+                    .pointerInput(content, renderedText) {
+                        detectTapGestures(
+                            onTap = { tapPosition ->
+                                val offset = textLayoutResult?.let { layout ->
+                                    try {
+                                        layout.getOffsetForPosition(Offset(tapPosition.x, tapPosition.y))
+                                            .coerceIn(0, content.length)
+                                    } catch (_: Exception) {
+                                        content.length
+                                    }
+                                } ?: content.length
+                                val now = android.os.SystemClock.uptimeMillis()
+                                val shouldSelectLine =
+                                    lastDoubleTapTimestamp != 0L && (now - lastDoubleTapTimestamp) <= TRIPLE_TAP_WINDOW_MS
+                                if (shouldSelectLine) {
+                                    onLineSelect(offset)
+                                    lastDoubleTapTimestamp = 0L
+                                } else {
+                                    onTapOffset(offset)
+                                }
+                            },
+                            onDoubleTap = { tapPosition ->
+                                val offset = textLayoutResult?.let { layout ->
+                                    try {
+                                        layout.getOffsetForPosition(Offset(tapPosition.x, tapPosition.y))
+                                            .coerceIn(0, content.length)
+                                    } catch (_: Exception) {
+                                        content.length
+                                    }
+                                } ?: content.length
+                                onWordSelect(offset)
+                                lastDoubleTapTimestamp = android.os.SystemClock.uptimeMillis()
+                            },
+                            onLongPress = { tapPosition ->
+                                val offset = textLayoutResult?.let { layout ->
+                                    try {
+                                        layout.getOffsetForPosition(Offset(tapPosition.x, tapPosition.y))
+                                            .coerceIn(0, content.length)
+                                    } catch (_: Exception) {
+                                        content.length
+                                    }
+                                } ?: content.length
+                                onWordSelect(offset)
+                            }
+                        )
+                    }
+            ) {
+                Text(
+                    text = renderedText,
+                    style = textStyle,
+                    onTextLayout = { textLayoutResult = it },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                if (foldMarker.isCollapsed && foldMarker.hiddenLineCount > 0) {
+                    Text(
+                        text = "... ${foldMarker.hiddenLineCount} lines",
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                        modifier = Modifier
+                            .align(Alignment.CenterEnd)
+                            .background(
+                                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.75f),
+                                shape = RoundedCornerShape(4.dp)
+                            )
+                            .padding(horizontal = 6.dp, vertical = 1.dp)
                     )
                 }
-        ) {
-            Text(
-                text = renderedText,
-                style = textStyle,
-                onTextLayout = { textLayoutResult = it },
-                modifier = Modifier.fillMaxWidth()
-            )
-            if (foldMarker.isCollapsed && foldMarker.hiddenLineCount > 0) {
-                Text(
-                    text = "... ${foldMarker.hiddenLineCount} lines",
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
-                    modifier = Modifier
-                        .align(Alignment.CenterEnd)
-                        .background(
-                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.75f),
-                            shape = RoundedCornerShape(4.dp)
-                        )
-                        .padding(horizontal = 6.dp, vertical = 1.dp)
-                )
+            }
+
+            // Draggable Start Handle
+            if (showStartHandle) {
+                val layout = textLayoutResult
+                if (layout != null) {
+                    val col = selectionRange?.start?.coerceIn(0, content.length) ?: 0
+                    val rect = layout.getCursorRect(col)
+                    val lineHeightPx = layout.size.height.toFloat()
+                    val baseLineIndex = lineNumber - 1
+                    var isDragging by remember { mutableStateOf(false) }
+                    var dragAccumulatorX by remember { mutableStateOf(0f) }
+                    var dragAccumulatorY by remember { mutableStateOf(0f) }
+
+                    val handleX = if (isDragging) dragAccumulatorX else rect.left
+                    val handleYExtra = if (isDragging) dragAccumulatorY else 0f
+
+                    Box(
+                        modifier = Modifier
+                            .layout { measurable, constraints ->
+                                val placeable = measurable.measure(constraints)
+                                layout(0, 0) { placeable.place(0, 0) }
+                            }
+                            .size(handleSizeDp)
+                            .offset(
+                                x = with(density) { (handleX - handleSizePx / 2f).toDp() },
+                                y = with(density) { (rect.bottom + handleYExtra - handleSizePx / 2f + 9.dp.toPx()).toDp() }
+                            )
+                            .pointerInput(Unit) {
+                                detectDragGestures(
+                                    onDragStart = {
+                                        isDragging = true
+                                        dragAccumulatorX = rect.left
+                                        dragAccumulatorY = 0f
+                                        onHandleDragStart(true)
+                                    },
+                                    onDrag = { change, dragAmount ->
+                                        change.consume()
+                                        dragAccumulatorX += dragAmount.x
+                                        dragAccumulatorY += dragAmount.y
+                                        val lineOffset = (dragAccumulatorY / lineHeightPx).toInt()
+                                        val targetLine = baseLineIndex + lineOffset
+                                        val newColumn = layout
+                                            .getOffsetForPosition(
+                                                Offset(
+                                                    dragAccumulatorX,
+                                                    rect.top + (rect.bottom - rect.top) / 2f
+                                                )
+                                            )
+                                            .coerceIn(0, content.length)
+                                        onStartHandleDrag(targetLine, newColumn)
+                                    },
+                                    onDragEnd = {
+                                        isDragging = false
+                                        onHandleDragEnd()
+                                    },
+                                    onDragCancel = {
+                                        isDragging = false
+                                        onHandleDragEnd()
+                                    }
+                                )
+                            }
+                    ) {
+                        Canvas(modifier = Modifier.fillMaxSize()) {
+                            val cx = size.width / 2f
+                            val lineTop = size.height / 2f - 9.dp.toPx()
+                            val lineBottom = size.height / 2f
+                            drawLine(
+                                color = handleColor,
+                                start = Offset(cx, lineTop.coerceAtLeast(0f)),
+                                end = Offset(cx, lineBottom),
+                                strokeWidth = 2.5f
+                            )
+                            drawCircle(
+                                color = handleColor,
+                                radius = 7.dp.toPx(),
+                                center = Offset(cx, lineBottom + 7.dp.toPx())
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Draggable End Handle
+            if (showEndHandle) {
+                val layout = textLayoutResult
+                if (layout != null) {
+                    val col = selectionRange?.end?.coerceIn(0, content.length) ?: content.length
+                    val rect = layout.getCursorRect(col)
+                    val lineHeightPx = layout.size.height.toFloat()
+                    val baseLineIndex = lineNumber - 1
+                    var isDragging by remember { mutableStateOf(false) }
+                    var dragAccumulatorX by remember { mutableStateOf(0f) }
+                    var dragAccumulatorY by remember { mutableStateOf(0f) }
+
+                    val handleX = if (isDragging) dragAccumulatorX else rect.left
+                    val handleYExtra = if (isDragging) dragAccumulatorY else 0f
+
+                    Box(
+                        modifier = Modifier
+                            .layout { measurable, constraints ->
+                                val placeable = measurable.measure(constraints)
+                                layout(0, 0) { placeable.place(0, 0) }
+                            }
+                            .size(handleSizeDp)
+                            .offset(
+                                x = with(density) { (handleX - handleSizePx / 2f).toDp() },
+                                y = with(density) { (rect.bottom + handleYExtra - handleSizePx / 2f + 9.dp.toPx()).toDp() }
+                            )
+                            .pointerInput(Unit) {
+                                detectDragGestures(
+                                    onDragStart = {
+                                        isDragging = true
+                                        dragAccumulatorX = rect.left
+                                        dragAccumulatorY = 0f
+                                        onHandleDragStart(false)
+                                    },
+                                    onDrag = { change, dragAmount ->
+                                        change.consume()
+                                        dragAccumulatorX += dragAmount.x
+                                        dragAccumulatorY += dragAmount.y
+                                        val lineOffset = (dragAccumulatorY / lineHeightPx).toInt()
+                                        val targetLine = baseLineIndex + lineOffset
+                                        val newColumn = layout
+                                            .getOffsetForPosition(
+                                                Offset(
+                                                    dragAccumulatorX,
+                                                    rect.top + (rect.bottom - rect.top) / 2f
+                                                )
+                                            )
+                                            .coerceIn(0, content.length)
+                                        onEndHandleDrag(targetLine, newColumn)
+                                    },
+                                    onDragEnd = {
+                                        isDragging = false
+                                        onHandleDragEnd()
+                                    },
+                                    onDragCancel = {
+                                        isDragging = false
+                                        onHandleDragEnd()
+                                    }
+                                )
+                            }
+                    ) {
+                        Canvas(modifier = Modifier.fillMaxSize()) {
+                            val cx = size.width / 2f
+                            val lineTop = size.height / 2f - 9.dp.toPx()
+                            val lineBottom = size.height / 2f
+                            drawLine(
+                                color = handleColor,
+                                start = Offset(cx, lineTop.coerceAtLeast(0f)),
+                                end = Offset(cx, lineBottom),
+                                strokeWidth = 2.5f
+                            )
+                            drawCircle(
+                                color = handleColor,
+                                radius = 7.dp.toPx(),
+                                center = Offset(cx, lineBottom + 7.dp.toPx())
+                            )
+                        }
+                    }
+                }
             }
         }
     }

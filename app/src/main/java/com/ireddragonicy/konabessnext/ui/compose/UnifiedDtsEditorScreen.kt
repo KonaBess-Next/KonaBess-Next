@@ -13,7 +13,8 @@ import kotlin.math.abs
 
 @Composable
 fun UnifiedDtsEditorScreen(
-    textViewModel: TextEditorViewModel = hiltViewModel()
+    textViewModel: TextEditorViewModel = hiltViewModel(),
+    onSelectionDragStateChanged: (Boolean) -> Unit = {}
 ) {
     val searchState by textViewModel.searchState.collectAsState()
     val lintErrorCount by textViewModel.lintErrorCount.collectAsState()
@@ -108,7 +109,8 @@ fun UnifiedDtsEditorScreen(
             searchResults = searchState.results.map { LineSearchResult(it.lineIndex) },
             navigationRequest = navigationRequest,
             lintErrorsByLine = textViewModel.lintErrorsByLine,
-            listState = listState
+            listState = listState,
+            onSelectionDragStateChanged = onSelectionDragStateChanged
         )
     }
 }

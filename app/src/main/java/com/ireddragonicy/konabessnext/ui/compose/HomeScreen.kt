@@ -39,7 +39,8 @@ fun HomeScreen(
     gpuFrequencyViewModel: GpuFrequencyViewModel,
     sharedViewModel: SharedGpuViewModel,
     highlightCache: Map<Int, androidx.compose.ui.text.AnnotatedString> = emptyMap(),
-    onStartRepack: () -> Unit
+    onStartRepack: () -> Unit,
+    onSelectionDragStateChanged: (Boolean) -> Unit = {}
 ) {
     val isFilesExtracted by deviceViewModel.isFilesExtracted.collectAsState()
     val reloadTrigger by deviceViewModel.dataReloadTrigger.collectAsState()
@@ -63,7 +64,8 @@ fun HomeScreen(
             deviceViewModel = deviceViewModel,
             gpuFrequencyViewModel = gpuFrequencyViewModel,
             sharedViewModel = sharedViewModel,
-            onStartRepack = onStartRepack
+            onStartRepack = onStartRepack,
+            onSelectionDragStateChanged = onSelectionDragStateChanged
         )
     } else {
         InitialSetupScreen(
@@ -136,7 +138,8 @@ fun GpuEditorMainContent(
     deviceViewModel: DeviceViewModel,
     gpuFrequencyViewModel: GpuFrequencyViewModel,
     sharedViewModel: SharedGpuViewModel,
-    onStartRepack: () -> Unit
+    onStartRepack: () -> Unit,
+    onSelectionDragStateChanged: (Boolean) -> Unit = {}
 ) {
     val isDirty by gpuFrequencyViewModel.isDirty.collectAsState()
     val canUndo by gpuFrequencyViewModel.canUndo.collectAsState()
@@ -363,7 +366,9 @@ fun GpuEditorMainContent(
                             gpuFrequencyViewModel,
                             onOpenCurveEditor = { binId -> activeCurveEditorBinId = binId }
                         )
-                        SharedGpuViewModel.ViewMode.TEXT_ADVANCED -> UnifiedDtsEditorScreen()
+                        SharedGpuViewModel.ViewMode.TEXT_ADVANCED -> UnifiedDtsEditorScreen(
+                            onSelectionDragStateChanged = onSelectionDragStateChanged
+                        )
                         SharedGpuViewModel.ViewMode.VISUAL_TREE -> VisualTreeContent()
                     }
                 }
