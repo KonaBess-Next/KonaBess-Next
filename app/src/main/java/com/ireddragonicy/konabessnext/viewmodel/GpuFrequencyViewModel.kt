@@ -2,6 +2,10 @@ package com.ireddragonicy.konabessnext.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.asLiveData
+import com.ireddragonicy.konabessnext.core.model.DomainResult
+import com.ireddragonicy.konabessnext.utils.UserMessageManager
+import android.widget.Toast
+import kotlinx.coroutines.Dispatchers
 import com.ireddragonicy.konabessnext.repository.GpuRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -15,7 +19,8 @@ import kotlinx.coroutines.launch
  */
 @HiltViewModel
 class GpuFrequencyViewModel @Inject constructor(
-    private val repository: GpuRepository
+    private val repository: GpuRepository,
+    private val userMessageManager: UserMessageManager
 ) : ViewModel() {
 
     // View State
@@ -40,9 +45,11 @@ class GpuFrequencyViewModel @Inject constructor(
     fun save(showToast: Boolean) {
         // Call repository save
         // Toast logic handled in UI layer observing states
-        @OptIn(kotlinx.coroutines.DelicateCoroutinesApi::class)
-        kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            repository.saveTable()
+        viewModelScope.launch {
+            val result = repository.saveTable()
+            if (result is DomainResult.Failure) {
+                userMessageManager.emitError("Save Failed", result.error.message)
+            }
         }
     }
 

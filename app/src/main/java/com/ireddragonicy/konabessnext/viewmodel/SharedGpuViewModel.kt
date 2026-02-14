@@ -45,7 +45,9 @@ class SharedGpuViewModel @Inject constructor(
     private val repository: GpuRepository,
     private val deviceRepository: DeviceRepositoryInterface,
     private val chipRepository: com.ireddragonicy.konabessnext.repository.ChipRepository,
-    private val settingsRepository: com.ireddragonicy.konabessnext.repository.SettingsRepository
+    private val chipRepository: com.ireddragonicy.konabessnext.repository.ChipRepository,
+    private val settingsRepository: com.ireddragonicy.konabessnext.repository.SettingsRepository,
+    private val userMessageManager: com.ireddragonicy.konabessnext.utils.UserMessageManager
 ) : AndroidViewModel(application) {
 
     enum class ViewMode { MAIN_EDITOR, TEXT_ADVANCED, VISUAL_TREE }
@@ -137,7 +139,12 @@ class SharedGpuViewModel @Inject constructor(
 
         viewModelScope.launch {
             try {
-                repository.loadTable()
+                val loadResult = repository.loadTable()
+                if (loadResult is com.ireddragonicy.konabessnext.core.model.DomainResult.Failure) {
+                    _isLoading.value = false
+                    _workbenchState.value = WorkbenchState.Error(loadResult.error.message)
+                    return@launch
+                }
 
                 val lines = repository.dtsLines.value
                 if (lines.isNotEmpty()) {
@@ -201,7 +208,16 @@ class SharedGpuViewModel @Inject constructor(
 
     fun save(showToast: Boolean = true) {
         viewModelScope.launch {
-            repository.saveTable()
+        viewModelScope.launch {
+            val result = repository.saveTable()
+            if (result is com.ireddragonicy.konabessnext.core.model.DomainResult.Failure) {
+                userMessageManager.emitError("Save Failed", result.error.message)
+            } else if (showToast) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(application, "Saved successfully", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
         }
     }
 
@@ -346,10 +362,9 @@ class SharedGpuViewModel @Inject constructor(
             return
         }
 
-        val runtimeFrequencies = try {
-            deviceRepository.getRunTimeGpuFrequencies()
-        } catch (_: Exception) {
-            emptyList()
+        val runtimeFrequencies = when (val result = deviceRepository.getRunTimeGpuFrequencies()) {
+            is com.ireddragonicy.konabessnext.core.model.DomainResult.Success -> result.data
+            is com.ireddragonicy.konabessnext.core.model.DomainResult.Failure -> emptyList()
         }
 
         val normalizedRuntime = normalizeFrequencyList(runtimeFrequencies)

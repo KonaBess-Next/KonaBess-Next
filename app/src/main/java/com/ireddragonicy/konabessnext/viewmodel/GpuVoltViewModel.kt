@@ -4,6 +4,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ireddragonicy.konabessnext.model.EditorState
 import com.ireddragonicy.konabessnext.model.Opp
+import com.ireddragonicy.konabessnext.core.model.DomainResult
+import com.ireddragonicy.konabessnext.utils.UserMessageManager
+import android.widget.Toast
+import kotlinx.coroutines.Dispatchers
 import com.ireddragonicy.konabessnext.repository.GpuRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -67,11 +71,9 @@ class GpuVoltViewModel @Inject constructor(
 
     fun save() {
         viewModelScope.launch {
-            try {
-                repository.saveTable()
-                _toastEvent.emit("Saved successfully")
-            } catch (e: Exception) {
-                _errorEvent.emit("Save failed: ${e.message}")
+            when (val result = repository.saveTable()) {
+                is DomainResult.Success -> _toastEvent.emit("Saved successfully")
+                is DomainResult.Failure -> _errorEvent.emit("Save failed: ${result.error.message}")
             }
         }
     }

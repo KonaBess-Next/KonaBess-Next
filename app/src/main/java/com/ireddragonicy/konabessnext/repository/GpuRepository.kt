@@ -3,6 +3,8 @@ package com.ireddragonicy.konabessnext.repository
 
 import com.ireddragonicy.konabessnext.model.Bin
 import com.ireddragonicy.konabessnext.model.Opp
+import com.ireddragonicy.konabessnext.core.model.AppError
+import com.ireddragonicy.konabessnext.core.model.DomainResult
 import com.ireddragonicy.konabessnext.model.dts.DtsNode
 import com.ireddragonicy.konabessnext.model.dts.DtsProperty
 import com.ireddragonicy.konabessnext.utils.DtsTreeHelper
@@ -91,7 +93,7 @@ open class GpuRepository @Inject constructor(
 
     // --- Core Operations ---
 
-    suspend fun loadTable() = withContext(Dispatchers.IO) {
+    suspend fun loadTable(): DomainResult<Unit> = withContext(Dispatchers.IO) {
         try {
             val lines = dtsFileRepository.loadDtsLines()
             historyManager.clear()
@@ -109,19 +111,21 @@ open class GpuRepository @Inject constructor(
             
             initialContentHash = lines.hashCode()
             _isDirty.value = false
+            DomainResult.Success(Unit)
         } catch (e: Exception) {
-            userMessageManager.emitError("Load Failed", e.localizedMessage ?: "Unknown error loading DTS")
+            DomainResult.Failure(AppError.UnknownError(e.localizedMessage ?: "Unknown error loading DTS", e))
         }
     }
 
-    suspend fun saveTable() = withContext(Dispatchers.IO) {
+    suspend fun saveTable(): DomainResult<Unit> = withContext(Dispatchers.IO) {
         try {
             val currentLines = _dtsLines.value
             dtsFileRepository.saveDtsLines(currentLines)
             initialContentHash = currentLines.hashCode()
             _isDirty.value = false
+            DomainResult.Success(Unit)
         } catch (e: Exception) {
-            userMessageManager.emitError("Save Failed", e.localizedMessage ?: "Unknown error saving DTS")
+            DomainResult.Failure(AppError.IoError(e.localizedMessage ?: "Unknown error saving DTS", e))
         }
     }
 

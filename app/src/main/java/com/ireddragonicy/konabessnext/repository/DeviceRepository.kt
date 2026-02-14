@@ -431,7 +431,7 @@ open class DeviceRepository @Inject constructor(
         return output.map { sanitizeString(it) }.filter { it.isNotEmpty() }
     }
 
-    override suspend fun getRunTimeGpuFrequencies(): List<Long> = withContext(Dispatchers.IO) {
+    override suspend fun getRunTimeGpuFrequencies(): DomainResult<List<Long>> = withContext(Dispatchers.IO) {
         val probeCommands = listOf(
             "cat /sys/class/kgsl/kgsl-3d0/frequencies",
             "cat /sys/class/kgsl/kgsl-3d0/available_frequencies",
@@ -452,18 +452,18 @@ open class DeviceRepository @Inject constructor(
                 shellRepository.execForOutput(command)
             } catch (securityException: SecurityException) {
                 Log.w(TAG, "GPU runtime frequency probe blocked: $command", securityException)
-                return@withContext emptyList()
+                continue
             } catch (_: Exception) {
-                emptyList()
+                continue
             }
 
             val parsed = parseRuntimeFrequencyOutput(output)
             if (parsed.isNotEmpty()) {
-                return@withContext parsed
+                return@withContext DomainResult.Success(parsed)
             }
         }
 
-        emptyList()
+        DomainResult.Failure(AppError.IoError("Could not determine runtime GPU frequencies. This is normal on some devices or if root is denied."))
     }
 
     fun chooseTarget(dtb: Dtb) {
