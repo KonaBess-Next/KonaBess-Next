@@ -61,4 +61,11 @@ class SettingsRepository @Inject constructor(
         return prefs.getBoolean("is_root_mode", false)
     }
     fun setRootMode(enabled: Boolean) = prefs.edit().putBoolean("is_root_mode", enabled).apply()
+
+    // Export Location
+    fun getDefaultExportUri(): String? = prefs.getString(SettingsViewModel.KEY_EXPORT_URI, null)
+    fun setDefaultExportUri(uri: String?) = prefs.edit().putString(SettingsViewModel.KEY_EXPORT_URI, uri).apply()
+
+    fun getExportPathDisplay(): String = prefs.getString(SettingsViewModel.KEY_EXPORT_PATH_DISPLAY, "") ?: ""
+    fun setExportPathDisplay(path: String) = prefs.edit().putString(SettingsViewModel.KEY_EXPORT_PATH_DISPLAY, path).apply()
 }

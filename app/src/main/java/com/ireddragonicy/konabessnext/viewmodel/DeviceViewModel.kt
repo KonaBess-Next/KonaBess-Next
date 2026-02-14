@@ -225,6 +225,50 @@ class DeviceViewModel @Inject constructor(
         }
     }
 
+    suspend fun tryExportBootImageToDefault(context: Context): Boolean {
+        val defaultUriStr = settingsRepository.getDefaultExportUri() ?: return false
+        val defaultUri = Uri.parse(defaultUriStr)
+        
+        return try {
+            withContext(Dispatchers.IO) {
+                val dir = androidx.documentfile.provider.DocumentFile.fromTreeUri(context, defaultUri)
+                if (dir == null || !dir.canWrite()) return@withContext false
+
+                when (val repackResult = repository.dts2bootImage()) {
+                    is DomainResult.Failure -> {
+                        withContext(Dispatchers.Main) {
+                            Toast.makeText(context, context.getString(R.string.export_failed_format, mapAppErrorToMessage(repackResult.error)), Toast.LENGTH_LONG).show()
+                        }
+                        false
+                    }
+                    is DomainResult.Success -> {
+                        val timestamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US).format(java.util.Date())
+                        val name = "boot_repack_$timestamp.img"
+                        val newFile = dir.createFile("application/octet-stream", name) 
+                            ?: return@withContext false
+                        
+                        val writeResult = runCatching {
+                            context.contentResolver.openOutputStream(newFile.uri)?.use { output ->
+                                repackResult.data.inputStream().use { input -> input.copyTo(output) }
+                            }
+                        }
+
+                        if (writeResult.isSuccess) {
+                            withContext(Dispatchers.Main) {
+                                Toast.makeText(context, "Saved to ${settingsRepository.getExportPathDisplay()}/$name", Toast.LENGTH_SHORT).show()
+                            }
+                            true
+                        } else {
+                            false
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            false
+        }
+    }
+
     fun detectChipset() {
         _detectionState.value = UiState.Loading
         viewModelScope.launch {

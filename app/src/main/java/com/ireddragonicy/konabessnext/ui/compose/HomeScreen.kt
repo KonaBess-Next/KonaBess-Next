@@ -261,8 +261,24 @@ fun GpuEditorMainContent(
         if (uri != null) sharedViewModel.exportRawDts(context, uri)
     }
     
+    fun launchExportDts() {
+        scope.launch {
+             if (!sharedViewModel.tryExportRawDtsToDefault(context)) {
+                 exportDtsLauncher.launch("gpu_config.dts")
+             }
+        }
+    }
+    
     val exportImgLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
         if (uri != null) deviceViewModel.exportBootImage(context, uri)
+    }
+
+    fun launchExportImage() {
+        scope.launch {
+            if (!deviceViewModel.tryExportBootImageToDefault(context)) {
+                exportImgLauncher.launch("boot_repack.img")
+            }
+        }
     }
 
     val dismissDiffSheet = {
@@ -285,7 +301,7 @@ fun GpuEditorMainContent(
     val confirmDiffAction = {
         when (pendingDiffAction) {
             DiffCommitAction.SAVE -> gpuFrequencyViewModel.save(true)
-            DiffCommitAction.EXPORT_IMAGE -> exportImgLauncher.launch("boot_repack.img")
+            DiffCommitAction.EXPORT_IMAGE -> launchExportImage()
             DiffCommitAction.FLASH_DEVICE -> onStartRepack()
             DiffCommitAction.INSTALL_INACTIVE_SLOT -> showInactiveInstallDialog = true
             null -> Unit
@@ -328,9 +344,10 @@ fun GpuEditorMainContent(
             sharedViewModel = sharedViewModel,
             onBack = { activeCurveEditorBinId = -1 },
             onRepack = onStartRepack,
+            onRepack = onStartRepack,
             onInstallToInactiveSlot = { showInactiveInstallDialog = true },
-            onExportDts = { exportDtsLauncher.launch("gpu_config.dts") },
-            onExportImg = { exportImgLauncher.launch("boot_repack.img") },
+            onExportDts = { launchExportDts() },
+            onExportImg = { launchExportImage() },
             canFlashOrRepack = canFlashOrRepack,
             isRootMode = isRootMode
         )
@@ -351,9 +368,10 @@ fun GpuEditorMainContent(
                 onViewModeChanged = { mode -> sharedViewModel.switchViewMode(mode) },
                 onChipsetClick = { activeSheet = WorkbenchSheetType.CHIPSET },
                 onFlashClick = { onStartRepack() },
+                onFlashClick = { onStartRepack() },
                 onInstallToInactiveSlot = { showInactiveInstallDialog = true },
-                onExportDts = { exportDtsLauncher.launch("gpu_config.dts") },
-                onExportImg = { exportImgLauncher.launch("boot_repack.img") },
+                onExportDts = { launchExportDts() },
+                onExportImg = { launchExportImage() },
                 canFlashOrRepack = canFlashOrRepack,
                 isRootMode = isRootMode
             )

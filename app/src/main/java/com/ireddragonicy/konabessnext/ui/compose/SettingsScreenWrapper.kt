@@ -35,6 +35,14 @@ fun SettingsScreenWrapper(
     val uiState by settingsViewModel.uiState.collectAsState()
     val context = LocalContext.current
     
+    val exportLocationLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.OpenDocumentTree()
+    ) { uri ->
+        if (uri != null) {
+            settingsViewModel.setDefaultExportLocation(context, uri)
+        }
+    }
+
     var showLanguageDialog by remember { mutableStateOf(false) }
     var showPaletteDialog by remember { mutableStateOf(false) }
     var showHelpDialog by remember { mutableStateOf(false) }
@@ -179,6 +187,10 @@ fun SettingsScreenWrapper(
         onUpdateChannelChange = { channel -> settingsViewModel.setUpdateChannel(channel) },
         onAutoCheckUpdateToggle = { settingsViewModel.toggleAutoCheckUpdate() },
         onCheckForUpdates = { settingsViewModel.checkForUpdates(isManual = true) },
-        onClearUpdateStatus = { settingsViewModel.clearUpdateStatus() }
+        onClearUpdateStatus = { settingsViewModel.clearUpdateStatus() },
+        
+        // Export Location
+        exportPath = uiState.exportPath,
+        onSetExportLocation = { exportLocationLauncher.launch(null) }
     )
 }

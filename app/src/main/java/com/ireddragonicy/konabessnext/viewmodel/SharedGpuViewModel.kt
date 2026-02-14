@@ -44,7 +44,8 @@ class SharedGpuViewModel @Inject constructor(
     private val application: Application,
     private val repository: GpuRepository,
     private val deviceRepository: DeviceRepositoryInterface,
-    private val chipRepository: com.ireddragonicy.konabessnext.repository.ChipRepository
+    private val chipRepository: com.ireddragonicy.konabessnext.repository.ChipRepository,
+    private val settingsRepository: com.ireddragonicy.konabessnext.repository.SettingsRepository
 ) : AndroidViewModel(application) {
 
     enum class ViewMode { MAIN_EDITOR, TEXT_ADVANCED, VISUAL_TREE }
@@ -222,6 +223,33 @@ class SharedGpuViewModel @Inject constructor(
                     Toast.makeText(context, context.getString(R.string.save_failed_format, e.message ?: ""), Toast.LENGTH_SHORT).show()
                 }
             }
+        }
+    }
+
+    suspend fun tryExportRawDtsToDefault(context: Context): Boolean {
+        val defaultUriStr = settingsRepository.getDefaultExportUri() ?: return false
+        val defaultUri = Uri.parse(defaultUriStr)
+        return try {
+            val content = dtsContent.value
+            withContext(Dispatchers.IO) {
+                val dir = androidx.documentfile.provider.DocumentFile.fromTreeUri(context, defaultUri)
+                if (dir == null || !dir.canWrite()) return@withContext false
+
+                val timestamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US).format(java.util.Date())
+                val name = "gpu_config_$timestamp.dts"
+                val newFile = dir.createFile("text/plain", name) 
+                    ?: return@withContext false
+                
+                context.contentResolver.openOutputStream(newFile.uri)?.use { output ->
+                    output.write(content.toByteArray())
+                }
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, "Saved to ${settingsRepository.getExportPathDisplay()}/$name", Toast.LENGTH_SHORT).show()
+                }
+                true
+            }
+        } catch (e: Exception) {
+            false
         }
     }
 

@@ -83,6 +83,11 @@ fun SettingsScreen(
     onAutoCheckUpdateToggle: () -> Unit,
     onCheckForUpdates: () -> Unit,
     onClearUpdateStatus: () -> Unit,
+
+    // Export Location
+    exportPath: String,
+    onSetExportLocation: () -> Unit,
+
     modifier: Modifier = Modifier
 ) {
     val themeTitle = androidx.compose.ui.res.stringResource(R.string.settings_theme)
@@ -135,7 +140,10 @@ fun SettingsScreen(
     val rootModeTitle = stringResource(R.string.settings_root_mode)
     val rootModeDesc = if (isRootMode) stringResource(R.string.settings_root_mode_desc_on) else stringResource(R.string.settings_root_mode_desc_off)
 
-    val settingsItems = remember(currentThemeDisplay, currentColorPalette, currentLanguageDisplay, currentFreqUnit, isAutoSave, isAmoledMode, themeTitle, updateChannel, isAutoCheckUpdate, updateStatus, isRootMode, rootModeDesc, amoledDesc) {
+    val exportLocationTitle = stringResource(R.string.settings_export_location)
+    val exportLocationDesc = if (exportPath.isNotEmpty()) exportPath else stringResource(R.string.settings_export_location_not_set)
+
+    val settingsItems = remember(currentThemeDisplay, currentColorPalette, currentLanguageDisplay, currentFreqUnit, isAutoSave, isAmoledMode, themeTitle, updateChannel, isAutoCheckUpdate, updateStatus, isRootMode, rootModeDesc, amoledDesc, exportLocationDesc) {
         buildList {
             // Appearance section
             add(SettingsListItem.Header(headerAppearance))
@@ -156,6 +164,7 @@ fun SettingsScreen(
             // Behavior section
             add(SettingsListItem.Header(headerBehavior))
             add(SettingsListItem.Setting(SettingItem.Toggle(Icons.Rounded.Save, autoSaveTitle, autoSaveDesc, isAutoSave)))
+            add(SettingsListItem.Setting(SettingItem.Clickable(Icons.Rounded.Save, exportLocationTitle, exportLocationDesc, "")))
             add(SettingsListItem.Setting(SettingItem.Toggle(Icons.Rounded.Security, rootModeTitle, rootModeDesc, isRootMode)))
 
             // About section
@@ -199,7 +208,9 @@ fun SettingsScreen(
                                             freqTitle -> onFreqUnitClick()
                                             helpTitle -> onHelpClick()
                                             channelTitle -> onUpdateChannelChange(if (updateChannel == "stable") "prerelease" else "stable")
+                                            channelTitle -> onUpdateChannelChange(if (updateChannel == "stable") "prerelease" else "stable")
                                             checkUpdatesTitle -> onCheckForUpdates()
+                                            exportLocationTitle -> onSetExportLocation()
                                         }
                                     }
                                 )

@@ -120,6 +120,44 @@ fun ImportExportScreenWrapper(
     ) { uri ->
         uri?.let { importExportViewModel.exportConfigToUri(context, it, pendingExportDesc) }
     }
+    
+    // Helper for fallback logic
+    fun launchExportConfig(desc: String) {
+        pendingExportDesc = desc
+        scope.launch {
+            if (!importExportViewModel.tryExportConfigToDefault(context, desc)) {
+                exportConfigLauncherWithDesc.launch("konabess_config.txt")
+            }
+        }
+    }
+
+    fun launchExportSingleDts(dtsInfo: DtsFileInfo) {
+        scope.launch {
+            if (!importExportViewModel.tryExportDtsToDefault(context, dtsInfo)) {
+                pendingDtsExport = dtsInfo
+                val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+                val safeName = "konabess_dts_dtb${dtsInfo.index}_$timestamp.dts"
+                exportSingleDtsLauncher.launch(safeName)
+            }
+        }
+    }
+    
+    fun launchExportZip() {
+        scope.launch {
+            if (!importExportViewModel.tryExportAllDtsZipToDefault(context)) {
+                val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+                exportAllDtsZipLauncher.launch("konabess_dts_$timestamp.zip")
+            }
+        }
+    }
+    
+    fun launchBackupBoot() {
+        scope.launch {
+            if (!importExportViewModel.tryBackupBootToDefault(context)) {
+                backupBootLauncher.launch("boot_modified.img")
+            }
+        }
+    }
 
     // ── Retrieve DTS files list & device info for the export sheet ──
     val dtsFiles = remember(isPrepared) {
@@ -132,10 +170,7 @@ fun ImportExportScreenWrapper(
         isPrepared = isPrepared,
         onExportHistory = onNavigateToExportHistory, 
         onImportFromFile = { importConfigLauncher.launch(arrayOf("*/*")) },
-        onExportToFile = { desc: String -> 
-            pendingExportDesc = desc
-            exportConfigLauncherWithDesc.launch("konabess_config.txt") 
-        },
+        onExportToFile = { desc: String -> launchExportConfig(desc) },
         onImportFromClipboard = { content: String -> importExportViewModel.importConfig(content) }, 
         onExportToClipboard = { desc: String -> 
              val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
@@ -151,23 +186,15 @@ fun ImportExportScreenWrapper(
              }
         },
         onExportRawDts = { /* Now handled by the sheet mechanism inside ImportExportScreen */ },
-        onExportSingleDts = { dtsInfo: DtsFileInfo ->
-            pendingDtsExport = dtsInfo
-            val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
-            val safeName = "konabess_dts_dtb${dtsInfo.index}_$timestamp.dts"
-            exportSingleDtsLauncher.launch(safeName)
-        },
+        onExportSingleDts = { dtsInfo: DtsFileInfo -> launchExportSingleDts(dtsInfo) },
         onExportAllDts = {
             exportAllDtsFolderLauncher.launch(null)
         },
-        onExportAllDtsAsZip = {
-            val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
-            exportAllDtsZipLauncher.launch("konabess_dts_$timestamp.zip")
-        },
+        onExportAllDtsAsZip = { launchExportZip() },
         dtsFiles = dtsFiles,
         deviceModel = deviceModel,
         deviceBrand = deviceBrand,
-        onBackupBootImage = { backupBootLauncher.launch("boot_modified.img") },
+        onBackupBootImage = { launchBackupBoot() },
         onBatchDtbToDts = { batchDtbLauncher.launch(arrayOf("*/*")) },
         onDismissResult = { importExportViewModel.clearExportResult() },
         onOpenFile = { path: String -> 

@@ -27,7 +27,8 @@ data class SettingsUiState(
     val updateChannel: String = "stable",
     val isAutoCheckUpdate: Boolean = true,
     val updateStatus: UpdateStatus = UpdateStatus.Idle,
-    val isRootMode: Boolean = true
+    val isRootMode: Boolean = true,
+    val exportPath: String = ""
 )
 
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
@@ -52,6 +53,8 @@ class SettingsViewModel @Inject constructor(
         const val KEY_AUTO_SAVE_GPU_TABLE = "auto_save_gpu_table"
         const val KEY_DYNAMIC_COLOR = "dynamic_color"
         const val KEY_AMOLED_MODE = "amoled_mode"
+        const val KEY_EXPORT_URI = "export_uri"
+        const val KEY_EXPORT_PATH_DISPLAY = "export_path_display"
 
         const val FREQ_UNIT_HZ = 0
         const val FREQ_UNIT_MHZ = 1
@@ -129,7 +132,8 @@ class SettingsViewModel @Inject constructor(
                 colorPalette = paletteName,
                 updateChannel = updateChannel,
                 isAutoCheckUpdate = autoCheckUpdate,
-                isRootMode = isRootMode
+                isRootMode = isRootMode,
+                exportPath = repository.getExportPathDisplay()
             )
         }
     }
@@ -296,6 +300,35 @@ class SettingsViewModel @Inject constructor(
     
     fun clearUpdateStatus() {
         _uiState.update { it.copy(updateStatus = UpdateStatus.Idle) }
+    }
+
+    fun setDefaultExportLocation(context: Context, uri: android.net.Uri) {
+        viewModelScope.launch {
+            try {
+                // Take persistable permission
+                val flags = android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                        android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                context.contentResolver.takePersistableUriPermission(uri, flags)
+
+                // Try to resolve a readable path
+                val docFile = androidx.documentfile.provider.DocumentFile.fromTreeUri(context, uri)
+                val rawPath = com.ireddragonicy.konabessnext.utils.UriPathHelper.getPath(context, uri)
+                
+                // If it's a raw path and looks like /storage/emulated/0/Download, maybe we can simplify
+                val displayPath = if (!rawPath.isNullOrEmpty()) {
+                    rawPath.replace("/storage/emulated/0", "Internal Storage")
+                } else {
+                    docFile?.name ?: uri.path ?: "Unknown"
+                }
+
+                repository.setDefaultExportUri(uri.toString())
+                repository.setExportPathDisplay(displayPath)
+                _uiState.update { it.copy(exportPath = displayPath) }
+            } catch (e: Exception) {
+                // If permission fails, don't save
+                e.printStackTrace()
+            }
+        }
     }
 }
 
