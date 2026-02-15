@@ -231,7 +231,7 @@
     <string name="backup_failed_format">Gagal backup: %1$s</string>
     <string name="backup_success_at_format">Backup berhasil di %1$s</string>
     <string name="batch_dtb_to_dts">Batch DTB ke DTS</string>
-    <string name="batch_dtb_to_dts_desc">Konversi beberapa file .dtb jadi teks yang bisa dibaca</string>
+    <string name="batch_dtb_to_dts_desc">Konversi beberapa file .dtb/.img (termasuk dtbo.img) menjadi teks DTS yang mudah dibaca</string>
     <string name="bin_id_format">Bin %1$d</string>
     <string name="btn_add_freq_bottom">Tambah Frekuensi di Bawah</string>
     <string name="btn_add_freq_top">Tambah Frekuensi di Atas</string>

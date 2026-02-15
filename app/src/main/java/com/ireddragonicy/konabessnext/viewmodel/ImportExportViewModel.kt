@@ -6,6 +6,7 @@ import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ireddragonicy.konabessnext.model.ExportHistoryItem
+import com.ireddragonicy.konabessnext.core.model.DomainResult
 import com.ireddragonicy.konabessnext.repository.ChipRepository
 import com.ireddragonicy.konabessnext.repository.DeviceRepository
 import com.ireddragonicy.konabessnext.repository.GpuDomainManager
@@ -56,6 +57,22 @@ class ImportExportViewModel @Inject constructor(
     private val exportHistoryManager: ExportHistoryManager,
     private val settingsRepository: SettingsRepository
 ) : ViewModel() {
+
+    companion object {
+        private const val FDT_MAGIC = 0xD00DFEED.toInt()
+        private const val DTBO_TABLE_MAGIC = 0xD7B7AB1E.toInt()
+        private const val MIN_DTB_SIZE = 40
+    }
+
+    private data class ExtractedDtb(
+        val bytes: ByteArray,
+        val suffix: String
+    )
+
+    private data class DtcConversionResult(
+        val success: Boolean,
+        val details: String
+    )
 
     private val _history = MutableStateFlow<List<ExportHistoryItem>>(emptyList())
     val history: SharedFlow<List<ExportHistoryItem>> = _history.asSharedFlow()
@@ -606,63 +623,136 @@ class ImportExportViewModel @Inject constructor(
 
     fun batchConvertDtbToDts(context: Context, sourceUris: List<Uri>) {
         viewModelScope.launch(Dispatchers.IO) {
-            val total = sourceUris.size
+            val totalSources = sourceUris.size
+            var totalDetectedDtbs = 0
             var successCount = 0
             val successPaths = StringBuilder()
-            val dtcPath = File(context.filesDir, "dtc").absolutePath
             val cacheDir = context.cacheDir
 
             try {
-                RootHelper.exec("chmod 755 $dtcPath")
+                // Best effort: prepare env so dtc is extracted when needed.
+                when (val setupResult = deviceRepository.setupEnv()) {
+                    is DomainResult.Failure -> {
+                        _errorEvent.emit("Warning: setup env failed before batch convert: ${setupResult.error.message}")
+                    }
+                    is DomainResult.Success -> Unit
+                }
+
+                val dtcPath = resolveUsableDtcPath(context)
+                if (dtcPath.isNullOrBlank()) {
+                    _batchProgress.value = null
+                    _errorEvent.emit(
+                        "DTB conversion tool (dtc) not found or not executable. " +
+                            "Please reinstall app or switch mode once in Settings to reinitialize binaries."
+                    )
+                    return@launch
+                }
+
+                RootHelper.exec("chmod 755 \"$dtcPath\"")
 
                 sourceUris.forEachIndexed { index, uri ->
-                    _batchProgress.value = "Converting ${index + 1}/$total..."
+                    _batchProgress.value = "Scanning ${index + 1}/$totalSources..."
                     try {
                         var realPath = UriPathHelper.getPath(context, uri)
                         val sourceFile = DocumentFile.fromSingleUri(context, uri)
-                        val originalName = sourceFile?.name ?: "file_${index}.dtb"
+                        val originalName = sourceFile?.name ?: "file_${index}.img"
                         val originalSize = sourceFile?.length() ?: 0L
 
                         if (realPath == null && RootHelper.isRootAvailable()) {
                             realPath = RootHelper.findFile(originalName, originalSize)
                         }
 
-                        val outputName = if (originalName.endsWith(".dtb", true))
-                            originalName.dropLast(4) + ".dts" else "$originalName.dts"
-
-                        val tempInput = File(cacheDir, "temp_input.dtb")
-                        context.contentResolver.openInputStream(uri)?.use { input ->
-                            tempInput.outputStream().use { input.copyTo(it) }
+                        val sourceBytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                        if (sourceBytes == null || sourceBytes.isEmpty()) {
+                            _errorEvent.emit("Failed to read $originalName (empty or inaccessible file)")
+                            return@forEachIndexed
                         }
 
-                        val tempOutput = File(cacheDir, "temp_output.dts")
-                        if (tempOutput.exists()) tempOutput.delete()
+                        val extractedDtbs = if (isDtbBinary(sourceBytes)) {
+                            listOf(ExtractedDtb(sourceBytes, ""))
+                        } else {
+                            extractDtbsFromBinaryImage(sourceBytes)
+                        }
 
-                        val result = RootHelper.exec("$dtcPath -I dtb -O dts \"${tempInput.absolutePath}\" -o \"${tempOutput.absolutePath}\"")
+                        if (extractedDtbs.isEmpty()) {
+                            _errorEvent.emit(
+                                "No DTB blobs found in $originalName. " +
+                                    "If this is a boot/dtbo image, ensure it contains raw DTB entries."
+                            )
+                            return@forEachIndexed
+                        }
 
-                        if (result.isSuccess && tempOutput.exists() && tempOutput.length() > 0 && realPath != null) {
-                            val finalOutputPath = "${File(realPath).parent}/$outputName"
-                            val saved = if (RootHelper.isRootAvailable()) {
-                                RootHelper.copyFile(tempOutput.absolutePath, finalOutputPath, "777")
-                            } else {
-                                runCatching { tempOutput.copyTo(File(finalOutputPath), overwrite = true) }.isSuccess
+                        totalDetectedDtbs += extractedDtbs.size
+
+                        val outputDir = realPath?.let { File(it).parent }
+                        if (outputDir == null) {
+                            _errorEvent.emit("Could not resolve writable output path for $originalName")
+                            return@forEachIndexed
+                        }
+
+                        val baseName = originalName.substringBeforeLast('.', originalName)
+
+                        extractedDtbs.forEachIndexed { dtbIndex, extracted ->
+                            _batchProgress.value =
+                                "Converting ${index + 1}/$totalSources (${dtbIndex + 1}/${extractedDtbs.size})..."
+
+                            val tempInput = File(cacheDir, "temp_input_${index}_$dtbIndex.dtb")
+                            val tempOutput = File(cacheDir, "temp_output_${index}_$dtbIndex.dts")
+
+                            try {
+                                val conversionResult = convertDtbToDts(
+                                    dtcPath = dtcPath,
+                                    inputFile = tempInput,
+                                    outputFile = tempOutput,
+                                    dtbBytes = extracted.bytes
+                                )
+
+                                if (conversionResult.success && tempOutput.exists() && tempOutput.length() > 0) {
+                                    val outputName = if (extractedDtbs.size == 1 && originalName.endsWith(".dtb", true)) {
+                                        "$baseName.dts"
+                                    } else {
+                                        val suffix = extracted.suffix.ifBlank { "_dtb$dtbIndex" }
+                                        "$baseName$suffix.dts"
+                                    }
+
+                                    val finalOutputPath = "$outputDir/$outputName"
+                                    val saved = if (RootHelper.isRootAvailable()) {
+                                        RootHelper.copyFile(tempOutput.absolutePath, finalOutputPath, "777")
+                                    } else {
+                                        runCatching {
+                                            tempOutput.copyTo(File(finalOutputPath), overwrite = true)
+                                        }.isSuccess
+                                    }
+
+                                    if (saved) {
+                                        successPaths.appendLine(finalOutputPath)
+                                        successCount++
+                                    } else {
+                                        _errorEvent.emit("Permission denied writing to $outputDir")
+                                    }
+                                } else {
+                                    _errorEvent.emit(
+                                        "Failed to convert $originalName segment ${dtbIndex + 1}: " +
+                                            conversionResult.details
+                                    )
+                                }
+                            } catch (e: Exception) {
+                                _errorEvent.emit("Failed converting $originalName segment ${dtbIndex + 1}: ${e.message}")
+                            } finally {
+                                tempInput.delete()
+                                tempOutput.delete()
                             }
-                            if (saved) { successPaths.appendLine(finalOutputPath); successCount++ }
-                            else _errorEvent.emit("Permission denied writing to ${File(realPath).parent}")
-                        } else if (!result.isSuccess) {
-                            _errorEvent.emit("Failed to convert $originalName: ${result.err.joinToString("\n")}")
-                        } else if (realPath == null) {
-                            _errorEvent.emit("Could not resolve path for $originalName")
                         }
-
-                        tempInput.delete()
-                        tempOutput.delete()
-                    } catch (e: Exception) { e.printStackTrace() }
+                    } catch (e: Exception) {
+                        _errorEvent.emit("Failed processing file ${index + 1}/$totalSources: ${e.message}")
+                    }
                 }
 
                 _batchProgress.value = null
                 if (successCount > 0) notifyExportResult(successPaths.toString().trim())
-                _messageEvent.emit("Successfully converted $successCount/$total files")
+                _messageEvent.emit(
+                    "Successfully converted $successCount/$totalDetectedDtbs DTB blobs from $totalSources file(s)"
+                )
             } catch (e: Exception) {
                 _batchProgress.value = null
                 _errorEvent.emit("Batch conversion error: ${e.message}")
@@ -676,6 +766,208 @@ class ImportExportViewModel @Inject constructor(
         val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
         val deviceModel = deviceRepository.getCurrent("model").replace(" ", "_")
         return timestamp to deviceModel
+    }
+
+    private fun resolveUsableDtcPath(context: Context): String? {
+        val candidates = linkedSetOf(
+            deviceRepository.getBinaryPath("dtc"),
+            File(context.applicationInfo.nativeLibraryDir, "libdtc.so").absolutePath,
+            File(context.filesDir, "dtc").absolutePath
+        )
+
+        for (path in candidates) {
+            val file = File(path)
+            if (!file.exists()) continue
+
+            if (!file.canExecute()) {
+                runCatching { file.setExecutable(true, false) }
+                if (!file.canExecute() && RootHelper.isRootAvailable()) {
+                    RootHelper.exec("chmod 755 \"$path\"")
+                }
+            }
+
+            if (file.exists() && file.canExecute()) return path
+        }
+
+        return null
+    }
+
+    private fun isDtbBinary(bytes: ByteArray): Boolean {
+        if (bytes.size < 4) return false
+        val magic = ((bytes[0].toInt() and 0xFF) shl 24) or
+            ((bytes[1].toInt() and 0xFF) shl 16) or
+            ((bytes[2].toInt() and 0xFF) shl 8) or
+            (bytes[3].toInt() and 0xFF)
+        return magic == FDT_MAGIC
+    }
+
+    private fun extractDtbsFromBinaryImage(bytes: ByteArray): List<ExtractedDtb> {
+        val dtboEntries = extractDtbsFromDtboTable(bytes)
+        if (dtboEntries.isNotEmpty()) return dtboEntries
+        return extractDtbsByMagicScan(bytes)
+    }
+
+    private fun extractDtbsFromDtboTable(bytes: ByteArray): List<ExtractedDtb> {
+        if (bytes.size < 32) return emptyList()
+
+        val magic = readUInt32Be(bytes, 0) ?: return emptyList()
+        if (magic != DTBO_TABLE_MAGIC.toLong()) return emptyList()
+
+        val entrySize = (readUInt32Be(bytes, 12) ?: return emptyList()).toInt()
+        val entryCount = (readUInt32Be(bytes, 16) ?: return emptyList()).toInt()
+        val entriesOffset = (readUInt32Be(bytes, 20) ?: return emptyList()).toInt()
+
+        if (entrySize < 8 || entryCount <= 0) return emptyList()
+        if (entryCount > 4096) return emptyList()
+
+        val entriesTableEnd = entriesOffset.toLong() + entrySize.toLong() * entryCount.toLong()
+        if (entriesOffset < 0 || entriesTableEnd > bytes.size.toLong()) return emptyList()
+
+        val results = mutableListOf<ExtractedDtb>()
+        for (i in 0 until entryCount) {
+            val entryOffset = entriesOffset + (i * entrySize)
+            if (entryOffset < 0 || entryOffset + 8 > bytes.size) continue
+
+            val dtSize = (readUInt32Be(bytes, entryOffset) ?: continue).toInt()
+            val dtOffset = (readUInt32Be(bytes, entryOffset + 4) ?: continue).toInt()
+            if (dtOffset < 0 || dtOffset + MIN_DTB_SIZE > bytes.size) continue
+            if (!isFdtMagicAt(bytes, dtOffset)) continue
+
+            val headerSize = readFdtTotalSize(bytes, dtOffset)
+            val selectedSize = when {
+                headerSize != null -> headerSize
+                dtSize >= MIN_DTB_SIZE && dtOffset.toLong() + dtSize.toLong() <= bytes.size.toLong() -> dtSize
+                else -> continue
+            }
+
+            val end = dtOffset + selectedSize
+            if (end > bytes.size || end <= dtOffset) continue
+
+            results.add(
+                ExtractedDtb(
+                    bytes = bytes.copyOfRange(dtOffset, end),
+                    suffix = "_entry$i"
+                )
+            )
+        }
+
+        return results
+    }
+
+    private fun extractDtbsByMagicScan(bytes: ByteArray): List<ExtractedDtb> {
+        val segments = mutableListOf<Pair<Int, Int>>()
+        var cursor = 0
+
+        while (cursor + 8 <= bytes.size) {
+            if (!isFdtMagicAt(bytes, cursor)) {
+                cursor++
+                continue
+            }
+
+            val dtbSize = (readUInt32Be(bytes, cursor + 4) ?: 0L).toInt()
+            if (dtbSize < MIN_DTB_SIZE || cursor + dtbSize > bytes.size) {
+                cursor++
+                continue
+            }
+
+            segments.add(cursor to dtbSize)
+            cursor += maxOf(dtbSize, 1)
+        }
+
+        if (segments.isEmpty()) return emptyList()
+
+        return segments.mapIndexed { index, segment ->
+            val (start, size) = segment
+            val end = start + size
+            val suffix = if (segments.size == 1) "" else "_dtb$index"
+            ExtractedDtb(bytes = bytes.copyOfRange(start, end), suffix = suffix)
+        }
+    }
+
+    private fun isFdtMagicAt(bytes: ByteArray, offset: Int): Boolean {
+        if (offset < 0 || offset + 4 > bytes.size) return false
+        val magic = ((bytes[offset].toInt() and 0xFF) shl 24) or
+            ((bytes[offset + 1].toInt() and 0xFF) shl 16) or
+            ((bytes[offset + 2].toInt() and 0xFF) shl 8) or
+            (bytes[offset + 3].toInt() and 0xFF)
+        return magic == FDT_MAGIC
+    }
+
+    private fun readFdtTotalSize(bytes: ByteArray, offset: Int = 0): Int? {
+        if (!isFdtMagicAt(bytes, offset)) return null
+        val size = (readUInt32Be(bytes, offset + 4) ?: return null).toInt()
+        if (size < MIN_DTB_SIZE) return null
+        if (offset < 0 || offset + size > bytes.size) return null
+        return size
+    }
+
+    private fun trimToFdtTotalSize(bytes: ByteArray): ByteArray? {
+        val size = readFdtTotalSize(bytes, 0) ?: return null
+        if (size == bytes.size) return null
+        return bytes.copyOfRange(0, size)
+    }
+
+    private fun runDtcDtbToDts(
+        dtcPath: String,
+        inputPath: String,
+        outputPath: String,
+        force: Boolean
+    ) = RootHelper.exec(
+        "\"$dtcPath\" ${if (force) "-f " else ""}-I dtb -O dts \"$inputPath\" -o \"$outputPath\""
+    )
+
+    private fun renderDtcShellOutput(err: List<String>, out: List<String>): String {
+        val lines = (err + out).map { it.trim() }.filter { it.isNotEmpty() }
+        return if (lines.isEmpty()) "Unknown dtc error (no stderr output)." else lines.joinToString("\n")
+    }
+
+    private fun convertDtbToDts(
+        dtcPath: String,
+        inputFile: File,
+        outputFile: File,
+        dtbBytes: ByteArray
+    ): DtcConversionResult {
+        val logs = mutableListOf<String>()
+
+        fun attempt(label: String, force: Boolean): Boolean {
+            if (outputFile.exists()) outputFile.delete()
+            val result = runDtcDtbToDts(
+                dtcPath = dtcPath,
+                inputPath = inputFile.absolutePath,
+                outputPath = outputFile.absolutePath,
+                force = force
+            )
+            logs.add("$label: ${renderDtcShellOutput(result.err, result.out)}")
+            return result.isSuccess && outputFile.exists() && outputFile.length() > 0
+        }
+
+        inputFile.writeBytes(dtbBytes)
+        if (attempt("normal", force = false)) return DtcConversionResult(true, "OK")
+        if (attempt("force", force = true)) return DtcConversionResult(true, "OK (forced)")
+
+        val trimmed = trimToFdtTotalSize(dtbBytes)
+        if (trimmed != null && trimmed.isNotEmpty()) {
+            inputFile.writeBytes(trimmed)
+            if (attempt("trimmed-normal", force = false)) {
+                return DtcConversionResult(true, "OK (trimmed by FDT header)")
+            }
+            if (attempt("trimmed-force", force = true)) {
+                return DtcConversionResult(true, "OK (trimmed + forced)")
+            }
+        }
+
+        return DtcConversionResult(
+            success = false,
+            details = logs.joinToString("\n\n").ifBlank { "Unknown dtc conversion failure." }
+        )
+    }
+
+    private fun readUInt32Be(bytes: ByteArray, offset: Int): Long? {
+        if (offset < 0 || offset + 4 > bytes.size) return null
+        return ((bytes[offset].toLong() and 0xFF) shl 24) or
+            ((bytes[offset + 1].toLong() and 0xFF) shl 16) or
+            ((bytes[offset + 2].toLong() and 0xFF) shl 8) or
+            (bytes[offset + 3].toLong() and 0xFF)
     }
 
     private fun parseBinsFromDts(dtsContent: String): List<BinInfo> {

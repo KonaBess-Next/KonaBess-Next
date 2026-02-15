@@ -311,7 +311,7 @@
     <string name="export_raw_dts_desc">Save raw device tree source</string>
     <string name="backup_boot_image">Backup Boot Image</string>
     <string name="batch_dtb_to_dts">Batch DTB to DTS</string>
-    <string name="batch_dtb_to_dts_desc">Convert multiple .dtb files to human-readable text</string>
+    <string name="batch_dtb_to_dts_desc">Convert multiple .dtb/.img (including dtbo.img) files to human-readable DTS text</string>
     <string name="converted_files">Converted Files:</string>
     <string name="open_file">Open File</string>
     
