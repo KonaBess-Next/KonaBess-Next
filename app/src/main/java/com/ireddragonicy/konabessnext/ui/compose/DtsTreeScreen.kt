@@ -449,12 +449,18 @@ private data class TreeRowStyle(
 
 // ─── Flatten ───
 
+private fun isVisualDtsRootNode(node: DtsNode, depth: Int): Boolean {
+    return depth == 0 && node.name == "/"
+}
+
 private fun flattenTree(root: DtsNode): List<TreeItem> {
     val result = ArrayList<TreeItem>(512)
 
     fun recurse(node: DtsNode, depth: Int) {
         val nodePath = node.getFullPath()
-        if (node.name != "root" || depth > 0) {
+        val isVisualRoot = isVisualDtsRootNode(node, depth)
+
+        if (!isVisualRoot && (node.name != "root" || depth > 0)) {
             result.add(TreeItem(
                 id = "node:$nodePath",
                 display = node.name,
@@ -468,8 +474,12 @@ private fun flattenTree(root: DtsNode): List<TreeItem> {
             ))
         }
 
-        if (node.isExpanded || (node.name == "root" && depth == 0)) {
-            val nextDepth = if (node.name == "root" && depth == 0) 0 else depth + 1
+        if (node.isExpanded || (node.name == "root" && depth == 0) || isVisualRoot) {
+            val nextDepth = when {
+                node.name == "root" && depth == 0 -> 0
+                isVisualRoot -> depth
+                else -> depth + 1
+            }
             val nextIndent = (16 + nextDepth * 20).dp
 
             node.properties.forEachIndexed { idx, prop ->
@@ -698,7 +708,7 @@ private fun RowScope.PropertyRow(
     Spacer(modifier = Modifier.width(6.dp))
 
     Text(
-        text = stringResource(R.string.property_equals_format, item.display),
+        text = stringResource(R.string.property_equals_format, item.display, ""),
         style = style.propNameStyle,
         color = style.primaryColor,
         maxLines = 1
