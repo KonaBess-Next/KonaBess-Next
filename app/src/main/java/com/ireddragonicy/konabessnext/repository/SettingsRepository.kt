@@ -63,9 +63,42 @@ class SettingsRepository @Inject constructor(
     fun setRootMode(enabled: Boolean) = prefs.edit().putBoolean("is_root_mode", enabled).apply()
 
     // Export Location
-    fun getDefaultExportUri(): String? = prefs.getString(SettingsViewModel.KEY_EXPORT_URI, null)
+    fun setAndPersistExportUri(uri: android.net.Uri) {
+        try {
+            val takeFlags = android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                    android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+            context.contentResolver.takePersistableUriPermission(uri, takeFlags)
+            
+            prefs.edit().putString(SettingsViewModel.KEY_EXPORT_URI, uri.toString()).apply()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    fun getValidExportUri(): android.net.Uri? {
+        val uriString = prefs.getString(SettingsViewModel.KEY_EXPORT_URI, null) ?: return null
+        val uri = android.net.Uri.parse(uriString)
+        
+        // Validate if we still have permission
+        val persistedUris = context.contentResolver.persistedUriPermissions
+        val hasPermission = persistedUris.any { 
+            it.uri == uri && it.isWritePermission 
+        }
+        
+        // If permission is revoked, we should probably clear the inconsistent state?
+        // For now just return null as requested.
+        return if (hasPermission) uri else null
+    }
+
+    // Deprecated: Use getValidExportUri() instead
+    fun getDefaultExportUri(): String? = getValidExportUri()?.toString()
+    // Deprecated: Use setAndPersistExportUri() instead
     fun setDefaultExportUri(uri: String?) = prefs.edit().putString(SettingsViewModel.KEY_EXPORT_URI, uri).apply()
 
-    fun getExportPathDisplay(): String = prefs.getString(SettingsViewModel.KEY_EXPORT_PATH_DISPLAY, "") ?: ""
+    fun getExportPathDisplay(): String {
+        // Default gracefully if the URI is invalid or permission revoked
+        if (getValidExportUri() == null) return "/storage/emulated/0/Download/KonaBess"
+        return prefs.getString(SettingsViewModel.KEY_EXPORT_PATH_DISPLAY, "") ?: ""
+    }
     fun setExportPathDisplay(path: String) = prefs.edit().putString(SettingsViewModel.KEY_EXPORT_PATH_DISPLAY, path).apply()
 }

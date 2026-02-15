@@ -11,6 +11,7 @@ import com.ireddragonicy.konabessnext.model.Level
 import com.ireddragonicy.konabessnext.model.LevelUiModel
 import com.ireddragonicy.konabessnext.model.Opp
 import com.ireddragonicy.konabessnext.model.UiText
+import com.ireddragonicy.konabessnext.model.ChipDefinition
 import com.ireddragonicy.konabessnext.R
 import com.ireddragonicy.konabessnext.repository.DeviceRepositoryInterface
 import com.ireddragonicy.konabessnext.repository.GpuRepository
@@ -44,7 +45,6 @@ class SharedGpuViewModel @Inject constructor(
     private val application: Application,
     private val repository: GpuRepository,
     private val deviceRepository: DeviceRepositoryInterface,
-    private val chipRepository: com.ireddragonicy.konabessnext.repository.ChipRepository,
     private val chipRepository: com.ireddragonicy.konabessnext.repository.ChipRepository,
     private val settingsRepository: com.ireddragonicy.konabessnext.repository.SettingsRepository,
     private val userMessageManager: com.ireddragonicy.konabessnext.utils.UserMessageManager

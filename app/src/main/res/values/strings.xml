@@ -382,6 +382,8 @@
     <string name="settings_version_format">Version %1$s</string>
     <string name="settings_color_palette">Color Palette</string>
     <string name="settings_color_palette_desc">Choose your color scheme</string>
+    <string name="settings_export_location">Export Location</string>
+    <string name="settings_export_location_not_set">Not set</string>
     
     <!-- Editor Button Strings -->
     <string name="btn_add_freq_top">Add Frequency to Top</string>

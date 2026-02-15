@@ -305,11 +305,6 @@ class SettingsViewModel @Inject constructor(
     fun setDefaultExportLocation(context: Context, uri: android.net.Uri) {
         viewModelScope.launch {
             try {
-                // Take persistable permission
-                val flags = android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or
-                        android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-                context.contentResolver.takePersistableUriPermission(uri, flags)
-
                 // Try to resolve a readable path
                 val docFile = androidx.documentfile.provider.DocumentFile.fromTreeUri(context, uri)
                 val rawPath = com.ireddragonicy.konabessnext.utils.UriPathHelper.getPath(context, uri)
@@ -321,7 +316,7 @@ class SettingsViewModel @Inject constructor(
                     docFile?.name ?: uri.path ?: "Unknown"
                 }
 
-                repository.setDefaultExportUri(uri.toString())
+                repository.setAndPersistExportUri(uri)
                 repository.setExportPathDisplay(displayPath)
                 _uiState.update { it.copy(exportPath = displayPath) }
             } catch (e: Exception) {

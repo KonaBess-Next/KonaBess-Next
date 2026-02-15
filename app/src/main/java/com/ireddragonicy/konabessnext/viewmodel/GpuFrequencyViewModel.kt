@@ -2,6 +2,7 @@ package com.ireddragonicy.konabessnext.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.asLiveData
+import androidx.lifecycle.viewModelScope
 import com.ireddragonicy.konabessnext.core.model.DomainResult
 import com.ireddragonicy.konabessnext.utils.UserMessageManager
 import android.widget.Toast

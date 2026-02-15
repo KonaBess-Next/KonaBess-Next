@@ -81,6 +81,8 @@ class ImportExportViewModel @Inject constructor(
 
     // ── Export ────────────────────────────────────────────────────────
 
+    // ── Export ────────────────────────────────────────────────────────
+
     fun exportConfig(desc: String): String? = try {
         val bins = gpuRepository.bins.value
         if (bins.isEmpty()) throw IllegalStateException("No GPU table data to export")
@@ -111,60 +113,64 @@ class ImportExportViewModel @Inject constructor(
     }
 
     suspend fun tryExportConfigToDefault(context: Context, desc: String): Boolean {
-        val defaultUriStr = settingsRepository.getDefaultExportUri() ?: return false
-        val defaultUri = Uri.parse(defaultUriStr)
-        return try {
-            val content = exportConfig(desc) ?: return false
-            withContext(Dispatchers.IO) {
-                val dir = DocumentFile.fromTreeUri(context, defaultUri)
-                if (dir == null || !dir.canWrite()) {
-                     // Permission might be revoked
-                     settingsRepository.setDefaultExportUri(null)
-                     settingsRepository.setExportPathDisplay("")
-                     return@withContext false
+        val defaultUri = settingsRepository.getValidExportUri()
+        val content = exportConfig(desc) ?: return false
+        val filename = "konabess_config_${System.currentTimeMillis()}.txt"
+
+        if (defaultUri != null) {
+            return try {
+                withContext(Dispatchers.IO) {
+                    val dir = DocumentFile.fromTreeUri(context, defaultUri)
+                    if (dir == null || !dir.canWrite()) {
+                        settingsRepository.setAndPersistExportUri(Uri.EMPTY) // clear invalid
+                        return@withContext false
+                    }
+
+                    val file = dir.createFile("text/plain", filename) 
+                        ?: throw java.io.IOException("Failed to create file in default directory")
+                    
+                    context.contentResolver.openOutputStream(file.uri)?.use {
+                        it.write(content.toByteArray(Charsets.ISO_8859_1))
+                    }
+                    addToHistory(filename, desc, file.uri.toString())
+                    _messageEvent.emit("Saved to ${settingsRepository.getExportPathDisplay()}/$filename")
+                    true
                 }
-                
-                val filename = "konabess_config_${System.currentTimeMillis()}.txt"
-                val file = dir.createFile("text/plain", filename) 
-                    ?: throw java.io.IOException("Failed to create file in default directory")
-                
-                context.contentResolver.openOutputStream(file.uri)?.use {
-                    it.write(content.toByteArray(Charsets.ISO_8859_1))
-                }
-                addToHistory(filename, desc, file.uri.toString())
-                _messageEvent.emit("Saved to ${settingsRepository.getExportPathDisplay()}/$filename")
-                true
+            } catch (e: Exception) {
+                false
             }
-        } catch (e: Exception) {
-            // e.printStackTrace()
-            false
+        } else {
+            return exportToLegacyDefault(filename, content.toByteArray(Charsets.ISO_8859_1), desc)
         }
     }
 
     suspend fun tryExportDtsToDefault(context: Context, dtsFileInfo: DtsFileInfo): Boolean {
-        val defaultUriStr = settingsRepository.getDefaultExportUri() ?: return false
-        val defaultUri = Uri.parse(defaultUriStr)
-        return try {
-            val file = dtsFileInfo.file
-            if (!file.exists()) return false
+        val defaultUri = settingsRepository.getValidExportUri()
+        val file = dtsFileInfo.file
+        if (!file.exists()) return false
+        val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+        val name = "konabess_dts_dtb${dtsFileInfo.index}_$timestamp.dts"
 
-            withContext(Dispatchers.IO) {
-                val dir = DocumentFile.fromTreeUri(context, defaultUri)
-                if (dir == null || !dir.canWrite()) return@withContext false
-                
-                val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
-                val name = "konabess_dts_dtb${dtsFileInfo.index}_$timestamp.dts"
-                val newFile = dir.createFile("text/plain", name) ?: return@withContext false
-                
-                context.contentResolver.openOutputStream(newFile.uri)?.use { out ->
-                    file.inputStream().use { it.copyTo(out) }
+        if (defaultUri != null) {
+            return try {
+                withContext(Dispatchers.IO) {
+                    val dir = DocumentFile.fromTreeUri(context, defaultUri)
+                    if (dir == null || !dir.canWrite()) return@withContext false
+                    
+                    val newFile = dir.createFile("text/plain", name) ?: return@withContext false
+                    
+                    context.contentResolver.openOutputStream(newFile.uri)?.use { out ->
+                        file.inputStream().use { it.copyTo(out) }
+                    }
+                    addToHistory(name, "Raw DTS Export (DTB ${dtsFileInfo.index})", newFile.uri.toString())
+                    _messageEvent.emit("Saved to ${settingsRepository.getExportPathDisplay()}/$name")
+                    true
                 }
-                addToHistory(name, "Raw DTS Export (DTB ${dtsFileInfo.index})", newFile.uri.toString())
-                _messageEvent.emit("Saved to ${settingsRepository.getExportPathDisplay()}/$name")
-                true
+            } catch (e: Exception) {
+                false
             }
-        } catch (e: Exception) {
-            false
+        } else {
+            return exportToLegacyDefault(name, file.readBytes(), "Raw DTS Export (DTB ${dtsFileInfo.index})")
         }
     }
 
@@ -230,66 +236,135 @@ class ImportExportViewModel @Inject constructor(
     }
 
     suspend fun tryExportAllDtsZipToDefault(context: Context): Boolean {
-        val defaultUriStr = settingsRepository.getDefaultExportUri() ?: return false
-        val defaultUri = Uri.parse(defaultUriStr)
-        return try {
-            withContext(Dispatchers.IO) {
-                val dir = DocumentFile.fromTreeUri(context, defaultUri)
-                if (dir == null || !dir.canWrite()) return@withContext false
-                
-                val (timestamp, deviceModel) = exportMeta()
-                val zipName = "konabess_dts_${deviceModel}_$timestamp.zip"
-                val zipFile = dir.createFile("application/zip", zipName) ?: return@withContext false
-                
-                val allFiles = getAllDtsFiles()
-                if (allFiles.isEmpty()) return@withContext false
-                
-                context.contentResolver.openOutputStream(zipFile.uri)?.use { outputStream ->
-                    ZipOutputStream(outputStream).use { zipOut ->
-                        for (info in allFiles) {
-                            if (!info.file.exists()) continue
-                            try {
-                                zipOut.putNextEntry(ZipEntry("konabess_dts_${deviceModel}_dtb${info.index}_$timestamp.dts"))
-                                info.file.inputStream().use { it.copyTo(zipOut) }
-                                zipOut.closeEntry()
-                            } catch (e: Exception) {
-                                // Ignore
+        val defaultUri = settingsRepository.getValidExportUri()
+        val (timestamp, deviceModel) = exportMeta()
+        val zipName = "konabess_dts_${deviceModel}_$timestamp.zip"
+        
+        val allFiles = getAllDtsFiles()
+        if (allFiles.isEmpty()) return false
+
+        // Prepare zip in valid location first? No, stream it.
+        // We'll stream to a byte array for the legacy fallback, which might be memory intensive but ok for DTS files.
+        // Or generate tmp file.
+        
+        if (defaultUri != null) {
+            return try {
+                withContext(Dispatchers.IO) {
+                    val dir = DocumentFile.fromTreeUri(context, defaultUri)
+                    if (dir == null || !dir.canWrite()) return@withContext false
+                    
+                    val zipFile = dir.createFile("application/zip", zipName) ?: return@withContext false
+                    
+                    context.contentResolver.openOutputStream(zipFile.uri)?.use { outputStream ->
+                        ZipOutputStream(outputStream).use { zipOut ->
+                            for (info in allFiles) {
+                                if (!info.file.exists()) continue
+                                try {
+                                    zipOut.putNextEntry(ZipEntry("konabess_dts_${deviceModel}_dtb${info.index}_$timestamp.dts"))
+                                    info.file.inputStream().use { it.copyTo(zipOut) }
+                                    zipOut.closeEntry()
+                                } catch (e: Exception) { }
                             }
                         }
                     }
+                    addToHistory(zipName, "Raw DTS Export (ZIP)", zipFile.uri.toString())
+                    _messageEvent.emit("Saved to ${settingsRepository.getExportPathDisplay()}/$zipName")
+                    true
                 }
-                addToHistory(zipName, "Raw DTS Export (ZIP)", zipFile.uri.toString())
-                _messageEvent.emit("Saved to ${settingsRepository.getExportPathDisplay()}/$zipName")
-                true
+            } catch (e: Exception) {
+                false
             }
-        } catch (e: Exception) {
-            false
+        } else {
+            // Generate zip to temp file then move
+            val tempFile = File(context.cacheDir, zipName)
+            return try {
+                withContext(Dispatchers.IO) {
+                    FileOutputStream(tempFile).use { outputStream ->
+                         ZipOutputStream(outputStream).use { zipOut ->
+                            for (info in allFiles) {
+                                if (!info.file.exists()) continue
+                                try {
+                                    zipOut.putNextEntry(ZipEntry("konabess_dts_${deviceModel}_dtb${info.index}_$timestamp.dts"))
+                                    info.file.inputStream().use { it.copyTo(zipOut) }
+                                    zipOut.closeEntry()
+                                } catch (e: Exception) { }
+                            }
+                        }
+                    }
+                    exportToLegacyDefault(zipName, tempFile.readBytes(), "Raw DTS Export (ZIP)")
+                }
+            } finally {
+                tempFile.delete()
+            }
         }
     }
 
     suspend fun tryBackupBootToDefault(context: Context): Boolean {
-        val defaultUriStr = settingsRepository.getDefaultExportUri() ?: return false
-        val defaultUri = Uri.parse(defaultUriStr)
-        return try {
-            withContext(Dispatchers.IO) {
-                val dir = DocumentFile.fromTreeUri(context, defaultUri)
-                if (dir == null || !dir.canWrite()) return@withContext false
-                
-                val bootFile = deviceRepository.getBootImageFile()
-                if (!bootFile.exists()) return@withContext false
-                
-                val name = "boot_backup_${System.currentTimeMillis()}.img"
-                val newFile = dir.createFile("application/octet-stream", name) ?: return@withContext false
-                
-                context.contentResolver.openOutputStream(newFile.uri)?.use { out ->
-                    bootFile.inputStream().use { it.copyTo(out) }
+        val defaultUri = settingsRepository.getValidExportUri()
+        val bootFile = deviceRepository.getBootImageFile()
+        if (!bootFile.exists()) return false
+        val name = "boot_backup_${System.currentTimeMillis()}.img"
+
+        if (defaultUri != null) {
+             return try {
+                withContext(Dispatchers.IO) {
+                    val dir = DocumentFile.fromTreeUri(context, defaultUri)
+                    if (dir == null || !dir.canWrite()) return@withContext false
+                    
+                    val newFile = dir.createFile("application/octet-stream", name) ?: return@withContext false
+                    
+                    context.contentResolver.openOutputStream(newFile.uri)?.use { out ->
+                        bootFile.inputStream().use { it.copyTo(out) }
+                    }
+                    addToHistory(name, "System Boot Backup", newFile.uri.toString())
+                    _messageEvent.emit("Saved to ${settingsRepository.getExportPathDisplay()}/$name")
+                    true
                 }
-                addToHistory(name, "System Boot Backup", newFile.uri.toString())
-                _messageEvent.emit("Saved to ${settingsRepository.getExportPathDisplay()}/$name")
-                true
+            } catch (e: Exception) {
+                false
             }
-        } catch (e: Exception) {
-            false
+        } else {
+             return exportToLegacyDefault(name, bootFile.readBytes(), "System Boot Backup")
+        }
+    }
+
+    private suspend fun exportToLegacyDefault(filename: String, content: ByteArray, desc: String): Boolean {
+        return withContext(Dispatchers.IO) {
+            try {
+                val targetDir = File("/storage/emulated/0/Download/KonaBess")
+                if (!targetDir.exists()) {
+                    if (!targetDir.mkdirs()) {
+                        // Try root mkdir if normal fails
+                         if (RootHelper.isRootAvailable()) {
+                             RootHelper.exec("mkdir -p \"${targetDir.absolutePath}\"")
+                         }
+                    }
+                }
+                
+                val targetFile = File(targetDir, filename)
+                
+                // Try standard write first
+                try {
+                     targetFile.writeBytes(content)
+                } catch (e: Exception) {
+                    // Fallback to root write
+                    if (RootHelper.isRootAvailable()) {
+                        val temp = File.createTempFile("root_write", null)
+                        temp.writeBytes(content)
+                        RootHelper.copyFile(temp.absolutePath, targetFile.absolutePath, "644")
+                        temp.delete()
+                    } else {
+                        throw e
+                    }
+                }
+                
+                addToHistory(filename, desc, targetFile.absolutePath)
+                _messageEvent.emit("Saved to /Download/KonaBess/$filename")
+                true
+            } catch (e: Exception) {
+                _errorEvent.emit("Export failed: ${e.message}")
+                false
+            }
         }
     }
 
