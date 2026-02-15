@@ -21,6 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.ireddragonicy.konabessnext.R
 import com.ireddragonicy.konabessnext.model.Dtb
+import com.ireddragonicy.konabessnext.model.TargetPartition
 
 /**
  * Defines the types of sheets available in the GPU Workbench.
@@ -38,8 +39,11 @@ fun GpuWorkbenchSheets(
     history: List<String>,
     // Chipset Data
     dtbs: List<Dtb>,
+    availablePartitions: List<TargetPartition> = emptyList(),
+    selectedPartition: TargetPartition = TargetPartition.VENDOR_BOOT,
     selectedDtbId: Int?,
     activeDtbId: Int,
+    onPartitionSelect: (TargetPartition) -> Unit = {},
     onChipsetSelect: (Dtb) -> Unit,
     onConfigureManual: (Int) -> Unit,
     onDeleteDts: (Int) -> Unit,
@@ -63,8 +67,11 @@ fun GpuWorkbenchSheets(
                 WorkbenchSheetType.HISTORY -> HistorySheetContent(history)
                 WorkbenchSheetType.CHIPSET -> ChipsetSelectorContent(
                     dtbs = dtbs,
+                    availablePartitions = availablePartitions,
+                    selectedPartition = selectedPartition,
                     selectedDtbId = selectedDtbId,
                     activeDtbId = activeDtbId,
+                    onPartitionSelect = onPartitionSelect,
                     onSelect = onChipsetSelect,
                     onConfigure = onConfigureManual,
                     onDelete = onDeleteDts,
@@ -107,8 +114,11 @@ private fun HistorySheetContent(history: List<String>) {
 @Composable
 private fun ChipsetSelectorContent(
     dtbs: List<Dtb>,
+    availablePartitions: List<TargetPartition>,
+    selectedPartition: TargetPartition,
     selectedDtbId: Int?,
     activeDtbId: Int,
+    onPartitionSelect: (TargetPartition) -> Unit,
     onSelect: (Dtb) -> Unit,
     onConfigure: (Int) -> Unit,
     onDelete: (Int) -> Unit,
@@ -125,6 +135,28 @@ private fun ChipsetSelectorContent(
         style = MaterialTheme.typography.headlineSmall,
         modifier = Modifier.padding(bottom = 16.dp)
     )
+
+    if (availablePartitions.isNotEmpty()) {
+        val selectedIndex = availablePartitions.indexOf(selectedPartition).coerceAtLeast(0)
+        TabRow(selectedTabIndex = selectedIndex, modifier = Modifier.fillMaxWidth()) {
+            availablePartitions.forEachIndexed { index, partition ->
+                Tab(
+                    selected = index == selectedIndex,
+                    onClick = { onPartitionSelect(partition) },
+                    text = {
+                        Text(
+                            text = when (partition) {
+                                TargetPartition.VENDOR_BOOT -> stringResource(R.string.partition_vendor_boot)
+                                TargetPartition.BOOT -> stringResource(R.string.partition_boot)
+                                TargetPartition.DTBO -> stringResource(R.string.partition_dtbo)
+                            }
+                        )
+                    }
+                )
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+    }
     
     LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         items(dtbs) { dtb ->

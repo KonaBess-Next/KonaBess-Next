@@ -294,6 +294,30 @@
     <string name="switch_chipset_confirm">Do you want to switch the chipset?</string>
     <string name="select_chipset">Select Chipset</string>
     <string name="edit_parameter">Edit Parameter</string>
+    <string name="dtbo_editor_title">DTBO Display Timing Editor</string>
+    <string name="dtbo_editor_subtitle">Edit display timing properties from the DTBO overlay.</string>
+    <string name="dtbo_select_panel">Select Panel</string>
+    <string name="dtbo_panel_count">%1$d panels with timings found</string>
+    <string name="dtbo_fragment_label">fragment@%1$d</string>
+    <string name="dtbo_select_timing">Select Timing</string>
+    <string name="dtbo_timing_count">%1$d timings available</string>
+    <string name="dtbo_node_name">Node: %1$s</string>
+    <string name="dtbo_panel_fps">Panel Framerate: %1$d Hz</string>
+    <string name="dtbo_panel_resolution">Resolution: %1$d × %2$d</string>
+    <string name="dtbo_panel_clock">Clockrate: %1$d</string>
+    <string name="dtbo_fps_quick_presets">Quick FPS Presets</string>
+    <string name="dtbo_custom_fps">Custom FPS</string>
+    <string name="dtbo_apply">Apply</string>
+    <string name="dtbo_overclock_warning">Warning: Overclocking panel FPS can cause flicker, black screen, or boot loop.</string>
+    <string name="dtbo_dfps_title">Supported DFPS List</string>
+    <string name="dtbo_dfps_subtitle">qcom,dsi-supported-dfps-list — the framerates the panel driver will accept.</string>
+    <string name="dtbo_dfps_empty">No DFPS entries. Add one below.</string>
+    <string name="dtbo_dfps_add">Add FPS</string>
+    <string name="dtbo_dfps_add_hint">FPS value</string>
+    <string name="dtbo_timing_properties">Timing Properties</string>
+    <string name="dtbo_no_timing_found">DTBO timing node not found in current DTS.</string>
+    <string name="dtbo_edit_property">Edit: %1$s</string>
+    <string name="dtbo_property_value_hint">Raw DTS property value (without semicolon)</string>
 
     <!-- Extracted Strings -->
     <string name="no_gpu_tables_found">No GPU Frequency Tables Found</string>
@@ -553,6 +577,9 @@
     <string name="select_all">Select All</string>
     <string name="select_color_palette">Select Color Palette</string>
     <string name="select_dts_index">Select DTS Index</string>
+    <string name="partition_vendor_boot">Vendor Boot</string>
+    <string name="partition_boot">Boot</string>
+    <string name="partition_dtbo">DTBO</string>
     <string name="select_frequency_table_bin">Select Frequency Table (Bin)</string>
     <string name="select_language">Select Language</string>
     <string name="set_opp_microvolt_value_desc">Set OPP microvolt value</string>

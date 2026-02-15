@@ -600,7 +600,7 @@ class ImportExportViewModel @Inject constructor(
 
         return dtbs.mapNotNull { dtb ->
             try {
-                val file = if (dtb.id < 0) deviceRepository.getDtsFile() else deviceRepository.getDtsFile(dtb.id)
+                val file = deviceRepository.getDtsFile(dtb.id)
                 if (!file.exists()) return@mapNotNull null
 
                 val firstLines = file.bufferedReader().use { reader ->

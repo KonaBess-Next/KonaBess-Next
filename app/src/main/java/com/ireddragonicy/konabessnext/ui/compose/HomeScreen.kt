@@ -30,7 +30,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.activity.compose.BackHandler
 import android.net.Uri
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.ireddragonicy.konabessnext.R
+import com.ireddragonicy.konabessnext.model.TargetPartition
 import com.ireddragonicy.konabessnext.utils.BinDiffResult
 import com.ireddragonicy.konabessnext.viewmodel.*
 import kotlinx.coroutines.launch
@@ -40,17 +42,28 @@ fun HomeScreen(
     deviceViewModel: DeviceViewModel,
     gpuFrequencyViewModel: GpuFrequencyViewModel,
     sharedViewModel: SharedGpuViewModel,
+    displayViewModel: DisplayViewModel,
     highlightCache: Map<Int, androidx.compose.ui.text.AnnotatedString> = emptyMap(),
     onStartRepack: () -> Unit,
     onSelectionDragStateChanged: (Boolean) -> Unit = {}
 ) {
     val isFilesExtracted by deviceViewModel.isFilesExtracted.collectAsState()
     val reloadTrigger by deviceViewModel.dataReloadTrigger.collectAsState()
+    val selectedPartition by deviceViewModel.selectedPartition.collectAsState()
+
+    // Obtain the same ViewModel instances used by UnifiedDtsEditorScreen and VisualTreeContent
+    val textEditorViewModel: TextEditorViewModel = hiltViewModel()
+    val visualTreeViewModel: VisualTreeViewModel = hiltViewModel()
 
     // Load data when extracted (Preserves state across rotation/theme change)
     LaunchedEffect(isFilesExtracted) {
         if (isFilesExtracted) {
             sharedViewModel.loadData()
+            textEditorViewModel.setActivePartition(selectedPartition)
+            visualTreeViewModel.setActivePartition(selectedPartition)
+            if (selectedPartition == TargetPartition.DTBO) {
+                displayViewModel.loadData()
+            }
         }
     }
     
@@ -58,6 +71,18 @@ fun HomeScreen(
     LaunchedEffect(reloadTrigger) {
         if (reloadTrigger > 0) {
             sharedViewModel.loadData()
+            if (selectedPartition == TargetPartition.DTBO) {
+                displayViewModel.loadData()
+            }
+        }
+    }
+
+    // Switch text/tree editors and load display data when partition changes
+    LaunchedEffect(selectedPartition) {
+        textEditorViewModel.setActivePartition(selectedPartition)
+        visualTreeViewModel.setActivePartition(selectedPartition)
+        if (isFilesExtracted && selectedPartition == TargetPartition.DTBO) {
+            displayViewModel.loadData()
         }
     }
 
@@ -66,6 +91,7 @@ fun HomeScreen(
             deviceViewModel = deviceViewModel,
             gpuFrequencyViewModel = gpuFrequencyViewModel,
             sharedViewModel = sharedViewModel,
+            displayViewModel = displayViewModel,
             onStartRepack = onStartRepack,
             onSelectionDragStateChanged = onSelectionDragStateChanged
         )
@@ -140,13 +166,28 @@ fun GpuEditorMainContent(
     deviceViewModel: DeviceViewModel,
     gpuFrequencyViewModel: GpuFrequencyViewModel,
     sharedViewModel: SharedGpuViewModel,
+    displayViewModel: DisplayViewModel,
     onStartRepack: () -> Unit,
     onSelectionDragStateChanged: (Boolean) -> Unit = {}
 ) {
-    val isDirty by gpuFrequencyViewModel.isDirty.collectAsState()
-    val canUndo by gpuFrequencyViewModel.canUndo.collectAsState()
-    val canRedo by gpuFrequencyViewModel.canRedo.collectAsState()
-    val history by gpuFrequencyViewModel.history.collectAsState()
+    val selectedPartition by deviceViewModel.selectedPartition.collectAsState()
+    val isDtboPartition = selectedPartition == TargetPartition.DTBO
+
+    // Partition-aware toolbar state: GPU or Display
+    val gpuIsDirty by gpuFrequencyViewModel.isDirty.collectAsState()
+    val gpuCanUndo by gpuFrequencyViewModel.canUndo.collectAsState()
+    val gpuCanRedo by gpuFrequencyViewModel.canRedo.collectAsState()
+    val gpuHistory by gpuFrequencyViewModel.history.collectAsState()
+
+    val displayIsDirty by displayViewModel.isDirty.collectAsState()
+    val displayCanUndo by displayViewModel.canUndo.collectAsState()
+    val displayCanRedo by displayViewModel.canRedo.collectAsState()
+    val displayHistory by displayViewModel.history.collectAsState()
+
+    val isDirty = if (isDtboPartition) displayIsDirty else gpuIsDirty
+    val canUndo = if (isDtboPartition) displayCanUndo else gpuCanUndo
+    val canRedo = if (isDtboPartition) displayCanRedo else gpuCanRedo
+    val history = if (isDtboPartition) displayHistory else gpuHistory
     val currentMode by sharedViewModel.viewMode.collectAsState()
 
     val selectedBinIndex by gpuFrequencyViewModel.selectedBinIndex.collectAsState()
@@ -178,10 +219,15 @@ fun GpuEditorMainContent(
     var diffResults by remember { mutableStateOf<List<BinDiffResult>>(emptyList()) }
     val scope = rememberCoroutineScope()
 
+    // Obtain the same ViewModel instances for partition-aware text/tree switching
+    val textEditorViewModel: TextEditorViewModel = hiltViewModel()
+    val visualTreeViewModel: VisualTreeViewModel = hiltViewModel()
+
     // Sheets
     val detectionState by deviceViewModel.detectionState.collectAsState()
     val selectedChipset by deviceViewModel.selectedChipset.collectAsState()
     val activeDtbId by deviceViewModel.activeDtbId.collectAsState()
+    val availablePartitions by deviceViewModel.availablePartitions.collectAsState()
     
     val context = LocalContext.current
     val canFlashOrRepack by deviceViewModel.canFlashOrRepack.collectAsState()
@@ -300,7 +346,10 @@ fun GpuEditorMainContent(
 
     val confirmDiffAction = {
         when (pendingDiffAction) {
-            DiffCommitAction.SAVE -> gpuFrequencyViewModel.save(true)
+            DiffCommitAction.SAVE -> {
+                if (selectedPartition == TargetPartition.DTBO) displayViewModel.save()
+                else gpuFrequencyViewModel.save(true)
+            }
             DiffCommitAction.EXPORT_IMAGE -> launchExportImage()
             DiffCommitAction.FLASH_DEVICE -> onStartRepack()
             DiffCommitAction.INSTALL_INACTIVE_SLOT -> showInactiveInstallDialog = true
@@ -324,13 +373,23 @@ fun GpuEditorMainContent(
         onDismiss = { activeSheet = WorkbenchSheetType.NONE },
         history = history,
         dtbs = (detectionState as? UiState.Success)?.data ?: emptyList(),
-        selectedDtbId = selectedChipset?.id,
+        availablePartitions = availablePartitions,
+        selectedPartition = selectedPartition,
+        selectedDtbId = selectedChipset?.takeIf { it.partition == selectedPartition }?.id,
         activeDtbId = activeDtbId,
+        onPartitionSelect = { partition ->
+            deviceViewModel.selectPartition(partition)
+        },
         onChipsetSelect = { dtb ->
             deviceViewModel.selectChipset(dtb)
             gpuFrequencyViewModel.selectedBinIndex.value = -1
             gpuFrequencyViewModel.selectedLevelIndex.value = -1
             sharedViewModel.loadData()
+            if (dtb.partition == TargetPartition.DTBO) {
+                textEditorViewModel.setActivePartition(TargetPartition.DTBO)
+                visualTreeViewModel.setActivePartition(TargetPartition.DTBO)
+                displayViewModel.loadData()
+            }
             activeSheet = WorkbenchSheetType.NONE
         },
         onConfigureManual = { id -> manualSetupIndex = id },
@@ -359,10 +418,19 @@ fun GpuEditorMainContent(
                 historyCount = history.size,
                 currentViewMode = currentMode,
                 showChipsetSelector = true,
-                onSave = { gpuFrequencyViewModel.save(true) },
+                onSave = {
+                    if (isDtboPartition) displayViewModel.save()
+                    else gpuFrequencyViewModel.save(true)
+                },
                 onRequireDiffConfirmation = requestDiffPreview,
-                onUndo = { gpuFrequencyViewModel.undo() },
-                onRedo = { gpuFrequencyViewModel.redo() },
+                onUndo = {
+                    if (isDtboPartition) displayViewModel.undo()
+                    else gpuFrequencyViewModel.undo()
+                },
+                onRedo = {
+                    if (isDtboPartition) displayViewModel.redo()
+                    else gpuFrequencyViewModel.redo()
+                },
                 onShowHistory = { activeSheet = WorkbenchSheetType.HISTORY },
                 onViewModeChanged = { mode -> sharedViewModel.switchViewMode(mode) },
                 onChipsetClick = { activeSheet = WorkbenchSheetType.CHIPSET },
@@ -381,6 +449,7 @@ fun GpuEditorMainContent(
                             sharedViewModel, 
                             deviceViewModel, 
                             gpuFrequencyViewModel,
+                            displayViewModel = displayViewModel,
                             onOpenCurveEditor = { binId -> activeCurveEditorBinId = binId }
                         )
                         SharedGpuViewModel.ViewMode.TEXT_ADVANCED -> UnifiedDtsEditorScreen(

@@ -6,8 +6,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ireddragonicy.konabessnext.editor.EditorSession
 import com.ireddragonicy.konabessnext.editor.text.DtsEditorState
+import com.ireddragonicy.konabessnext.model.TargetPartition
 import com.ireddragonicy.konabessnext.model.dts.DtsError
 import com.ireddragonicy.konabessnext.model.dts.Severity
+import com.ireddragonicy.konabessnext.repository.DisplayRepository
+import com.ireddragonicy.konabessnext.repository.DtsDataProvider
 import com.ireddragonicy.konabessnext.repository.GpuRepository
 import com.ireddragonicy.konabessnext.utils.DtsEditorDebug
 import com.ireddragonicy.konabessnext.utils.DtsFormatter
@@ -16,6 +19,7 @@ import com.ireddragonicy.konabessnext.utils.DtsParser
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
@@ -33,17 +37,43 @@ import javax.inject.Inject
  * - Code folding persistence
  * - Text scroll position persistence
  *
- * Observes [GpuRepository.dtsLines] as the Single Source of Truth (SSOT).
+ * Partition-aware: switches between [GpuRepository] and [DisplayRepository]
+ * based on the active partition set via [setActivePartition].
  */
 @HiltViewModel
 class TextEditorViewModel @Inject constructor(
-    private val repository: GpuRepository
+    private val gpuRepository: GpuRepository,
+    private val displayRepository: DisplayRepository
 ) : ViewModel() {
 
-    // --- Expose repo lines directly for the editor to observe ---
-    val dtsLines: StateFlow<List<String>> = repository.dtsLines
+    // --- Partition-aware provider switching ---
+    private val _activePartition = MutableStateFlow(TargetPartition.VENDOR_BOOT)
 
-    val dtsContent: StateFlow<String> = repository.dtsContent
+    private val activeProvider: DtsDataProvider
+        get() = if (_activePartition.value == TargetPartition.DTBO) displayRepository else gpuRepository
+
+    fun setActivePartition(partition: TargetPartition) {
+        if (_activePartition.value == partition) return
+        _activePartition.value = partition
+        // Reset editor state for the new partition's data
+        resetEditorState()
+    }
+
+    // --- Expose repo lines that switch based on partition ---
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val dtsLines: StateFlow<List<String>> = _activePartition
+        .flatMapLatest { partition ->
+            if (partition == TargetPartition.DTBO) displayRepository.dtsLines
+            else gpuRepository.dtsLines
+        }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val dtsContent: StateFlow<String> = _activePartition
+        .flatMapLatest { partition ->
+            if (partition == TargetPartition.DTBO) displayRepository.dtsContent
+            else gpuRepository.dtsContent
+        }
         .stateIn(viewModelScope, SharingStarted.Lazily, "")
 
     // --- Search State ---
@@ -88,7 +118,7 @@ class TextEditorViewModel @Inject constructor(
     @OptIn(kotlinx.coroutines.FlowPreview::class)
     private fun startHighlightSession() {
         viewModelScope.launch {
-            combine(repository.dtsLines, _searchState) { lines, search ->
+            combine(dtsLines, _searchState) { lines, search ->
                 lines to search.query
             }
                 .debounce(300)
@@ -103,7 +133,7 @@ class TextEditorViewModel @Inject constructor(
     // --- Editor State Sync ---
     private fun startEditorStateSync() {
         viewModelScope.launch {
-            repository.dtsLines.collect { lines ->
+            dtsLines.collect { lines ->
                 if (isEditorOutOfSync(lines)) {
                     dtsEditorState.replaceLines(lines)
                 }
@@ -114,7 +144,7 @@ class TextEditorViewModel @Inject constructor(
     }
 
     fun refreshEditorSessionKey() {
-        val path = repository.currentDtsPath()
+        val path = activeProvider.currentDtsPath()
         if (!path.isNullOrBlank()) {
             _dtsEditorSessionKey.value = "session:path:$path"
             return
@@ -145,12 +175,12 @@ class TextEditorViewModel @Inject constructor(
     }
 
     fun updateFromEditorLines(lines: List<String>, description: String) {
-        val current = repository.dtsLines.value
+        val current = dtsLines.value
         if (current.size == lines.size && current.indices.all { current[it] == lines[it] }) {
             return
         }
         DtsEditorDebug.logUpdateFromText(estimateCharCount(lines), lines.size)
-        repository.updateContent(lines, description)
+        activeProvider.updateContent(lines, description)
     }
 
     // --- Reformat ---
@@ -167,7 +197,7 @@ class TextEditorViewModel @Inject constructor(
             DtsEditorDebug.logReformat(current.length, formatted.length, durationMs)
             if (formatted != current) {
                 val lines = formatted.split("\n")
-                repository.updateContent(lines, "Reformat code")
+                activeProvider.updateContent(lines, "Reformat code")
             }
         }
     }
@@ -193,12 +223,7 @@ class TextEditorViewModel @Inject constructor(
                     val lexer = DtsLexer(content)
                     val tokens = lexer.tokenize(
                         DtsLexer.LexOptions(
-                            checkCancelled = checkCancelled,
-                            budget = DtsLexer.LexBudget(
-                                maxCharsScanned = MAX_LINT_CHARS,
-                                timeBudgetMs = LINT_LEX_TIME_BUDGET_MS,
-                                checkIntervalChars = LINT_CHECK_INTERVAL
-                            )
+                            checkCancelled = checkCancelled
                         )
                     )
 
@@ -208,27 +233,11 @@ class TextEditorViewModel @Inject constructor(
                     parser.parse(
                         DtsParser.ParseOptions(
                             checkCancelled = checkCancelled,
-                            budget = DtsParser.ParseBudget(
-                                maxTokensConsumed = MAX_LINT_TOKENS,
-                                timeBudgetMs = LINT_PARSE_TIME_BUDGET_MS,
-                                checkIntervalTokens = LINT_CHECK_INTERVAL
-                            ),
                             maxErrors = MAX_LINT_ERRORS
                         )
                     )
 
-                    val diagnostics = parser.getLintResult().errors.toMutableList()
-                    if (lexer.wasBudgetExceeded()) {
-                        diagnostics.add(
-                            DtsError(
-                                line = 0,
-                                column = 0,
-                                message = "Lexing budget exceeded; lint results may be incomplete",
-                                severity = Severity.WARNING
-                            )
-                        )
-                    }
-                    diagnostics.groupBy { it.line }
+                    parser.getLintResult().errors.groupBy { it.line }
                 } catch (ce: CancellationException) {
                     throw ce
                 } catch (_: Exception) {
@@ -271,7 +280,7 @@ class TextEditorViewModel @Inject constructor(
     fun search(query: String) {
         if (query.isEmpty()) { _searchState.value = SearchState(); return }
 
-        val lines = repository.dtsLines.value
+        val lines = dtsLines.value
         val results = mutableListOf<SearchResult>()
         lines.forEachIndexed { i, line ->
             if (line.contains(query, true)) results.add(SearchResult(i))
@@ -322,11 +331,6 @@ class TextEditorViewModel @Inject constructor(
     }
 
     private companion object {
-        private const val LINT_CHECK_INTERVAL = 1024
-        private const val MAX_LINT_ERRORS = 200
-        private const val MAX_LINT_CHARS = 3_000_000
-        private const val MAX_LINT_TOKENS = 300_000
-        private const val LINT_LEX_TIME_BUDGET_MS = 250L
-        private const val LINT_PARSE_TIME_BUDGET_MS = 250L
+        private const val MAX_LINT_ERRORS = 1000
     }
 }

@@ -9,6 +9,7 @@ import com.ireddragonicy.konabessnext.core.model.AppError
 import com.ireddragonicy.konabessnext.core.model.DomainResult
 import com.ireddragonicy.konabessnext.model.Dtb
 import com.ireddragonicy.konabessnext.model.ChipDefinition
+import com.ireddragonicy.konabessnext.model.TargetPartition
 import com.ireddragonicy.konabessnext.repository.DeviceRepository
 import com.ireddragonicy.konabessnext.core.scanner.DtsScanner
 import com.ireddragonicy.konabessnext.core.scanner.DtsScanResult
@@ -46,6 +47,12 @@ class DeviceViewModel @Inject constructor(
     private val _selectedChipset = MutableStateFlow<Dtb?>(null)
     val selectedChipset: StateFlow<Dtb?> = _selectedChipset.asStateFlow()
 
+    private val _availablePartitions = MutableStateFlow(repository.availablePartitions)
+    val availablePartitions: StateFlow<List<TargetPartition>> = _availablePartitions.asStateFlow()
+
+    private val _selectedPartition = MutableStateFlow(repository.selectedPartition)
+    val selectedPartition: StateFlow<TargetPartition> = _selectedPartition.asStateFlow()
+
     private val _isPrepared = MutableStateFlow(false)
     val isPrepared: StateFlow<Boolean> = _isPrepared.asStateFlow()
     
@@ -70,8 +77,14 @@ class DeviceViewModel @Inject constructor(
         private const val TAG = "KonaBessVM"
         // FDT (Flattened Device Tree) magic number
         private val DTB_MAGIC = byteArrayOf(0xD0.toByte(), 0x0D.toByte(), 0xFE.toByte(), 0xED.toByte())
+        private const val DTBO_TABLE_MAGIC = 0xD7B7AB1E.toInt()
         // Android boot image magic
         private const val BOOT_MAGIC = "ANDROID!"
+    }
+
+    private fun syncPartitionState() {
+        _availablePartitions.value = repository.availablePartitions
+        _selectedPartition.value = repository.selectedPartition
     }
 
     // ── Helpers ───────────────────────────────────────────────────────
@@ -121,6 +134,7 @@ class DeviceViewModel @Inject constructor(
 
     /** Finalize a successful DTB detection/import: select best chipset and update state. */
     private fun finalizeDetection(dtbs: List<Dtb>) {
+        syncPartitionState()
         _activeDtbId.value = repository.activeDtbId
         _detectionState.value = UiState.Success(dtbs)
         _isFilesExtracted.value = true
@@ -161,6 +175,7 @@ class DeviceViewModel @Inject constructor(
             inputStream.use { stream ->
                 when (val result = repository.importExternalDts(stream, displayName)) {
                     is DomainResult.Success -> {
+                        syncPartitionState()
                         val dtb = result.data
                         // Repository already set: dtsPath, currentDtb, currentChip, prepared
                         _selectedChipset.value = dtb
@@ -321,6 +336,7 @@ class DeviceViewModel @Inject constructor(
                         null
                     }
                     if (activeDtb != null && activeDtb.type.strategyType.isNotEmpty()) {
+                        syncPartitionState()
                         _activeDtbId.value = repository.activeDtbId
                         _detectionState.value = UiState.Success(dtbs)
                         _isFilesExtracted.value = true
@@ -354,6 +370,11 @@ class DeviceViewModel @Inject constructor(
                 val isDtb = magic.size >= 4 &&
                     magic[0] == DTB_MAGIC[0] && magic[1] == DTB_MAGIC[1] &&
                     magic[2] == DTB_MAGIC[2] && magic[3] == DTB_MAGIC[3]
+                val isDtbo = magic.size >= 4 &&
+                    ((((magic[0].toInt() and 0xFF) shl 24) or
+                        ((magic[1].toInt() and 0xFF) shl 16) or
+                        ((magic[2].toInt() and 0xFF) shl 8) or
+                        (magic[3].toInt() and 0xFF)) == DTBO_TABLE_MAGIC)
 
                 when {
                     isBootImage && !isRootMode -> {
@@ -364,6 +385,7 @@ class DeviceViewModel @Inject constructor(
                         }
                     }
                     isBootImage -> importBootImage(context, uri)
+                    isDtbo -> importDtboImage(context, uri)
                     else -> {
                         // Text DTS or binary DTB — both handled by importExternalDts
                         _detectionState.value = null
@@ -457,8 +479,99 @@ class DeviceViewModel @Inject constructor(
         }
     }
 
+    private fun importDtboImage(context: Context, uri: Uri) {
+        _detectionState.value = UiState.Loading
+        viewModelScope.launch {
+            val displayName = resolveDisplayName(context, uri, "dtbo.img")
+            val inputStream = runCatching { context.contentResolver.openInputStream(uri) }.getOrNull()
+                ?: run {
+                    applyDetectionFailure(AppError.IoError("Cannot read dtbo file - permission denied"))
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, context.getString(R.string.import_failed_permission_denied), Toast.LENGTH_LONG).show()
+                    }
+                    return@launch
+                }
+
+            when (val setupResult = repository.setupEnv()) {
+                is DomainResult.Failure -> {
+                    applyDetectionFailure(setupResult.error)
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, mapAppErrorToMessage(setupResult.error), Toast.LENGTH_LONG).show()
+                    }
+                    return@launch
+                }
+                is DomainResult.Success -> Unit
+            }
+
+            inputStream.use { stream ->
+                when (val importResult = repository.importDtboImage(stream, displayName)) {
+                    is DomainResult.Failure -> {
+                        applyDetectionFailure(importResult.error)
+                        withContext(Dispatchers.Main) {
+                            Toast.makeText(context, mapAppErrorToMessage(importResult.error), Toast.LENGTH_LONG).show()
+                        }
+                        return@launch
+                    }
+                    is DomainResult.Success -> Unit
+                }
+            }
+
+            when (val splitResult = repository.bootImage2dts()) {
+                is DomainResult.Failure -> {
+                    applyDetectionFailure(splitResult.error)
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, mapAppErrorToMessage(splitResult.error), Toast.LENGTH_LONG).show()
+                    }
+                    return@launch
+                }
+                is DomainResult.Success -> Unit
+            }
+
+            when (val checkResult = repository.checkDevice()) {
+                is DomainResult.Failure -> {
+                    applyDetectionFailure(checkResult.error)
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, mapAppErrorToMessage(checkResult.error), Toast.LENGTH_LONG).show()
+                    }
+                    return@launch
+                }
+                is DomainResult.Success -> {
+                    finalizeDetection(checkResult.data)
+                }
+            }
+        }
+    }
+
+    fun selectPartition(partition: TargetPartition) {
+        viewModelScope.launch {
+            if (partition == repository.selectedPartition && (repository.getDtbs(partition).isNotEmpty())) {
+                syncPartitionState()
+                _detectionState.value = UiState.Success(repository.getDtbs(partition))
+                _activeDtbId.value = repository.activeDtbId
+                return@launch
+            }
+
+            when (val result = repository.switchPartitionAndLoad(partition)) {
+                is DomainResult.Failure -> {
+                    // Keep current editor state stable; partition switch should not kick the user out.
+                    syncPartitionState()
+                    if (partition == TargetPartition.DTBO) {
+                        _detectionState.value = UiState.Success(repository.getDtbs(partition))
+                        _activeDtbId.value = repository.activeDtbId
+                    }
+                }
+                is DomainResult.Success -> {
+                    syncPartitionState()
+                    _detectionState.value = UiState.Success(result.data)
+                    _activeDtbId.value = repository.activeDtbId
+                }
+            }
+        }
+    }
+
     fun selectChipset(dtb: Dtb) {
         repository.chooseTarget(dtb)
+        syncPartitionState()
         chipRepository.setCurrentChip(dtb.type)
         _selectedChipset.value = dtb
         _isPrepared.value = dtb.type.strategyType.isNotEmpty()
@@ -505,6 +618,7 @@ class DeviceViewModel @Inject constructor(
             runCatching { repository.loadSavedDts() }
                 .onSuccess { savedDtbs ->
                     if (savedDtbs.isNotEmpty()) {
+                        syncPartitionState()
                         _detectionState.value = UiState.Success(ArrayList(repository.dtbs))
                         selectChipset(savedDtbs.last())
                         _isFilesExtracted.value = true
@@ -539,6 +653,7 @@ class DeviceViewModel @Inject constructor(
     fun tryRestoreLastChipset() {
         viewModelScope.launch {
             if (repository.tryRestoreLastChipset()) {
+                syncPartitionState()
                 repository.currentDtb?.let {
                     _selectedChipset.value = it
                     _isPrepared.value = it.type.strategyType.isNotEmpty()
@@ -567,7 +682,12 @@ class DeviceViewModel @Inject constructor(
                 is DomainResult.Success -> Unit
             }
 
-            when (val flashResult = repository.writeBootImage()) {
+            val flashResult = if (_selectedPartition.value == TargetPartition.DTBO) {
+                repository.flashDtboImage()
+            } else {
+                repository.writeBootImage()
+            }
+            when (flashResult) {
                 is DomainResult.Failure -> {
                     applyRepackFailure(flashResult.error)
                     return@launch

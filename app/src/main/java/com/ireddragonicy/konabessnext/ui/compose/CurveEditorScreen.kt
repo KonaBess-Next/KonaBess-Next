@@ -22,6 +22,7 @@ import androidx.compose.ui.zIndex
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.ireddragonicy.konabessnext.R
+import com.ireddragonicy.konabessnext.model.TargetPartition
 import com.github.mikephil.charting.charts.LineChart
 import com.github.mikephil.charting.components.XAxis
 import com.github.mikephil.charting.components.YAxis
@@ -161,8 +162,11 @@ fun CurveEditorScreen(
         onDismiss = { activeSheet = WorkbenchSheetType.NONE },
         history = history,
         dtbs = emptyList(), // Chipset selection not supported in this screen
+        availablePartitions = emptyList(),
+        selectedPartition = TargetPartition.VENDOR_BOOT,
         selectedDtbId = -1,
         activeDtbId = -1,
+        onPartitionSelect = {},
         onChipsetSelect = {},
         onConfigureManual = {},
         onDeleteDts = {},

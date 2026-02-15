@@ -1,7 +1,7 @@
 package com.ireddragonicy.konabessnext.core.processor
 
-import android.util.Log
 import com.ireddragonicy.konabessnext.model.DtbType
+import com.ireddragonicy.konabessnext.model.TargetPartition
 import com.ireddragonicy.konabessnext.repository.ShellRepository
 import java.io.File
 import java.nio.file.Files
@@ -17,9 +17,27 @@ class BootImageProcessor @Inject constructor(
     companion object {
         private const val TAG = "BootImageProcessor"
         private val DTB_MAGIC = byteArrayOf(0xD0.toByte(), 0x0D.toByte(), 0xFE.toByte(), 0xED.toByte())
+        private const val DTBO_TABLE_MAGIC = 0xD7B7AB1E.toInt()
+        private const val DTBO_HEADER_SIZE = 32
+        private const val DTBO_ENTRY_SIZE = 32
+        private const val MIN_DTB_SIZE = 40
         private const val DTB_HEADER_SIZE = 8
         private const val BYTE_MASK = 0xFF
     }
+
+    private data class DtboEntryMeta(
+        val id: Int,
+        val rev: Int,
+        val custom: IntArray
+    )
+
+    private data class DtboMetadata(
+        val usesTable: Boolean,
+        val pageSize: Int,
+        val entries: List<DtboEntryMeta>
+    )
+
+    private val dtboMetadataByDir: MutableMap<String, DtboMetadata> = HashMap()
 
     private fun renderShellFailure(err: List<String>, out: List<String>): String {
         val lines = (err + out).map { it.trim() }.filter { it.isNotEmpty() }
@@ -204,13 +222,25 @@ class BootImageProcessor @Inject constructor(
         return changed
     }
 
-    suspend fun unpackBootImage(filesDir: String, magiskbootPath: String): DtbType {
+    suspend fun unpackBootImage(
+        filesDir: String,
+        magiskbootPath: String,
+        partition: TargetPartition = TargetPartition.BOOT
+    ): DtbType {
         val binaryFile = File(magiskbootPath)
         if (!binaryFile.exists()) {
             throw Exception("magiskboot binary not found at $magiskbootPath")
         }
 
-        val result = shellRepository.execAdaptive("cd $filesDir && $magiskbootPath unpack boot.img")
+        if (partition == TargetPartition.DTBO) {
+            val dtboFile = File(filesDir, partition.imageFileName)
+            if (!dtboFile.exists() || dtboFile.length() < MIN_DTB_SIZE) {
+                throw Exception("dtbo image not found or invalid at ${dtboFile.absolutePath}")
+            }
+            return DtbType.DTBO
+        }
+
+        val result = shellRepository.execAdaptive("cd $filesDir && $magiskbootPath unpack ${partition.imageFileName}")
         if (!result.isSuccess) {
             val errMsg = result.err.joinToString("\n").ifEmpty { result.out.joinToString("\n") }
             throw Exception("Failed to unpack boot image: $errMsg")
@@ -233,6 +263,10 @@ class BootImageProcessor @Inject constructor(
     suspend fun splitAndConvertDtbs(filesDir: String, dtcPath: String, dtbType: DtbType): Int {
         // Cleanup stale split artifacts from previous runs (can be root-owned after repack)
         shellRepository.execAndCheck("cd \"$filesDir\" && rm -f ./*.dtb ./*.dts")
+
+        if (dtbType == DtbType.DTBO) {
+            return splitAndConvertDtbo(filesDir, dtcPath)
+        }
 
         val dtbFile = if (dtbType == DtbType.DTB || dtbType == DtbType.BOTH) File(filesDir, "dtb") else File(filesDir, "kernel_dtb")
         if (dtbType == DtbType.BOTH) shellRepository.execAndCheck("cd \"$filesDir\" && rm -f kernel_dtb")
@@ -277,7 +311,67 @@ class BootImageProcessor @Inject constructor(
         return offsets.size
     }
 
-    suspend fun repackBootImage(filesDir: String, magiskbootPath: String, dtcPath: String, dtbCount: Int, dtbType: DtbType?) {
+    private suspend fun splitAndConvertDtbo(filesDir: String, dtcPath: String): Int {
+        val dtboFile = File(filesDir, TargetPartition.DTBO.imageFileName)
+        if (!dtboFile.exists()) {
+            throw Exception("Missing dtbo image at ${dtboFile.absolutePath}")
+        }
+
+        val data = Files.readAllBytes(dtboFile.toPath())
+        val entriesWithMeta = extractDtboEntries(data)
+
+        val dtbEntries: List<ByteArray>
+        val metadata: DtboMetadata
+
+        if (entriesWithMeta.isNotEmpty()) {
+            dtbEntries = entriesWithMeta.map { it.first }
+            metadata = DtboMetadata(
+                usesTable = true,
+                pageSize = readU32Be(data, 24) ?: 4096,
+                entries = entriesWithMeta.map { it.second }
+            )
+        } else {
+            val split = extractRawConcatenatedDtbs(data)
+            if (split.isEmpty()) {
+                throw Exception("No DTB entries found in dtbo image")
+            }
+            dtbEntries = split
+            metadata = DtboMetadata(
+                usesTable = false,
+                pageSize = 4096,
+                entries = split.map { DtboEntryMeta(0, 0, intArrayOf(0, 0, 0, 0)) }
+            )
+        }
+
+        dtboMetadataByDir[filesDir] = metadata
+
+        for ((idx, dtbBytes) in dtbEntries.withIndex()) {
+            val dtbFile = Paths.get(filesDir, "$idx.dtb")
+            Files.deleteIfExists(dtbFile)
+            Files.write(dtbFile, dtbBytes)
+
+            val convertResult = shellRepository.execAdaptive(
+                "cd \"$filesDir\" && \"$dtcPath\" -I dtb -O dts \"$idx.dtb\" -o \"$idx.dts\""
+            )
+            if (!convertResult.isSuccess) {
+                throw Exception(
+                    "Failed to convert DTBO entry index $idx:\n${renderShellFailure(convertResult.err, convertResult.out)}"
+                )
+            }
+            File(filesDir, "$idx.dtb").delete()
+        }
+
+        return dtbEntries.size
+    }
+
+    suspend fun repackBootImage(
+        filesDir: String,
+        magiskbootPath: String,
+        dtcPath: String,
+        dtbCount: Int,
+        dtbType: DtbType?,
+        partition: TargetPartition = TargetPartition.BOOT
+    ) {
         // Compile DTS to DTB
         for (i in 0 until dtbCount) {
             val sourceDts = File(filesDir, "$i.dts")
@@ -325,6 +419,12 @@ class BootImageProcessor @Inject constructor(
             }
         }
 
+        if (partition == TargetPartition.DTBO || dtbType == DtbType.DTBO) {
+            repackDtboImage(filesDir, dtbCount)
+            shellRepository.execAndCheck("cd \"$filesDir\" && rm -f ./*.dtb")
+            return
+        }
+
         // Concatenate
         val out = if (dtbType == DtbType.KERNEL_DTB) "kernel_dtb" else "dtb"
         val cmd = StringBuilder("cd \"$filesDir\" && cat")
@@ -332,7 +432,7 @@ class BootImageProcessor @Inject constructor(
         cmd.append(" > \"$out\"")
         
         if (dtbType == DtbType.BOTH) cmd.append(" && cp dtb kernel_dtb")
-        cmd.append(" && \"$magiskbootPath\" repack boot.img boot_new.img")
+        cmd.append(" && \"$magiskbootPath\" repack ${partition.imageFileName} ${partition.outputFileName}")
         
         val repackResult = shellRepository.execAdaptive(cmd.toString())
         // Cleanup split temporary dtb files created for repack.
@@ -340,5 +440,161 @@ class BootImageProcessor @Inject constructor(
         if (!repackResult.isSuccess) {
             throw Exception("Failed to repack boot image:\n${renderShellFailure(repackResult.err, repackResult.out)}")
         }
+    }
+
+    private fun repackDtboImage(filesDir: String, dtbCount: Int) {
+        val dtbChunks = (0 until dtbCount).map { idx ->
+            val file = File(filesDir, "$idx.dtb")
+            if (!file.exists()) {
+                throw Exception("Missing compiled DTB chunk for DTBO repack: ${file.absolutePath}")
+            }
+            file.readBytes()
+        }
+
+        val metadata = dtboMetadataByDir[filesDir]
+        val outputFile = File(filesDir, TargetPartition.DTBO.outputFileName)
+
+        val bytes = if (metadata?.usesTable == true) {
+            buildDtboTableImage(dtbChunks, metadata)
+        } else {
+            dtbChunks.fold(ByteArray(0)) { acc, item -> acc + item }
+        }
+
+        outputFile.writeBytes(bytes)
+    }
+
+    private fun buildDtboTableImage(dtbChunks: List<ByteArray>, metadata: DtboMetadata): ByteArray {
+        val entryCount = dtbChunks.size
+        val pageSize = metadata.pageSize.coerceAtLeast(4)
+        val entriesOffset = DTBO_HEADER_SIZE
+        val entriesSize = entryCount * DTBO_ENTRY_SIZE
+
+        var cursor = align(entriesOffset + entriesSize, pageSize)
+        val offsets = IntArray(entryCount)
+        for (i in 0 until entryCount) {
+            offsets[i] = cursor
+            cursor = align(cursor + dtbChunks[i].size, pageSize)
+        }
+
+        val totalSize = cursor
+        val out = ByteArray(totalSize)
+
+        writeU32Be(out, 0, DTBO_TABLE_MAGIC)
+        writeU32Be(out, 4, totalSize)
+        writeU32Be(out, 8, DTBO_HEADER_SIZE)
+        writeU32Be(out, 12, DTBO_ENTRY_SIZE)
+        writeU32Be(out, 16, entryCount)
+        writeU32Be(out, 20, entriesOffset)
+        writeU32Be(out, 24, pageSize)
+        writeU32Be(out, 28, 0)
+
+        for (i in 0 until entryCount) {
+            val entry = metadata.entries.getOrNull(i) ?: DtboEntryMeta(0, 0, intArrayOf(0, 0, 0, 0))
+            val base = entriesOffset + i * DTBO_ENTRY_SIZE
+            writeU32Be(out, base, dtbChunks[i].size)
+            writeU32Be(out, base + 4, offsets[i])
+            writeU32Be(out, base + 8, entry.id)
+            writeU32Be(out, base + 12, entry.rev)
+            writeU32Be(out, base + 16, entry.custom.getOrElse(0) { 0 })
+            writeU32Be(out, base + 20, entry.custom.getOrElse(1) { 0 })
+            writeU32Be(out, base + 24, entry.custom.getOrElse(2) { 0 })
+            writeU32Be(out, base + 28, entry.custom.getOrElse(3) { 0 })
+        }
+
+        for (i in 0 until entryCount) {
+            val chunk = dtbChunks[i]
+            System.arraycopy(chunk, 0, out, offsets[i], chunk.size)
+        }
+
+        return out
+    }
+
+    private fun extractDtboEntries(data: ByteArray): List<Pair<ByteArray, DtboEntryMeta>> {
+        if (data.size < DTBO_HEADER_SIZE) return emptyList()
+        val magic = readU32Be(data, 0) ?: return emptyList()
+        if (magic != DTBO_TABLE_MAGIC) return emptyList()
+
+        val entrySize = readU32Be(data, 12) ?: return emptyList()
+        val entryCount = readU32Be(data, 16) ?: return emptyList()
+        val entriesOffset = readU32Be(data, 20) ?: return emptyList()
+
+        if (entrySize < DTBO_ENTRY_SIZE || entryCount <= 0 || entryCount > 4096) return emptyList()
+        val tableEnd = entriesOffset.toLong() + entrySize.toLong() * entryCount.toLong()
+        if (entriesOffset < 0 || tableEnd > data.size.toLong()) return emptyList()
+
+        val entries = mutableListOf<Pair<ByteArray, DtboEntryMeta>>()
+        for (i in 0 until entryCount) {
+            val entryOffset = entriesOffset + (i * entrySize)
+            if (entryOffset < 0 || entryOffset + 8 > data.size) continue
+
+            val dtSize = readU32Be(data, entryOffset) ?: continue
+            val dtOffset = readU32Be(data, entryOffset + 4) ?: continue
+            if (dtSize < MIN_DTB_SIZE || dtOffset < 0 || dtOffset + dtSize > data.size) continue
+            if (!isDtbMagicAt(data, dtOffset)) continue
+
+            val id = readU32Be(data, entryOffset + 8) ?: 0
+            val rev = readU32Be(data, entryOffset + 12) ?: 0
+            val custom = intArrayOf(
+                readU32Be(data, entryOffset + 16) ?: 0,
+                readU32Be(data, entryOffset + 20) ?: 0,
+                readU32Be(data, entryOffset + 24) ?: 0,
+                readU32Be(data, entryOffset + 28) ?: 0
+            )
+
+            val dtBytes = data.copyOfRange(dtOffset, dtOffset + dtSize)
+            entries.add(dtBytes to DtboEntryMeta(id, rev, custom))
+        }
+
+        return entries
+    }
+
+    private fun extractRawConcatenatedDtbs(data: ByteArray): List<ByteArray> {
+        val segments = mutableListOf<Pair<Int, Int>>()
+        var i = 0
+        while (i + DTB_HEADER_SIZE < data.size) {
+            if (isDtbMagicAt(data, i)) {
+                val size = readU32Be(data, i + 4) ?: -1
+                if (size >= MIN_DTB_SIZE && i + size <= data.size) {
+                    segments.add(i to size)
+                    i += maxOf(size, 1)
+                    continue
+                }
+            }
+            i++
+        }
+
+        return segments.mapNotNull { (start, size) ->
+            val end = start + size
+            if (end <= start || end > data.size) null else Arrays.copyOfRange(data, start, end)
+        }
+    }
+
+    private fun isDtbMagicAt(bytes: ByteArray, offset: Int): Boolean {
+        if (offset < 0 || offset + 4 > bytes.size) return false
+        return bytes[offset] == DTB_MAGIC[0] &&
+            bytes[offset + 1] == DTB_MAGIC[1] &&
+            bytes[offset + 2] == DTB_MAGIC[2] &&
+            bytes[offset + 3] == DTB_MAGIC[3]
+    }
+
+    private fun readU32Be(bytes: ByteArray, offset: Int): Int? {
+        if (offset < 0 || offset + 4 > bytes.size) return null
+        return ((bytes[offset].toInt() and BYTE_MASK) shl 24) or
+            ((bytes[offset + 1].toInt() and BYTE_MASK) shl 16) or
+            ((bytes[offset + 2].toInt() and BYTE_MASK) shl 8) or
+            (bytes[offset + 3].toInt() and BYTE_MASK)
+    }
+
+    private fun writeU32Be(bytes: ByteArray, offset: Int, value: Int) {
+        bytes[offset] = ((value ushr 24) and BYTE_MASK).toByte()
+        bytes[offset + 1] = ((value ushr 16) and BYTE_MASK).toByte()
+        bytes[offset + 2] = ((value ushr 8) and BYTE_MASK).toByte()
+        bytes[offset + 3] = (value and BYTE_MASK).toByte()
+    }
+
+    private fun align(value: Int, alignment: Int): Int {
+        val align = alignment.coerceAtLeast(1)
+        val rem = value % align
+        return if (rem == 0) value else value + (align - rem)
     }
 }

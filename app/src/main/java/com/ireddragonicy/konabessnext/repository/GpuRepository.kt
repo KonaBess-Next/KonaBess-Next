@@ -22,14 +22,14 @@ open class GpuRepository @Inject constructor(
     private val historyManager: HistoryManager,
     private val chipRepository: ChipRepositoryInterface,
     private val userMessageManager: com.ireddragonicy.konabessnext.utils.UserMessageManager
-) {
+) : DtsDataProvider {
     // --- Single Source of Truth: The Text Lines ---
     private val _dtsLines = MutableStateFlow<List<String>>(emptyList())
-    val dtsLines: StateFlow<List<String>> = _dtsLines.asStateFlow()
+    override val dtsLines: StateFlow<List<String>> = _dtsLines.asStateFlow()
 
-    val dtsContent: Flow<String> = _dtsLines.map { it.joinToString("\n") }.flowOn(Dispatchers.Default)
+    override val dtsContent: Flow<String> = _dtsLines.map { it.joinToString("\n") }.flowOn(Dispatchers.Default)
 
-    fun currentDtsPath(): String? = dtsFileRepository.currentDtsPath()
+    override fun currentDtsPath(): String? = dtsFileRepository.currentDtsPath()
 
     // Manual trigger to force-refresh bins/opps immediately (bypasses debounce).
     // Used after structural changes (add/remove/duplicate level) so UI updates instantly.
@@ -59,7 +59,7 @@ open class GpuRepository @Inject constructor(
         .stateIn(repoScope, SharingStarted.Lazily, emptyList())
 
     private val _parsedTree = MutableStateFlow<DtsNode?>(null)
-    val parsedTree: StateFlow<DtsNode?> = _parsedTree.asStateFlow()
+    override val parsedTree: StateFlow<DtsNode?> = _parsedTree.asStateFlow()
 
     // PERF: debounce(1000) prevents re-parsing opps on every keystroke
     // _structuralChange merge ensures instant refresh after structural edits
@@ -76,12 +76,12 @@ open class GpuRepository @Inject constructor(
         .flowOn(Dispatchers.Default)
         .stateIn(repoScope, SharingStarted.Lazily, emptyList())
 
-    val canUndo = historyManager.canUndo
-    val canRedo = historyManager.canRedo
+    override val canUndo: StateFlow<Boolean> = historyManager.canUndo
+    override val canRedo: StateFlow<Boolean> = historyManager.canRedo
     val history = historyManager.history
 
     private val _isDirty = MutableStateFlow(false)
-    val isDirty: StateFlow<Boolean> = _isDirty.asStateFlow()
+    override val isDirty: StateFlow<Boolean> = _isDirty.asStateFlow()
     
     private var initialContentHash: Int = 0
 
@@ -93,7 +93,7 @@ open class GpuRepository @Inject constructor(
 
     // --- Core Operations ---
 
-    suspend fun loadTable(): DomainResult<Unit> = withContext(Dispatchers.IO) {
+    override suspend fun loadTable(): DomainResult<Unit> = withContext(Dispatchers.IO) {
         try {
             val lines = dtsFileRepository.loadDtsLines()
             historyManager.clear()
@@ -117,7 +117,7 @@ open class GpuRepository @Inject constructor(
         }
     }
 
-    suspend fun saveTable(): DomainResult<Unit> = withContext(Dispatchers.IO) {
+    override suspend fun saveTable(): DomainResult<Unit> = withContext(Dispatchers.IO) {
         try {
             val currentLines = _dtsLines.value
             dtsFileRepository.saveDtsLines(currentLines)
@@ -129,11 +129,11 @@ open class GpuRepository @Inject constructor(
         }
     }
 
-    fun updateContent(
+    override fun updateContent(
         newLines: List<String>,
-        description: String = "Edit",
-        addToHistory: Boolean = true,
-        reparseTree: Boolean = true
+        description: String,
+        addToHistory: Boolean,
+        reparseTree: Boolean
     ) {
         if (newLines == _dtsLines.value) {
             DtsEditorDebug.logUpdateContentSkipped("newLines == oldLines")
@@ -398,7 +398,7 @@ open class GpuRepository @Inject constructor(
      * Sync in-memory tree edits back to text representation.
      * Called after user finishes editing a property in the tree view.
      */
-    fun syncTreeToText(description: String = "Tree Edit") {
+    override fun syncTreeToText(description: String) {
         if (ensureParsedTree() == null) return
         commitTreeChanges(description)
     }
@@ -455,7 +455,7 @@ open class GpuRepository @Inject constructor(
         commitTreeChanges("Imported Voltage Table")
     }
 
-    fun undo() {
+    override fun undo() {
         val currentState = _dtsLines.value
         val revertedState = historyManager.undo(currentState)
         if (revertedState != null) {
@@ -464,7 +464,7 @@ open class GpuRepository @Inject constructor(
         }
     }
 
-    fun redo() {
+    override fun redo() {
         val currentState = _dtsLines.value
         val revertedState = historyManager.redo(currentState)
         if (revertedState != null) {

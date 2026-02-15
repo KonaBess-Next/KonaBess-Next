@@ -26,6 +26,7 @@ fun MainScreen(
     deviceViewModel: DeviceViewModel,
     gpuFrequencyViewModel: GpuFrequencyViewModel,
     sharedViewModel: SharedGpuViewModel,
+    displayViewModel: DisplayViewModel,
     settingsViewModel: SettingsViewModel,
     importExportViewModel: ImportExportViewModel,
     snackbarHostState: SnackbarHostState,
@@ -66,6 +67,7 @@ fun MainScreen(
                     deviceViewModel = deviceViewModel,
                     gpuFrequencyViewModel = gpuFrequencyViewModel,
                     sharedViewModel = sharedViewModel,
+                    displayViewModel = displayViewModel,
                     onStartRepack = onStartRepack,
                     onSelectionDragStateChanged = { isTextSelectionActive = it }
                 )

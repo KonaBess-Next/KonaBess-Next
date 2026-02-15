@@ -1,12 +1,20 @@
 package com.ireddragonicy.konabessnext.viewmodel
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.ireddragonicy.konabessnext.model.TargetPartition
 import com.ireddragonicy.konabessnext.model.dts.DtsNode
+import com.ireddragonicy.konabessnext.repository.DisplayRepository
+import com.ireddragonicy.konabessnext.repository.DtsDataProvider
 import com.ireddragonicy.konabessnext.repository.GpuRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
 
 /**
@@ -16,18 +24,43 @@ import javax.inject.Inject
  * - Tree scroll position persistence
  * - Tree-to-text synchronization
  *
- * Observes [GpuRepository.parsedTree] as the Single Source of Truth (SSOT).
+ * Partition-aware: switches between [GpuRepository] and [DisplayRepository]
+ * based on the active partition set via [setActivePartition].
  */
 @HiltViewModel
 class VisualTreeViewModel @Inject constructor(
-    private val repository: GpuRepository
+    private val gpuRepository: GpuRepository,
+    private val displayRepository: DisplayRepository
 ) : ViewModel() {
 
-    // --- Parsed Tree (SSOT from Repository) ---
-    val parsedTree: StateFlow<DtsNode?> = repository.parsedTree
+    // --- Partition-aware provider switching ---
+    private val _activePartition = MutableStateFlow(TargetPartition.VENDOR_BOOT)
+
+    private val activeProvider: DtsDataProvider
+        get() = if (_activePartition.value == TargetPartition.DTBO) displayRepository else gpuRepository
+
+    fun setActivePartition(partition: TargetPartition) {
+        if (_activePartition.value == partition) return
+        _activePartition.value = partition
+        resetTreeState()
+    }
+
+    // --- Parsed Tree (SSOT from active partition's repository) ---
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val parsedTree: StateFlow<DtsNode?> = _activePartition
+        .flatMapLatest { partition ->
+            if (partition == TargetPartition.DTBO) displayRepository.parsedTree
+            else gpuRepository.parsedTree
+        }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     // --- DTS Content (for copy-all in tree view) ---
-    val dtsContent = repository.dtsContent
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val dtsContent = _activePartition
+        .flatMapLatest { partition ->
+            if (partition == TargetPartition.DTBO) displayRepository.dtsContent
+            else gpuRepository.dtsContent
+        }
 
     // --- Scroll Persistence ---
     val treeScrollIndex = MutableStateFlow(0)
@@ -52,7 +85,7 @@ class VisualTreeViewModel @Inject constructor(
     }
 
     fun syncTreeToText() {
-        repository.syncTreeToText("Property Edit")
+        activeProvider.syncTreeToText("Property Edit")
     }
 
     // --- Reset (called on new DTS load) ---

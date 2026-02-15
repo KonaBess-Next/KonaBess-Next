@@ -8,6 +8,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import com.ireddragonicy.konabessnext.model.TargetPartition
 import com.ireddragonicy.konabessnext.viewmodel.*
 
 @Composable
@@ -15,28 +16,31 @@ fun GuiEditorContent(
     sharedViewModel: SharedGpuViewModel,
     deviceViewModel: DeviceViewModel,
     gpuFrequencyViewModel: GpuFrequencyViewModel,
+    displayViewModel: DisplayViewModel,
     onOpenCurveEditor: (Int) -> Unit
 ) {
     val isPrepared by deviceViewModel.isPrepared.collectAsState()
     val detectionState by deviceViewModel.detectionState.collectAsState()
-    
+    val selectedPartition by deviceViewModel.selectedPartition.collectAsState()
+
     // EXPERT OPTIMIZATION: Consume the unified state from ViewModel
     val binListState by sharedViewModel.binListState.collectAsState()
     val detectedActiveBinIndex by sharedViewModel.detectedActiveBinIndex.collectAsState()
     val runtimeGpuFrequencies by sharedViewModel.runtimeGpuFrequencies.collectAsState()
-    
+
     val bins by sharedViewModel.bins.collectAsState()
     val binUiModels by sharedViewModel.binUiModels.collectAsState()
-    
+
     val navigationStep by gpuFrequencyViewModel.navigationStep.collectAsState()
     val selectedBinIndex by gpuFrequencyViewModel.selectedBinIndex.collectAsState()
     val selectedLevelIndex by gpuFrequencyViewModel.selectedLevelIndex.collectAsState()
-    val workbenchState by sharedViewModel.workbenchState.collectAsState()
-    
+
     val currentChip = sharedViewModel.currentChip.collectAsState().value
 
     // Back Handler Logic
-    androidx.activity.compose.BackHandler(enabled = navigationStep > 0 || selectedBinIndex != -1) {
+    androidx.activity.compose.BackHandler(
+        enabled = selectedPartition != TargetPartition.DTBO && (navigationStep > 0 || selectedBinIndex != -1)
+    ) {
         if (selectedLevelIndex != -1) {
             gpuFrequencyViewModel.selectedLevelIndex.value = -1
         } else if (selectedBinIndex != -1) {
@@ -67,10 +71,16 @@ fun GuiEditorContent(
         }
     }
 
-    if (!isPrepared) {
+    val isDtboMode = selectedPartition == TargetPartition.DTBO
+    val showUnsupportedState = !isPrepared && !isDtboMode
+
+    if (isDtboMode) {
+        DtboTimingEditor(displayViewModel = displayViewModel)
+    } else if (showUnsupportedState) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(32.dp)) {
-                val msg = (detectionState as? UiState.Error)?.message?.asString() ?: "Unsupported Chipset"
+                val msg = (detectionState as? UiState.Error)?.message?.asString()
+                    ?: "No compatible chipset profile selected."
                 ErrorScreen(
                     message = msg,
                     onRetryClick = { deviceViewModel.detectChipset() },
@@ -124,7 +134,7 @@ fun GuiEditorContent(
                         if (level != null) {
                             val strings = sharedViewModel.getLevelStrings()
                             val values = sharedViewModel.getLevelValues()
-                            
+
                             // Get OPP voltage by matching frequency
                             val opps by sharedViewModel.opps.collectAsState()
                             val oppVoltage = remember(level, opps) {
@@ -132,7 +142,7 @@ fun GuiEditorContent(
                                 opps.find { it.frequency == freq }?.volt
                                     ?: opps.minByOrNull { kotlin.math.abs(it.frequency - freq) }?.volt
                             }
-                            
+
                             GpuParamEditor(
                                 level = level,
                                 levelStrings = strings,
