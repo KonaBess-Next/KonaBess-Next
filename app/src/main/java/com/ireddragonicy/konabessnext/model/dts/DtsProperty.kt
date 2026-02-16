@@ -83,13 +83,19 @@ class DtsProperty(name: String?, originalValue: String?) {
     }
 
     fun updateFromDisplayValue(displayValue: String?) {
-        var dVal = displayValue ?: ""
+        var dVal = displayValue?.trim() ?: ""
 
         if (isHexArray) {
+            // Fix: If the input is already wrapped in < >, strip them first.
+            // This prevents "double wrapping" (e.g. <<0x...>>) which corrupts the AST.
+            if (dVal.startsWith("<") && dVal.endsWith(">")) {
+                dVal = dVal.substring(1, dVal.length - 1).trim()
+            }
+
             // Assume the user is inputting a space-separated list of decimal numbers (or hex if they want)
             // We want to convert everything back to hex format <0x...> if it looks like a number
             
-            val tokens = dVal.trim().split("\\s+".toRegex())
+            val tokens = dVal.split("\\s+".toRegex())
             val sb = StringBuilder()
             sb.append("<")
 

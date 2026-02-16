@@ -104,22 +104,33 @@ class DisplayViewModel @Inject constructor(
     }
 
     /**
+     * Update the panel clockrate for the first panel's first timing.
+     */
+    fun updatePanelClockRate(newClock: Long): Boolean {
+        return repository.updatePanelClockRate(newClock)
+    }
+
+    /**
      * Update any timing property by name.
      */
     fun updateTimingProperty(
         propertyName: String,
         rawValue: String,
         panelNodeName: String? = null,
-        timingIndex: Int? = null
+        timingIndex: Int? = null,
+        fragmentIndex: Int? = null
     ): Boolean {
         val snapshot = displaySnapshot.value ?: return false
         val targetPanel = panelNodeName ?: snapshot.panelNodeName
         val targetTiming = timingIndex ?: snapshot.timingIndex
+        val targetFragment = fragmentIndex ?: snapshot.fragmentIndex
+
         return repository.updateTimingProperty(
             panelNodeName = targetPanel,
             timingIndex = targetTiming,
             propertyName = propertyName,
-            newValue = rawValue
+            newValue = rawValue,
+            fragmentIndex = targetFragment
         )
     }
 
@@ -129,14 +140,18 @@ class DisplayViewModel @Inject constructor(
     fun updatePanelProperty(
         propertyName: String,
         rawValue: String,
-        panelNodeName: String? = null
+        panelNodeName: String? = null,
+        fragmentIndex: Int? = null
     ): Boolean {
         val snapshot = displaySnapshot.value ?: return false
         val targetPanel = panelNodeName ?: snapshot.panelNodeName
+        val targetFragment = fragmentIndex ?: snapshot.fragmentIndex
+
         return repository.updatePanelProperty(
             panelNodeName = targetPanel,
             propertyName = propertyName,
-            newValue = rawValue
+            newValue = rawValue,
+            fragmentIndex = targetFragment
         )
     }
 

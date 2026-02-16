@@ -261,6 +261,13 @@ fun DtboTimingEditor(
         }
 
         item {
+            PanelClockRateCard(
+                currentClock = snapshot?.timing?.panelClockRate ?: 0L,
+                onUpdateClock = { displayViewModel.updatePanelClockRate(it) }
+            )
+        }
+
+        item {
             Text(
                 text = stringResource(R.string.dtbo_timing_properties),
                 style = MaterialTheme.typography.titleMedium,
@@ -539,6 +546,51 @@ private fun TimingSelectorCard(
                             }
                         )
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PanelClockRateCard(
+    currentClock: Long,
+    onUpdateClock: (Long) -> Unit
+) {
+    var clockText by remember(currentClock) { mutableStateOf(currentClock.toString()) }
+
+    Card(shape = RoundedCornerShape(20.dp)) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(
+                text = stringResource(R.string.dtbo_panel_clockrate_title),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = stringResource(R.string.dtbo_panel_clockrate_subtitle),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedTextField(
+                    value = clockText,
+                    onValueChange = { clockText = it.filter(Char::isDigit) },
+                    modifier = Modifier.weight(1f),
+                    singleLine = true,
+                    label = { Text("Hz") }
+                )
+                OutlinedButton(
+                    onClick = {
+                        val value = clockText.toLongOrNull() ?: return@OutlinedButton
+                        onUpdateClock(value)
+                    }
+                ) {
+                    Text(stringResource(R.string.dtbo_apply))
                 }
             }
         }

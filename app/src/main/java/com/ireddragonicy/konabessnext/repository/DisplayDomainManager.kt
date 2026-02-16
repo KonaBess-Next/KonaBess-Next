@@ -363,29 +363,57 @@ class DisplayDomainManager @Inject constructor() {
     /**
      * Finds the first timing node matching the given panel and timing index
      * in the AST tree. Used for AST-based mutations.
+     * 
+     * @param fragmentIndex If >= 0, restricts search to that fragment. If -1, finds first match.
      */
-    fun findTimingNode(root: DtsNode, panelNodeName: String, timingIndex: Int): DtsNode? {
-        val panelNode = findPanelNodeInTree(root, panelNodeName) ?: return null
+    fun findTimingNode(
+        root: DtsNode, 
+        panelNodeName: String, 
+        timingIndex: Int, 
+        fragmentIndex: Int = -1
+    ): DtsNode? {
+        val panelNode = findPanelNodeInTree(root, panelNodeName, fragmentIndex) ?: return null
         val timingsContainer = panelNode.getChild("qcom,mdss-dsi-display-timings") ?: return null
         return timingsContainer.getChild("timing@$timingIndex")
     }
 
     /**
      * Finds a panel node by name across all overlay fragments.
+     * 
+     * @param fragmentIndex If >= 0, restricts search to that fragment. If -1, finds first match.
      */
-    fun findPanelNodeInTree(root: DtsNode, panelNodeName: String): DtsNode? {
-        // Recurse through all fragments
-        for (fragment in root.children) {
-            if (!isFragmentNode(fragment)) {
-                // May be a "/" or "root" wrapper
-                val found = findPanelNodeInTree(fragment, panelNodeName)
-                if (found != null) return found
-                continue
+    fun findPanelNodeInTree(
+        root: DtsNode, 
+        panelNodeName: String,
+        fragmentIndex: Int = -1
+    ): DtsNode? {
+        // 1. Search direct fragments first (Standard DTBO structure)
+        for (child in root.children) {
+            if (isFragmentNode(child)) {
+                if (fragmentIndex >= 0) {
+                    val idx = parseFragmentIndex(child.name)
+                    if (idx != fragmentIndex) continue
+                }
+                
+                val overlay = child.getChild("__overlay__") ?: continue
+                val panel = overlay.getChild(panelNodeName)
+                if (panel != null) {
+                    com.ireddragonicy.konabessnext.utils.DtsEditorDebug.logDomainSearch("found", panelNodeName, fragmentIndex, "frag=${child.name}")
+                    return panel
+                }
             }
-            val overlay = fragment.getChild("__overlay__") ?: continue
-            val panel = overlay.getChild(panelNodeName)
-            if (panel != null) return panel
         }
+        
+        // 2. Recurse ONLY into known container nodes ("/" and "root")
+        // This matches findAllPanels logic and prevents finding phantom nodes in other structures
+        for (child in root.children) {
+            if (child.name == "/" || child.name == "root") {
+                val found = findPanelNodeInTree(child, panelNodeName, fragmentIndex)
+                if (found != null) return found
+            }
+        }
+
+        com.ireddragonicy.konabessnext.utils.DtsEditorDebug.logDomainSearch("FAIL", panelNodeName, fragmentIndex, null)
         return null
     }
 
@@ -478,7 +506,8 @@ class DisplayDomainManager @Inject constructor() {
 
     private fun parseFragmentIndex(name: String): Int {
         val suffix = name.substringAfter("fragment@", "")
-        return suffix.toIntOrNull() ?: -1
+        // Try hex parsing first as DTS unit addresses are typically hex
+        return suffix.toIntOrNull(16) ?: -1
     }
 
     private fun extractSingleInt(rawValue: String): Int {

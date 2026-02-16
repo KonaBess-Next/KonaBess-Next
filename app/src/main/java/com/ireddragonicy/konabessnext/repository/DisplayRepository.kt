@@ -147,7 +147,9 @@ class DisplayRepository @Inject constructor(
         addToHistory: Boolean,
         reparseTree: Boolean
     ) {
-        if (newLines == _dtsLines.value) return
+        if (newLines == _dtsLines.value) {
+            return
+        }
 
         if (addToHistory) {
             historyManager.snapshot(_dtsLines.value, newLines, description)
@@ -202,10 +204,11 @@ class DisplayRepository @Inject constructor(
         timingIndex: Int,
         propertyName: String,
         newValue: String,
+        fragmentIndex: Int = -1,
         historyDesc: String? = null
     ): Boolean {
         val root = ensureParsedTree() ?: return false
-        val timingNode = displayDomainManager.findTimingNode(root, panelNodeName, timingIndex)
+        val timingNode = displayDomainManager.findTimingNode(root, panelNodeName, timingIndex, fragmentIndex)
             ?: return false
 
         val success = displayDomainManager.updateTimingProperty(timingNode, propertyName, newValue)
@@ -222,10 +225,11 @@ class DisplayRepository @Inject constructor(
         panelNodeName: String,
         propertyName: String,
         newValue: String,
+        fragmentIndex: Int = -1,
         historyDesc: String? = null
     ): Boolean {
         val root = ensureParsedTree() ?: return false
-        val panelNode = displayDomainManager.findPanelNodeInTree(root, panelNodeName) ?: return false
+        val panelNode = displayDomainManager.findPanelNodeInTree(root, panelNodeName, fragmentIndex) ?: return false
 
         val success = displayDomainManager.updatePanelProperty(panelNode, propertyName, newValue)
         if (!success) return false
@@ -242,13 +246,34 @@ class DisplayRepository @Inject constructor(
         val root = ensureParsedTree() ?: return false
         val panel = getSelectedPanel(root) ?: return false
         val timingIdx = _selectedTimingIndex.value.coerceIn(0, (panel.timings.size - 1).coerceAtLeast(0))
-        val timingNode = displayDomainManager.findTimingNode(root, panel.nodeName, timingIdx) ?: return false
+        val timingNode = displayDomainManager.findTimingNode(root, panel.nodeName, timingIdx, panel.fragmentIndex)
+            ?: return false
 
         displayDomainManager.updateTimingProperty(
             timingNode, "qcom,mdss-dsi-panel-framerate", newFps.toString()
         )
 
-        commitTreeChanges("Set display framerate to ${newFps}Hz")
+        DtsEditorDebug.logDisplayUpdate("updatePanelFramerate", panel.nodeName, timingIdx, true, "newFps=$newFps")
+        commitTreeChanges("Set framerate to ${newFps}Hz on fragment@${panel.fragmentIndex}")
+        return true
+    }
+
+    /**
+     * Updates the panel clockrate for the selected panel's first timing.
+     */
+    fun updatePanelClockRate(newClock: Long): Boolean {
+        if (newClock < 0) return false
+        val root = ensureParsedTree() ?: return false
+        val panel = getSelectedPanel(root) ?: return false
+        val timingIdx = _selectedTimingIndex.value.coerceIn(0, (panel.timings.size - 1).coerceAtLeast(0))
+        val timingNode = displayDomainManager.findTimingNode(root, panel.nodeName, timingIdx, panel.fragmentIndex) ?: return false
+
+        displayDomainManager.updateTimingProperty(
+            timingNode, "qcom,mdss-dsi-panel-clockrate", newClock.toString()
+        )
+
+        DtsEditorDebug.logDisplayUpdate("updatePanelClockRate", panel.nodeName, timingIdx, true, "newClock=$newClock")
+        commitTreeChanges("Set display clockrate to $newClock")
         return true
     }
 
@@ -259,9 +284,10 @@ class DisplayRepository @Inject constructor(
     fun updateDfpsList(fpsList: List<Int>): Boolean {
         val root = ensureParsedTree() ?: return false
         val panel = getSelectedPanel(root) ?: return false
-        val panelNode = displayDomainManager.findPanelNodeInTree(root, panel.nodeName) ?: return false
+        val panelNode = displayDomainManager.findPanelNodeInTree(root, panel.nodeName, panel.fragmentIndex) ?: return false
 
         displayDomainManager.updateDfpsList(panelNode, fpsList)
+        DtsEditorDebug.logDisplayUpdate("updateDfpsList", panel.nodeName, -1, true, "list=$fpsList")
         commitTreeChanges("Updated DFPS list to ${fpsList.joinToString(", ")}Hz")
         return true
     }
@@ -316,7 +342,8 @@ class DisplayRepository @Inject constructor(
         val allPanels = displayDomainManager.findAllPanels(root)
         val panelsWithTimings = allPanels.filter { it.timings.isNotEmpty() }
         val idx = _selectedPanelIndex.value.coerceIn(0, (panelsWithTimings.size - 1).coerceAtLeast(0))
-        return panelsWithTimings.getOrNull(idx)
+        val result = panelsWithTimings.getOrNull(idx)
+        return result
     }
 
     /**
@@ -339,7 +366,7 @@ class DisplayRepository @Inject constructor(
         val currentState = _dtsLines.value
         val revertedState = historyManager.undo(currentState)
         if (revertedState != null) {
-            updateContent(revertedState, addToHistory = false)
+            updateContent(revertedState, description = "Undo", addToHistory = false, reparseTree = true)
             _structuralChange.tryEmit(Unit)
         }
     }
@@ -348,13 +375,13 @@ class DisplayRepository @Inject constructor(
         val currentState = _dtsLines.value
         val revertedState = historyManager.redo(currentState)
         if (revertedState != null) {
-            updateContent(revertedState, addToHistory = false)
+            updateContent(revertedState, description = "Redo", addToHistory = false, reparseTree = true)
             _structuralChange.tryEmit(Unit)
         }
     }
 
     fun applySnapshot(content: String) {
-        updateContent(content.split("\n"), "Applied external snapshot")
+        updateContent(content.split("\n"), "Applied external snapshot", addToHistory = true, reparseTree = true)
     }
 
     override fun currentDtsPath(): String? = dtsFileRepository.currentDtsPath()
@@ -378,9 +405,13 @@ class DisplayRepository @Inject constructor(
 
     private fun commitTreeChanges(description: String) {
         val root = _parsedTree.value ?: return
-        val newLines = DtsTreeHelper.generate(root).split("\n")
-        if (newLines == _dtsLines.value) return
-        updateContent(newLines, description, reparseTree = false)
+        val newText = DtsTreeHelper.generate(root)
+        val newLines = newText.split("\n")
+        val oldLines = _dtsLines.value
+        val isSame = newLines == oldLines
+        if (isSame) return
+
+        updateContent(newLines, description, addToHistory = true, reparseTree = false)
         _structuralChange.tryEmit(Unit)
     }
 }

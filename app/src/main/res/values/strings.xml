@@ -625,4 +625,6 @@
     <string name="voltage_opp_table">Voltage OPP Table</string>
     <string name="voltage_table_pattern_optional">Voltage table pattern (optional)</string>
     <string name="zip_archive">ZIP archive</string>
+    <string name="dtbo_panel_clockrate_title">Panel Clockrate</string>
+    <string name="dtbo_panel_clockrate_subtitle">qcom,mdss-dsi-panel-clockrate — byte clock frequency in Hz.</string>
 </resources>

@@ -147,6 +147,16 @@ object DtsEditorDebug {
         if (!enabled) return
         Log.d(TAG, "[REPO] flow '$flowName' triggered | lines=$lineCount")
     }
+
+    fun logDisplayUpdate(action: String, panelNode: String, timingIdx: Int, success: Boolean, details: String) {
+        if (!enabled) return
+        Log.w(TAG, "[REPO] DisplayUpdate: $action | panel=$panelNode | timing=$timingIdx | success=$success | $details")
+    }
+
+    fun logDomainSearch(action: String, panelNode: String, fragmentIndex: Int, resultNode: String?) {
+        if (!enabled) return
+        Log.v(TAG, "[DOMAIN] Search $action | queryPanel=$panelNode | queryFrag=$fragmentIndex | found=${resultNode ?: "NULL"}")
+    }
     
     // ==================== EDITOR SESSION ====================
     
