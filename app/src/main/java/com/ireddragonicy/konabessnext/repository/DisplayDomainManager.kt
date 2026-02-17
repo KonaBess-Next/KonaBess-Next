@@ -506,8 +506,9 @@ class DisplayDomainManager @Inject constructor() {
 
     private fun parseFragmentIndex(name: String): Int {
         val suffix = name.substringAfter("fragment@", "")
-        // Try hex parsing first as DTS unit addresses are typically hex
-        return suffix.toIntOrNull(16) ?: -1
+        // Try decimal first (user report: fragment@92 is being read as 0x92/146)
+        // If it fails (e.g. contains a-f), fallback to hex.
+        return suffix.toIntOrNull() ?: suffix.toIntOrNull(16) ?: -1
     }
 
     private fun extractSingleInt(rawValue: String): Int {

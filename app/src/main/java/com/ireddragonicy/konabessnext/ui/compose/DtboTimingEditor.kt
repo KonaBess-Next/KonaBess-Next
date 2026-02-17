@@ -20,6 +20,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ArrowDropDown
+import androidx.compose.material.icons.rounded.Brightness6
+import androidx.compose.foundation.layout.padding
+
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Card
@@ -265,6 +268,18 @@ fun DtboTimingEditor(
                 currentClock = snapshot?.timing?.panelClockRate ?: 0L,
                 onUpdateClock = { displayViewModel.updatePanelClockRate(it) }
             )
+        }
+
+        // --- Brightness / Backlight Section ---
+        if (currentPanel != null) {
+            item {
+                BrightnessCard(
+                    properties = currentPanel.properties,
+                    onUpdateProperty = { name, value ->
+                        displayViewModel.updatePanelProperty(name, value)
+                    }
+                )
+            }
         }
 
         item {
@@ -595,4 +610,140 @@ private fun PanelClockRateCard(
             }
         }
     }
+}
+
+@Composable
+private fun BrightnessCard(
+    properties: List<DisplayProperty>,
+    onUpdateProperty: (String, String) -> Unit
+) {
+    val brightnessKeys = setOf(
+        "qcom,mdss-dsi-bl-max-level",
+        "qcom,mdss-brightness-max-level",
+        "mi,mdss-fac-brightness-max-level",
+        "mi,mdss-dsi-fac-bl-max-level",
+        "mi,max-brightness-clone"
+    )
+
+    val relevantProps = properties.filter { it.name in brightnessKeys }
+        .sortedBy { it.name }
+
+    if (relevantProps.isEmpty()) return
+
+    Card(shape = RoundedCornerShape(20.dp)) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(
+                text = stringResource(R.string.dtbo_brightness_title),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = stringResource(R.string.dtbo_brightness_subtitle),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            relevantProps.forEach { prop ->
+                BrightnessPropertyRow(
+                    name = prop.name,
+                    rawValue = prop.value,
+                    onValueChange = { newValue ->
+                        onUpdateProperty(prop.name, newValue)
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun BrightnessPropertyRow(
+    name: String,
+    rawValue: String,
+    onValueChange: (String) -> Unit
+) {
+    // Parse raw DTS value (e.g. "<0x3fff>") to decimal string (e.g. "16383") for display
+    // We remember the initial raw value to detect external changes
+    var decimalText by remember(rawValue) {
+        mutableStateOf(parseDtsToDecimalString(rawValue))
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(
+            text = name,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            softWrap = false
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            OutlinedTextField(
+                value = decimalText,
+                onValueChange = { 
+                    // Allow only digits
+                    if (it.all { char -> char.isDigit() }) {
+                        decimalText = it
+                    }
+                },
+                modifier = Modifier.weight(1f),
+                singleLine = true,
+                textStyle = MaterialTheme.typography.bodyMedium,
+                label = { Text("Value") },
+                suffix = { Text("dec") }
+            )
+            OutlinedButton(
+                onClick = { 
+                    // Convert decimal back to DTS format usually <0x...>
+                    val longVal = decimalText.toLongOrNull()
+                    if (longVal != null) {
+                        val newRaw = formatDecimalToDts(longVal)
+                        onValueChange(newRaw)
+                    }
+                },
+                // Enable apply if the parsed decimal of current raw value != current text
+                enabled = parseDtsToDecimalString(rawValue) != decimalText
+            ) {
+                Text(stringResource(R.string.dtbo_apply))
+            }
+        }
+        
+        // Helper text to show the mapped hex value that will be saved
+        val longVal = decimalText.toLongOrNull()
+        if (longVal != null) {
+            Text(
+                text = "Hex: 0x${longVal.toString(16)}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                modifier = Modifier.padding(start = 4.dp)
+            )
+        }
+    }
+}
+
+private fun parseDtsToDecimalString(raw: String): String {
+    val trimmed = raw.trim()
+    val content = if (trimmed.startsWith("<") && trimmed.endsWith(">")) {
+        trimmed.substring(1, trimmed.length - 1).trim()
+    } else {
+        trimmed
+    }
+    
+    return try {
+        if (content.startsWith("0x", ignoreCase = true)) {
+            java.lang.Long.decode(content).toString()
+        } else {
+            content.toLongOrNull()?.toString() ?: ""
+        }
+    } catch (e: Exception) {
+        ""
+    }
+}
+
+private fun formatDecimalToDts(value: Long): String {
+    // Standard format for these properties is often <0xHEX>
+    return "<0x${value.toString(16)}>"
 }
