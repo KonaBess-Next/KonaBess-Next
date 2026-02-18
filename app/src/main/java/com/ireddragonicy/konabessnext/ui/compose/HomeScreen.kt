@@ -322,7 +322,8 @@ fun GpuEditorMainContent(
     fun launchExportImage() {
         scope.launch {
             if (!deviceViewModel.tryExportBootImageToDefault(context)) {
-                exportImgLauncher.launch("boot_repack.img")
+                val filename = "${selectedPartition.partitionName}_repack.img"
+                exportImgLauncher.launch(filename)
             }
         }
     }

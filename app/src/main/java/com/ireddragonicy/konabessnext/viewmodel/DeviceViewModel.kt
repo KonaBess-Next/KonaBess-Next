@@ -258,7 +258,8 @@ class DeviceViewModel @Inject constructor(
                     }
                     is DomainResult.Success -> {
                         val timestamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US).format(java.util.Date())
-                        val name = "boot_repack_$timestamp.img"
+                        val partitionName = _selectedPartition.value.partitionName
+                        val name = "${partitionName}_repack_$timestamp.img"
                         val newFile = dir.createFile("application/octet-stream", name) 
                             ?: return@withContext false
                         

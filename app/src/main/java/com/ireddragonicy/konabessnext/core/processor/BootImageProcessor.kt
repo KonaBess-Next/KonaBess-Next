@@ -344,6 +344,7 @@ class BootImageProcessor @Inject constructor(
         }
 
         dtboMetadataByDir[filesDir] = metadata
+        saveDtboMetadata(filesDir, metadata)
 
         for ((idx, dtbBytes) in dtbEntries.withIndex()) {
             val dtbFile = Paths.get(filesDir, "$idx.dtb")
@@ -451,7 +452,46 @@ class BootImageProcessor @Inject constructor(
             file.readBytes()
         }
 
-        val metadata = dtboMetadataByDir[filesDir]
+        var metadata = dtboMetadataByDir[filesDir]
+        if (metadata == null) {
+            metadata = loadDtboMetadata(filesDir)
+            if (metadata != null) {
+                dtboMetadataByDir[filesDir] = metadata
+            } else {
+                // FALLBACK: Try to reconstruct metadata from original dtbo.img
+                // This handles cases where user updated app but didn't re-import.
+                val originalDtbo = File(filesDir, TargetPartition.DTBO.imageFileName)
+                if (originalDtbo.exists()) {
+                    try {
+                        val data = originalDtbo.readBytes()
+                        val entriesWithMeta = extractDtboEntries(data)
+                        if (entriesWithMeta.isNotEmpty()) {
+                            metadata = DtboMetadata(
+                                usesTable = true,
+                                pageSize = readU32Be(data, 24) ?: 4096,
+                                entries = entriesWithMeta.map { it.second }
+                            )
+                            dtboMetadataByDir[filesDir] = metadata
+                            saveDtboMetadata(filesDir, metadata!!)
+                        } else {
+                             // Maybe it was concatenanted?
+                             val split = extractRawConcatenatedDtbs(data)
+                             if (split.isNotEmpty()) {
+                                 metadata = DtboMetadata(
+                                     usesTable = false,
+                                     pageSize = 4096,
+                                     entries = split.map { DtboEntryMeta(0, 0, intArrayOf(0, 0, 0, 0)) }
+                                 )
+                                 dtboMetadataByDir[filesDir] = metadata
+                                 saveDtboMetadata(filesDir, metadata!!)
+                             }
+                        }
+                    } catch (e: Exception) {
+                        android.util.Log.e(TAG, "Failed to recover metadata from original dtbo.img", e)
+                    }
+                }
+            }
+        }
         val outputFile = File(filesDir, TargetPartition.DTBO.outputFileName)
 
         val bytes = if (metadata?.usesTable == true) {
@@ -590,6 +630,64 @@ class BootImageProcessor @Inject constructor(
         bytes[offset + 1] = ((value ushr 16) and BYTE_MASK).toByte()
         bytes[offset + 2] = ((value ushr 8) and BYTE_MASK).toByte()
         bytes[offset + 3] = (value and BYTE_MASK).toByte()
+    }
+
+    private fun saveDtboMetadata(filesDir: String, metadata: DtboMetadata) {
+        try {
+            val json = org.json.JSONObject()
+            json.put("usesTable", metadata.usesTable)
+            json.put("pageSize", metadata.pageSize)
+            
+            val entriesArray = org.json.JSONArray()
+            metadata.entries.forEach { entry ->
+                val entryObj = org.json.JSONObject()
+                entryObj.put("id", entry.id)
+                entryObj.put("rev", entry.rev)
+                val customArray = org.json.JSONArray()
+                entry.custom.forEach { customArray.put(it) }
+                entryObj.put("custom", customArray)
+                entriesArray.put(entryObj)
+            }
+            json.put("entries", entriesArray)
+            
+            File(filesDir, "dtbo_metadata.json").writeText(json.toString())
+        } catch (e: Exception) {
+            android.util.Log.e(TAG, "Failed to save DTBO metadata", e)
+        }
+    }
+
+    private fun loadDtboMetadata(filesDir: String): DtboMetadata? {
+        val file = File(filesDir, "dtbo_metadata.json")
+        if (!file.exists()) return null
+        
+        return try {
+            val json = org.json.JSONObject(file.readText())
+            val usesTable = json.optBoolean("usesTable", true)
+            val pageSize = json.optInt("pageSize", 2048)
+            val entriesArray = json.optJSONArray("entries")
+            val entries = mutableListOf<DtboEntryMeta>()
+            
+            if (entriesArray != null) {
+                for (i in 0 until entriesArray.length()) {
+                    val entryObj = entriesArray.getJSONObject(i)
+                    val id = entryObj.optInt("id")
+                    val rev = entryObj.optInt("rev")
+                    val customArray = entryObj.optJSONArray("custom")
+                    val custom = IntArray(4)
+                    if (customArray != null) {
+                        for (j in 0 until 4) {
+                            if (j < customArray.length()) custom[j] = customArray.getInt(j)
+                        }
+                    }
+                    entries.add(DtboEntryMeta(id, rev, custom))
+                }
+            }
+            
+            DtboMetadata(usesTable, pageSize, entries)
+        } catch (e: Exception) {
+            android.util.Log.e(TAG, "Failed to load DTBO metadata", e)
+            null
+        }
     }
 
     private fun align(value: Int, alignment: Int): Int {
