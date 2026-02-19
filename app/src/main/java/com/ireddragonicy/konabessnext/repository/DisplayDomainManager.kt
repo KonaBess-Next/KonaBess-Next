@@ -140,6 +140,11 @@ class DisplayDomainManager @Inject constructor() {
             vFrontPorch = intProp("qcom,mdss-dsi-v-front-porch"),
             vBackPorch = intProp("qcom,mdss-dsi-v-back-porch"),
             vPulseWidth = intProp("qcom,mdss-dsi-v-pulse-width"),
+            hLeftBorder = intProp("qcom,mdss-dsi-h-left-border"),
+            hRightBorder = intProp("qcom,mdss-dsi-h-right-border"),
+            vTopBorder = intProp("qcom,mdss-dsi-v-top-border"),
+            vBottomBorder = intProp("qcom,mdss-dsi-v-bottom-border"),
+            hSyncPulse = intProp("qcom,mdss-dsi-h-sync-pulse"),
             properties = timingProperties
         )
     }
@@ -307,6 +312,7 @@ class DisplayDomainManager @Inject constructor() {
         var clockRate = 0L
         var hFP = 0; var hBP = 0; var hPW = 0
         var vFP = 0; var vBP = 0; var vPW = 0
+        var hLB = 0; var hRB = 0; var vTB = 0; var vBB = 0; var hSync = 0
         val timingProps = ArrayList<DisplayProperty>()
 
         while (i < lines.size && braceCount > 0) {
@@ -331,6 +337,11 @@ class DisplayDomainManager @Inject constructor() {
                     "qcom,mdss-dsi-v-front-porch" -> vFP = extractSingleInt(propValue)
                     "qcom,mdss-dsi-v-back-porch" -> vBP = extractSingleInt(propValue)
                     "qcom,mdss-dsi-v-pulse-width" -> vPW = extractSingleInt(propValue)
+                    "qcom,mdss-dsi-h-left-border" -> hLB = extractSingleInt(propValue)
+                    "qcom,mdss-dsi-h-right-border" -> hRB = extractSingleInt(propValue)
+                    "qcom,mdss-dsi-v-top-border" -> vTB = extractSingleInt(propValue)
+                    "qcom,mdss-dsi-v-bottom-border" -> vBB = extractSingleInt(propValue)
+                    "qcom,mdss-dsi-h-sync-pulse" -> hSync = extractSingleInt(propValue)
                 }
                 timingProps.add(DisplayProperty(propName, propValue))
             } else if (!line.contains("{") && !line.contains("}") && line.endsWith(";")) {
@@ -354,6 +365,11 @@ class DisplayDomainManager @Inject constructor() {
             vFrontPorch = vFP,
             vBackPorch = vBP,
             vPulseWidth = vPW,
+            hLeftBorder = hLB,
+            hRightBorder = hRB,
+            vTopBorder = vTB,
+            vBottomBorder = vBB,
+            hSyncPulse = hSync,
             properties = timingProps
         )
     }

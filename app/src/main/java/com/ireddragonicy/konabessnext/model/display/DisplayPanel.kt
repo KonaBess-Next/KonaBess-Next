@@ -44,6 +44,11 @@ data class DisplayTiming(
     val vFrontPorch: Int,
     val vBackPorch: Int,
     val vPulseWidth: Int,
+    val hLeftBorder: Int,
+    val hRightBorder: Int,
+    val vTopBorder: Int,
+    val vBottomBorder: Int,
+    val hSyncPulse: Int,
     val properties: List<DisplayProperty>
 )
 

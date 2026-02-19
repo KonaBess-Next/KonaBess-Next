@@ -629,4 +629,5 @@
     <string name="dtbo_panel_clockrate_subtitle">qcom,mdss-dsi-panel-clockrate — byte clock frequency in Hz.</string>
     <string name="dtbo_brightness_title">Brightness / Backlight</string>
     <string name="dtbo_brightness_subtitle">Override maximum brightness levels.</string>
+    <string name="dtbo_advanced_timing_title">Advanced Timing</string>
 </resources>

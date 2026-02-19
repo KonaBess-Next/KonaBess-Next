@@ -22,6 +22,7 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ArrowDropDown
 import androidx.compose.material.icons.rounded.Brightness6
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChipDefaults
@@ -268,6 +269,17 @@ fun DtboTimingEditor(
                 currentClock = snapshot?.timing?.panelClockRate ?: 0L,
                 onUpdateClock = { displayViewModel.updatePanelClockRate(it) }
             )
+        }
+
+        if (currentPanel != null) {
+            item {
+                AdvancedTimingCard(
+                    timing = snapshot?.timing,
+                    onUpdateProperty = { name, value ->
+                        displayViewModel.updateTimingProperty(name, value)
+                    }
+                )
+            }
         }
 
         // --- Brightness / Backlight Section ---
@@ -746,4 +758,123 @@ private fun parseDtsToDecimalString(raw: String): String {
 private fun formatDecimalToDts(value: Long): String {
     // Standard format for these properties is often <0xHEX>
     return "<0x${value.toString(16)}>"
+}
+
+@Composable
+private fun AdvancedTimingCard(
+    timing: com.ireddragonicy.konabessnext.model.display.DisplayTiming?,
+    onUpdateProperty: (String, String) -> Unit
+) {
+    if (timing == null) return
+
+    Card(shape = RoundedCornerShape(20.dp)) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Text(
+                text = stringResource(R.string.dtbo_advanced_timing_title),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold
+            )
+
+            // Horizontal Timing Section
+            TimingGroup(
+                title = "Horizontal Timing",
+                items = listOf(
+                    TimingItem("H Front Porch", "qcom,mdss-dsi-h-front-porch", timing.hFrontPorch),
+                    TimingItem("H Back Porch", "qcom,mdss-dsi-h-back-porch", timing.hBackPorch),
+                    TimingItem("H Pulse Width", "qcom,mdss-dsi-h-pulse-width", timing.hPulseWidth),
+                    TimingItem("H Sync Pulse", "qcom,mdss-dsi-h-sync-pulse", timing.hSyncPulse),
+                    TimingItem("H Left Border", "qcom,mdss-dsi-h-left-border", timing.hLeftBorder),
+                    TimingItem("H Right Border", "qcom,mdss-dsi-h-right-border", timing.hRightBorder)
+                ),
+                onUpdateProperty = onUpdateProperty
+            )
+
+            // Vertical Timing Section
+            TimingGroup(
+                title = "Vertical Timing",
+                items = listOf(
+                    TimingItem("V Front Porch", "qcom,mdss-dsi-v-front-porch", timing.vFrontPorch),
+                    TimingItem("V Back Porch", "qcom,mdss-dsi-v-back-porch", timing.vBackPorch),
+                    TimingItem("V Pulse Width", "qcom,mdss-dsi-v-pulse-width", timing.vPulseWidth),
+                    TimingItem("V Top Border", "qcom,mdss-dsi-v-top-border", timing.vTopBorder),
+                    TimingItem("V Bottom Border", "qcom,mdss-dsi-v-bottom-border", timing.vBottomBorder)
+                ),
+                onUpdateProperty = onUpdateProperty
+            )
+        }
+    }
+}
+
+data class TimingItem(val label: String, val key: String, val value: Int)
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun TimingGroup(
+    title: String,
+    items: List<TimingItem>,
+    onUpdateProperty: (String, String) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.Bold
+        )
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            items.forEach { item ->
+                TimingField(
+                    label = item.label,
+                    value = item.value,
+                    onValueChange = { newValue ->
+                        // Convert decimal string back to typical hex format <0x...>
+                        val longVal = newValue.toLongOrNull()
+                        if (longVal != null) {
+                            onUpdateProperty(item.key, "<0x${longVal.toString(16)}>")
+                        }
+                    },
+                    modifier = Modifier.weight(1f).fillMaxWidth().coerceAtLeast(140.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun TimingField(
+    label: String,
+    value: Int,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var text by remember(value) { mutableStateOf(value.toString()) }
+    // Only enable update if text differs from current value (and is valid)
+    val isChanged = (text.toIntOrNull() != null && text.toIntOrNull() != value)
+
+    OutlinedTextField(
+        value = text,
+        onValueChange = { if (it.all { c -> c.isDigit() }) text = it },
+        label = { Text(label, maxLines = 1, style = MaterialTheme.typography.bodySmall) },
+        textStyle = MaterialTheme.typography.bodyMedium,
+        singleLine = true,
+        modifier = modifier,
+        trailingIcon = {
+            if (isChanged) {
+                 androidx.compose.material3.IconButton(
+                     onClick = { onValueChange(text) },
+                     modifier = Modifier.size(24.dp)
+                 ) {
+                     Icon(Icons.Rounded.Brightness6, "Apply", tint = MaterialTheme.colorScheme.primary)
+                 }
+            }
+        }
+    )
+}
+
+private fun Modifier.coerceAtLeast(minWidth: androidx.compose.ui.unit.Dp): Modifier {
+    return this.widthIn(min = minWidth)
 }
