@@ -4,8 +4,6 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.ireddragonicy.konabessnext.editor.EditorSession
-import com.ireddragonicy.konabessnext.editor.text.DtsEditorState
 import com.ireddragonicy.konabessnext.model.TargetPartition
 import com.ireddragonicy.konabessnext.model.dts.DtsError
 import com.ireddragonicy.konabessnext.model.dts.Severity
@@ -30,12 +28,12 @@ import javax.inject.Inject
 
 /**
  * ViewModel responsible for all raw text editing concerns:
- * - DTS editor state & session management
- * - Syntax highlighting session
- * - Lint (error checking)
- * - Text search (query, navigation)
- * - Code folding persistence
- * - Text scroll position persistence
+ * - DTS content delivery to the Sora Editor
+ * - Lint (error checking) via DtsLexer/DtsParser
+ * - Content persistence via repositories
+ * - Reformat code
+ *
+ * Search and highlighting are now handled by Sora Editor directly.
  *
  * Partition-aware: switches between [GpuRepository] and [DisplayRepository]
  * based on the active partition set via [setActivePartition].
@@ -55,7 +53,6 @@ class TextEditorViewModel @Inject constructor(
     fun setActivePartition(partition: TargetPartition) {
         if (_activePartition.value == partition) return
         _activePartition.value = partition
-        // Reset editor state for the new partition's data
         resetEditorState()
     }
 
@@ -76,17 +73,6 @@ class TextEditorViewModel @Inject constructor(
         }
         .stateIn(viewModelScope, SharingStarted.Lazily, "")
 
-    // --- Search State ---
-    data class SearchState(
-        val query: String = "",
-        val results: List<SearchResult> = emptyList(),
-        val currentIndex: Int = -1
-    )
-    data class SearchResult(val lineIndex: Int)
-
-    private val _searchState = MutableStateFlow(SearchState())
-    val searchState: StateFlow<SearchState> = _searchState.asStateFlow()
-
     // --- Lint State ---
     val lintErrorsByLine: SnapshotStateMap<Int, List<DtsError>> = mutableStateMapOf()
     private val _lintErrorCount = MutableStateFlow(0)
@@ -97,75 +83,17 @@ class TextEditorViewModel @Inject constructor(
     private var lintGeneration = 0L
     private val lintDispatcher = Dispatchers.Default.limitedParallelism(1)
 
-    // --- Editor State ---
-    val dtsEditorState = DtsEditorState("")
-    private val _dtsEditorSessionKey = MutableStateFlow("session:default")
-    val dtsEditorSessionKey: StateFlow<String> = _dtsEditorSessionKey.asStateFlow()
-    private val collapsedFoldsBySession: SnapshotStateMap<String, Map<Int, Int>> = mutableStateMapOf()
-
-    // --- Scroll Persistence ---
-    val textScrollIndex = MutableStateFlow(0)
-    val textScrollOffset = MutableStateFlow(0)
-
     // --- Init ---
     init {
-        refreshEditorSessionKey()
-        startEditorStateSync()
-        startHighlightSession()
+        startEditorContentSync()
     }
 
-    // --- Highlight Session ---
-    @OptIn(kotlinx.coroutines.FlowPreview::class)
-    private fun startHighlightSession() {
-        viewModelScope.launch {
-            combine(dtsLines, _searchState) { lines, search ->
-                lines to search.query
-            }
-                .debounce(300)
-                .distinctUntilChanged()
-                .collect { (lines, query) ->
-                    DtsEditorDebug.logEditorSessionUpdate(lines.size, query)
-                    EditorSession.update(lines, query, viewModelScope)
-                }
-        }
-    }
-
-    // --- Editor State Sync ---
-    private fun startEditorStateSync() {
+    // --- Editor Content Sync (triggers lint on new content) ---
+    private fun startEditorContentSync() {
         viewModelScope.launch {
             dtsLines.collect { lines ->
-                if (isEditorOutOfSync(lines)) {
-                    dtsEditorState.replaceLines(lines)
-                }
-                refreshEditorSessionKey()
                 scheduleLint(lines)
             }
-        }
-    }
-
-    fun refreshEditorSessionKey() {
-        val path = activeProvider.currentDtsPath()
-        if (!path.isNullOrBlank()) {
-            _dtsEditorSessionKey.value = "session:path:$path"
-            return
-        }
-
-        if (_dtsEditorSessionKey.value == "session:default") {
-            val seed = System.currentTimeMillis()
-            _dtsEditorSessionKey.value = "session:memory:$seed"
-        }
-    }
-
-    // --- Fold Persistence ---
-    fun getCollapsedFolds(sessionKey: String): Map<Int, Int> {
-        return collapsedFoldsBySession[sessionKey].orEmpty()
-    }
-
-    fun updateCollapsedFolds(sessionKey: String, folds: Map<Int, Int>) {
-        if (folds.isEmpty()) {
-            collapsedFoldsBySession.remove(sessionKey)
-        } else {
-            collapsedFoldsBySession[sessionKey] = folds.toMap()
         }
     }
 
@@ -276,39 +204,8 @@ class TextEditorViewModel @Inject constructor(
         }
     }
 
-    // --- Search ---
-    fun search(query: String) {
-        if (query.isEmpty()) { _searchState.value = SearchState(); return }
-
-        val lines = dtsLines.value
-        val results = mutableListOf<SearchResult>()
-        lines.forEachIndexed { i, line ->
-            if (line.contains(query, true)) results.add(SearchResult(i))
-        }
-        _searchState.value = SearchState(query, results, if (results.isNotEmpty()) 0 else -1)
-    }
-
-    fun nextSearchResult() {
-        val current = _searchState.value
-        if (current.results.isEmpty()) return
-        val nextIdx = (current.currentIndex + 1) % current.results.size
-        _searchState.value = current.copy(currentIndex = nextIdx)
-    }
-
-    fun previousSearchResult() {
-        val current = _searchState.value
-        if (current.results.isEmpty()) return
-        val prevIdx = if (current.currentIndex - 1 < 0) current.results.size - 1 else current.currentIndex - 1
-        _searchState.value = current.copy(currentIndex = prevIdx)
-    }
-
-    fun clearSearch() { _searchState.value = SearchState() }
-
     // --- Reset (called on new DTS load) ---
     fun resetEditorState() {
-        textScrollIndex.value = 0
-        textScrollOffset.value = 0
-        _searchState.value = SearchState()
         lintErrorsByLine.clear()
         _lintErrors.value = emptyList()
         _lintErrorCount.value = 0
@@ -316,14 +213,6 @@ class TextEditorViewModel @Inject constructor(
     }
 
     // --- Private Helpers ---
-    private fun isEditorOutOfSync(lines: List<String>): Boolean {
-        if (dtsEditorState.lines.size != lines.size) return true
-        for (i in lines.indices) {
-            if (dtsEditorState.lines[i].text != lines[i]) return true
-        }
-        return false
-    }
-
     private fun estimateCharCount(lines: List<String>): Int {
         var total = if (lines.isEmpty()) 0 else lines.size - 1
         for (line in lines) total += line.length

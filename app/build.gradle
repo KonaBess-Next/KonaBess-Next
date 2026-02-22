@@ -218,6 +218,9 @@ dependencies {
     // Extended Icons
     implementation "androidx.compose.material:material-icons-extended"
 
+    // Sora Editor - High-performance native code editor
+    implementation("io.github.rosemoe:editor:0.24.4")
+
     // Unit Testing
     testImplementation 'junit:junit:4.13.2'
     testImplementation 'org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2'

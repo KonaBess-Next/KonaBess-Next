@@ -482,6 +482,8 @@
     <string name="detection_failed_title">Detection Failed</string>
     <string name="detection_results">Detection Results</string>
     <string name="developed_by_ireddragonicy">Developed by iRedDragonICY</string>
+    <string name="settings_open_source_licenses">Open-source licenses</string>
+    <string name="settings_open_source_licenses_desc">Libraries and tools used in this app</string>
     <string name="device_brand_model_format">%1$s %2$s</string>
     <string name="device_name">Device Name</string>
     <string name="diff_overview">Diff Overview</string>

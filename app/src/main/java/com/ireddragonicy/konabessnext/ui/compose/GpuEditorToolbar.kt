@@ -183,12 +183,14 @@ fun GpuEditorToolbar(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // Segmented Button
+                val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
                 SingleChoiceSegmentedButtonRow(modifier = Modifier.weight(1f)) {
                     SharedGpuViewModel.ViewMode.values().forEachIndexed { index, mode ->
                         SegmentedButton(
                             selected = currentViewMode == mode,
                             onClick = { 
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                focusManager.clearFocus()
                                 onViewModeChanged(mode) 
                             },
                             shape = SegmentedButtonDefaults.itemShape(index, SharedGpuViewModel.ViewMode.values().size),
@@ -331,6 +333,8 @@ fun SearchAndToolsBar(
     onPrev: () -> Unit,
     onCopyAll: () -> Unit,
     onReformat: (() -> Unit)? = null,
+    isWordWrapEnabled: Boolean = false,
+    onToggleWordWrap: (() -> Unit)? = null,
     lintErrorCount: Int = 0,
     lintErrors: List<DtsError> = emptyList(),
     onLintErrorClick: (DtsError) -> Unit = {},
@@ -424,6 +428,17 @@ fun SearchAndToolsBar(
             // Copy All
             IconButton(onClick = onCopyAll) {
                 Icon(painter = painterResource(R.drawable.ic_content_copy), contentDescription = stringResource(R.string.copy_all))
+            }
+
+            // Word Wrap Toggle
+            if (onToggleWordWrap != null) {
+                IconButton(onClick = onToggleWordWrap) {
+                    Icon(
+                        imageVector = if (isWordWrapEnabled) Icons.Default.WrapText else Icons.Default.FormatAlignLeft,
+                        contentDescription = if (isWordWrapEnabled) "Disable word wrap" else "Enable word wrap",
+                        tint = if (isWordWrapEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
 
             // Reformat Code
