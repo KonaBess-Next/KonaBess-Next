@@ -7,7 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.ireddragonicy.konabessnext.model.TargetPartition
 import com.ireddragonicy.konabessnext.model.dts.DtsError
 import com.ireddragonicy.konabessnext.model.dts.Severity
-import com.ireddragonicy.konabessnext.repository.DisplayRepository
+import com.ireddragonicy.konabessnext.repository.DtboRepository
 import com.ireddragonicy.konabessnext.repository.DtsDataProvider
 import com.ireddragonicy.konabessnext.repository.GpuRepository
 import com.ireddragonicy.konabessnext.utils.DtsEditorDebug
@@ -35,20 +35,20 @@ import javax.inject.Inject
  *
  * Search and highlighting are now handled by Sora Editor directly.
  *
- * Partition-aware: switches between [GpuRepository] and [DisplayRepository]
+ * Partition-aware: switches between [GpuRepository] and [DtboRepository]
  * based on the active partition set via [setActivePartition].
  */
 @HiltViewModel
 class TextEditorViewModel @Inject constructor(
     private val gpuRepository: GpuRepository,
-    private val displayRepository: DisplayRepository
+    private val dtboRepository: DtboRepository
 ) : ViewModel() {
 
     // --- Partition-aware provider switching ---
     private val _activePartition = MutableStateFlow(TargetPartition.VENDOR_BOOT)
 
     private val activeProvider: DtsDataProvider
-        get() = if (_activePartition.value == TargetPartition.DTBO) displayRepository else gpuRepository
+        get() = if (_activePartition.value == TargetPartition.DTBO) dtboRepository else gpuRepository
 
     fun setActivePartition(partition: TargetPartition) {
         if (_activePartition.value == partition) return
@@ -60,7 +60,7 @@ class TextEditorViewModel @Inject constructor(
     @OptIn(ExperimentalCoroutinesApi::class)
     val dtsLines: StateFlow<List<String>> = _activePartition
         .flatMapLatest { partition ->
-            if (partition == TargetPartition.DTBO) displayRepository.dtsLines
+            if (partition == TargetPartition.DTBO) dtboRepository.dtsLines
             else gpuRepository.dtsLines
         }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
@@ -68,7 +68,7 @@ class TextEditorViewModel @Inject constructor(
     @OptIn(ExperimentalCoroutinesApi::class)
     val dtsContent: StateFlow<String> = _activePartition
         .flatMapLatest { partition ->
-            if (partition == TargetPartition.DTBO) displayRepository.dtsContent
+            if (partition == TargetPartition.DTBO) dtboRepository.dtsContent
             else gpuRepository.dtsContent
         }
         .stateIn(viewModelScope, SharingStarted.Lazily, "")

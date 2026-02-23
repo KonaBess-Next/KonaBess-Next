@@ -1,5 +1,6 @@
 package com.ireddragonicy.konabessnext.repository
 
+import com.ireddragonicy.konabessnext.model.dts.DtsNode
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -13,7 +14,12 @@ import kotlin.math.min
 class HistoryManager @Inject constructor() {
 
     // Store the DIFF, not the full state
-    data class HistoryItem(val diff: List<LineDiff>, val description: String)
+    data class HistoryItem(
+        val diff: List<LineDiff>,
+        val description: String,
+        val treeSnapshot: DtsNode? = null,
+        var redoTreeSnapshot: DtsNode? = null
+    )
 
     sealed class LineDiff {
         data class Change(val index: Int, val oldLine: String, val newLine: String) : LineDiff()
@@ -44,11 +50,11 @@ class HistoryManager @Inject constructor() {
     /**
      * Calculates the diff between oldState and newState and pushes it to history.
      */
-    fun snapshot(oldState: List<String>, newState: List<String>, description: String) {
+    fun snapshot(oldState: List<String>, newState: List<String>, description: String, treeSnapshot: DtsNode? = null) {
         val diff = calculateDiff(oldState, newState)
         if (diff.isEmpty()) return
 
-        undoStack.push(HistoryItem(diff, description))
+        undoStack.push(HistoryItem(diff, description, treeSnapshot = treeSnapshot?.deepCopy()))
         
         if (undoStack.size > MAX_HISTORY) {
             undoStack.removeLast()
@@ -59,16 +65,13 @@ class HistoryManager @Inject constructor() {
         refreshHistoryList()
     }
 
-    fun undo(currentState: List<String>): List<String>? {
+    fun undo(currentState: List<String>, currentTree: DtsNode? = null): Pair<List<String>, DtsNode?>? {
         if (undoStack.isEmpty()) return null
         
         val historyItem = undoStack.pop()
         
-        // To undo, we explicitly REVERSE the diff 
-        // (e.g. if Diff was "Insert Line A", Undo is "Delete Line A")
-        // We push this REVERSE diff to the Redo stack so Redo can re-apply it later? 
-        // No, Redo stack should store the ORIGINAL diff (the action to re-do).
-        
+        // Save the current tree into the redoTreeSnapshot so Redo can restore it
+        historyItem.redoTreeSnapshot = currentTree?.deepCopy()
         redoStack.push(historyItem)
         
         val restoredState = applyReverseDiff(currentState, historyItem.diff)
@@ -76,10 +79,10 @@ class HistoryManager @Inject constructor() {
         updateHistoryFlags()
         refreshHistoryList()
         
-        return restoredState
+        return restoredState to historyItem.treeSnapshot?.deepCopy()
     }
 
-    fun redo(currentState: List<String>): List<String>? {
+    fun redo(currentState: List<String>): Pair<List<String>, DtsNode?>? {
         if (redoStack.isEmpty()) return null
         
         val historyItem = redoStack.pop()
@@ -91,7 +94,7 @@ class HistoryManager @Inject constructor() {
         updateHistoryFlags()
         refreshHistoryList()
         
-        return restoredState
+        return restoredState to historyItem.redoTreeSnapshot?.deepCopy()
     }
 
     private fun updateHistoryFlags() {

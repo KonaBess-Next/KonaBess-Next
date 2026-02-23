@@ -39,9 +39,8 @@ fun GuiEditorContent(
 
     val currentChip = sharedViewModel.currentChip.collectAsState().value
 
-    val displayNavStep by displayViewModel.displayNavStep.collectAsState()
-    val touchPanels by displayViewModel.touchPanels.collectAsState()
-    val speakerPanels by displayViewModel.speakerPanels.collectAsState()
+    val dtboNavViewModel: com.ireddragonicy.konabessnext.viewmodel.dtbo.DtboNavViewModel = androidx.hilt.navigation.compose.hiltViewModel()
+    val displayNavStep by dtboNavViewModel.currentStep.collectAsState()
 
     // Back Handler Logic
     androidx.activity.compose.BackHandler(
@@ -49,7 +48,7 @@ fun GuiEditorContent(
                   (selectedPartition != TargetPartition.DTBO && (navigationStep > 0 || selectedBinIndex != -1))
     ) {
         if (selectedPartition == TargetPartition.DTBO) {
-            displayViewModel.displayNavStep.value = 0
+            dtboNavViewModel.currentStep.value = 0
         } else if (selectedLevelIndex != -1) {
             gpuFrequencyViewModel.selectedLevelIndex.value = -1
         } else if (selectedBinIndex != -1) {
@@ -88,58 +87,42 @@ fun GuiEditorContent(
             when (step) {
                 0 -> {
                     DtboDashboard(
-                        onNavigateToTimings = { displayViewModel.displayNavStep.value = 1 },
-                        onNavigateToTouch = { displayViewModel.displayNavStep.value = 2 },
-                        onNavigateToSpeaker = { displayViewModel.displayNavStep.value = 3 }
+                        onNavigateToTimings = { dtboNavViewModel.currentStep.value = 1 },
+                        onNavigateToTouch = { dtboNavViewModel.currentStep.value = 2 },
+                        onNavigateToSpeaker = { dtboNavViewModel.currentStep.value = 3 }
                     )
                 }
                 1 -> {
+                    val scopedDisplayVM: DisplayViewModel = androidx.hilt.navigation.compose.hiltViewModel()
                     Column(modifier = Modifier.fillMaxSize()) {
-                        Surface(
-                            tonalElevation = 3.dp,
-                            shadowElevation = 3.dp,
-                            modifier = Modifier.zIndex(1f)
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Button(
-                                    onClick = { displayViewModel.displayNavStep.value = 0 },
-                                    modifier = Modifier.weight(1f),
-                                    shape = MaterialTheme.shapes.medium,
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                                    )
-                                ) {
+                        Surface(tonalElevation = 3.dp, shadowElevation = 3.dp, modifier = Modifier.zIndex(1f)) {
+                            Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Button(onClick = { dtboNavViewModel.currentStep.value = 0 }, modifier = Modifier.weight(1f), shape = MaterialTheme.shapes.medium, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer, contentColor = MaterialTheme.colorScheme.onSecondaryContainer)) {
                                     Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_arrow_back), null, modifier = Modifier.size(18.dp))
                                     Spacer(Modifier.width(8.dp))
                                     Text(androidx.compose.ui.res.stringResource(R.string.btn_back))
                                 }
                             }
                         }
-                        DtboTimingEditor(displayViewModel = displayViewModel)
+                        DtboTimingEditor(displayViewModel = scopedDisplayVM)
                     }
                 }
                 2 -> {
+                    val touchViewModel: com.ireddragonicy.konabessnext.viewmodel.dtbo.TouchOverclockViewModel = androidx.hilt.navigation.compose.hiltViewModel()
+                    val touchPanels by touchViewModel.touchPanels.collectAsState()
                     TouchOverclockScreen(
                         touchPanels = touchPanels,
-                        onBack = { displayViewModel.displayNavStep.value = 0 },
-                        onSaveFrequency = { nodeName, fragmentIndex, newFreq ->
-                            displayViewModel.updateTouchSpiFrequency(nodeName, fragmentIndex, newFreq)
-                        }
+                        onBack = { dtboNavViewModel.currentStep.value = 0 },
+                        onSaveFrequency = touchViewModel::updateFrequency
                     )
                 }
                 3 -> {
+                    val speakerViewModel: com.ireddragonicy.konabessnext.viewmodel.dtbo.SpeakerOverclockViewModel = androidx.hilt.navigation.compose.hiltViewModel()
+                    val speakerPanels by speakerViewModel.speakerPanels.collectAsState()
                     SpeakerOverclockScreen(
                         speakerPanels = speakerPanels,
-                        onBack = { displayViewModel.displayNavStep.value = 0 },
-                        onSaveReBounds = { nodeName, fragmentIndex, newMin, newMax ->
-                            displayViewModel.updateSpeakerReBounds(nodeName, fragmentIndex, newMin, newMax)
-                        }
+                        onBack = { dtboNavViewModel.currentStep.value = 0 },
+                        onSaveReBounds = speakerViewModel::updateReBounds
                     )
                 }
             }

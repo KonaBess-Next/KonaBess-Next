@@ -54,6 +54,7 @@ fun HomeScreen(
     // Obtain the same ViewModel instances used by UnifiedDtsEditorScreen and VisualTreeContent
     val textEditorViewModel: TextEditorViewModel = hiltViewModel()
     val visualTreeViewModel: VisualTreeViewModel = hiltViewModel()
+    val dtboNavViewModel: com.ireddragonicy.konabessnext.viewmodel.dtbo.DtboNavViewModel = hiltViewModel()
 
     // Load data when extracted (Preserves state across rotation/theme change)
     LaunchedEffect(isFilesExtracted) {
@@ -62,7 +63,7 @@ fun HomeScreen(
             textEditorViewModel.setActivePartition(selectedPartition)
             visualTreeViewModel.setActivePartition(selectedPartition)
             if (selectedPartition == TargetPartition.DTBO) {
-                displayViewModel.loadData()
+                dtboNavViewModel.loadData()
             }
         }
     }
@@ -72,7 +73,7 @@ fun HomeScreen(
         if (reloadTrigger > 0) {
             sharedViewModel.loadData()
             if (selectedPartition == TargetPartition.DTBO) {
-                displayViewModel.loadData()
+                dtboNavViewModel.loadData()
             }
         }
     }
@@ -82,7 +83,7 @@ fun HomeScreen(
         textEditorViewModel.setActivePartition(selectedPartition)
         visualTreeViewModel.setActivePartition(selectedPartition)
         if (isFilesExtracted && selectedPartition == TargetPartition.DTBO) {
-            displayViewModel.loadData()
+            dtboNavViewModel.loadData()
         }
     }
 
@@ -179,10 +180,11 @@ fun GpuEditorMainContent(
     val gpuCanRedo by gpuFrequencyViewModel.canRedo.collectAsState()
     val gpuHistory by gpuFrequencyViewModel.history.collectAsState()
 
-    val displayIsDirty by displayViewModel.isDirty.collectAsState()
-    val displayCanUndo by displayViewModel.canUndo.collectAsState()
-    val displayCanRedo by displayViewModel.canRedo.collectAsState()
-    val displayHistory by displayViewModel.history.collectAsState()
+    val dtboNavViewModel: com.ireddragonicy.konabessnext.viewmodel.dtbo.DtboNavViewModel = hiltViewModel()
+    val displayIsDirty by dtboNavViewModel.isDirty.collectAsState()
+    val displayCanUndo by dtboNavViewModel.canUndo.collectAsState()
+    val displayCanRedo by dtboNavViewModel.canRedo.collectAsState()
+    val displayHistory by dtboNavViewModel.history.collectAsState()
 
     val isDirty = if (isDtboPartition) displayIsDirty else gpuIsDirty
     val canUndo = if (isDtboPartition) displayCanUndo else gpuCanUndo
@@ -348,7 +350,7 @@ fun GpuEditorMainContent(
     val confirmDiffAction = {
         when (pendingDiffAction) {
             DiffCommitAction.SAVE -> {
-                if (selectedPartition == TargetPartition.DTBO) displayViewModel.save()
+                if (selectedPartition == TargetPartition.DTBO) dtboNavViewModel.save()
                 else gpuFrequencyViewModel.save(true)
             }
             DiffCommitAction.EXPORT_IMAGE -> launchExportImage()
@@ -389,7 +391,7 @@ fun GpuEditorMainContent(
             if (dtb.partition == TargetPartition.DTBO) {
                 textEditorViewModel.setActivePartition(TargetPartition.DTBO)
                 visualTreeViewModel.setActivePartition(TargetPartition.DTBO)
-                displayViewModel.loadData()
+                dtboNavViewModel.loadData()
             }
             activeSheet = WorkbenchSheetType.NONE
         },
@@ -420,16 +422,16 @@ fun GpuEditorMainContent(
                 currentViewMode = currentMode,
                 showChipsetSelector = true,
                 onSave = {
-                    if (isDtboPartition) displayViewModel.save()
+                    if (isDtboPartition) dtboNavViewModel.save()
                     else gpuFrequencyViewModel.save(true)
                 },
                 onRequireDiffConfirmation = requestDiffPreview,
                 onUndo = {
-                    if (isDtboPartition) displayViewModel.undo()
+                    if (isDtboPartition) dtboNavViewModel.undo()
                     else gpuFrequencyViewModel.undo()
                 },
                 onRedo = {
-                    if (isDtboPartition) displayViewModel.redo()
+                    if (isDtboPartition) dtboNavViewModel.redo()
                     else gpuFrequencyViewModel.redo()
                 },
                 onShowHistory = { activeSheet = WorkbenchSheetType.HISTORY },

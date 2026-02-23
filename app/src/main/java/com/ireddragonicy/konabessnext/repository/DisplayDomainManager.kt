@@ -3,6 +3,7 @@ package com.ireddragonicy.konabessnext.repository
 import com.ireddragonicy.konabessnext.model.display.DisplayPanel
 import com.ireddragonicy.konabessnext.model.display.DisplayProperty
 import com.ireddragonicy.konabessnext.model.display.DisplayTiming
+import com.ireddragonicy.konabessnext.domain.DtboDomainUtils
 import com.ireddragonicy.konabessnext.model.dts.DtsNode
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -51,8 +52,8 @@ class DisplayDomainManager @Inject constructor() {
     fun findAllPanels(root: DtsNode): List<DisplayPanel> {
         val panels = ArrayList<DisplayPanel>()
         for (fragment in root.children) {
-            if (!isFragmentNode(fragment)) continue
-            val fragmentIndex = parseFragmentIndex(fragment.name)
+            if (!DtboDomainUtils.isFragmentNode(fragment)) continue
+            val fragmentIndex = DtboDomainUtils.parseFragmentIndex(fragment.name)
             val overlay = fragment.getChild("__overlay__") ?: continue
             for (child in overlay.children) {
                 if (isPanelNode(child)) {
@@ -120,9 +121,9 @@ class DisplayDomainManager @Inject constructor() {
      */
     private fun buildTiming(timingNode: DtsNode): DisplayTiming {
         fun intProp(name: String): Int =
-            extractSingleInt(timingNode.getProperty(name)?.originalValue ?: "0")
+            DtboDomainUtils.extractSingleInt(timingNode.getProperty(name)?.originalValue ?: "0")
         fun longProp(name: String): Long =
-            extractSingleLong(timingNode.getProperty(name)?.originalValue ?: "0")
+            DtboDomainUtils.extractSingleLong(timingNode.getProperty(name)?.originalValue ?: "0")
 
         val timingProperties = timingNode.properties.map {
             DisplayProperty(it.name, it.originalValue)
@@ -201,7 +202,7 @@ class DisplayDomainManager @Inject constructor() {
         for (j in startIndex downTo 0) {
             val line = lines[j].trim()
             if (line.startsWith("fragment@")) {
-                fragmentIndex = parseFragmentIndex(line.substringBefore("{").trim())
+                fragmentIndex = DtboDomainUtils.parseFragmentIndex(line.substringBefore("{").trim())
                 break
             }
         }
@@ -327,21 +328,21 @@ class DisplayDomainManager @Inject constructor() {
                 val propValue = line.substringAfter("=").trim().removeSuffix(";").trim()
 
                 when (propName) {
-                    "qcom,mdss-dsi-panel-framerate" -> framerate = extractSingleInt(propValue)
-                    "qcom,mdss-dsi-panel-width" -> width = extractSingleInt(propValue)
-                    "qcom,mdss-dsi-panel-height" -> height = extractSingleInt(propValue)
-                    "qcom,mdss-dsi-panel-clockrate" -> clockRate = extractSingleLong(propValue)
-                    "qcom,mdss-dsi-h-front-porch" -> hFP = extractSingleInt(propValue)
-                    "qcom,mdss-dsi-h-back-porch" -> hBP = extractSingleInt(propValue)
-                    "qcom,mdss-dsi-h-pulse-width" -> hPW = extractSingleInt(propValue)
-                    "qcom,mdss-dsi-v-front-porch" -> vFP = extractSingleInt(propValue)
-                    "qcom,mdss-dsi-v-back-porch" -> vBP = extractSingleInt(propValue)
-                    "qcom,mdss-dsi-v-pulse-width" -> vPW = extractSingleInt(propValue)
-                    "qcom,mdss-dsi-h-left-border" -> hLB = extractSingleInt(propValue)
-                    "qcom,mdss-dsi-h-right-border" -> hRB = extractSingleInt(propValue)
-                    "qcom,mdss-dsi-v-top-border" -> vTB = extractSingleInt(propValue)
-                    "qcom,mdss-dsi-v-bottom-border" -> vBB = extractSingleInt(propValue)
-                    "qcom,mdss-dsi-h-sync-pulse" -> hSync = extractSingleInt(propValue)
+                    "qcom,mdss-dsi-panel-framerate" -> framerate = DtboDomainUtils.extractSingleInt(propValue)
+                    "qcom,mdss-dsi-panel-width" -> width = DtboDomainUtils.extractSingleInt(propValue)
+                    "qcom,mdss-dsi-panel-height" -> height = DtboDomainUtils.extractSingleInt(propValue)
+                    "qcom,mdss-dsi-panel-clockrate" -> clockRate = DtboDomainUtils.extractSingleLong(propValue)
+                    "qcom,mdss-dsi-h-front-porch" -> hFP = DtboDomainUtils.extractSingleInt(propValue)
+                    "qcom,mdss-dsi-h-back-porch" -> hBP = DtboDomainUtils.extractSingleInt(propValue)
+                    "qcom,mdss-dsi-h-pulse-width" -> hPW = DtboDomainUtils.extractSingleInt(propValue)
+                    "qcom,mdss-dsi-v-front-porch" -> vFP = DtboDomainUtils.extractSingleInt(propValue)
+                    "qcom,mdss-dsi-v-back-porch" -> vBP = DtboDomainUtils.extractSingleInt(propValue)
+                    "qcom,mdss-dsi-v-pulse-width" -> vPW = DtboDomainUtils.extractSingleInt(propValue)
+                    "qcom,mdss-dsi-h-left-border" -> hLB = DtboDomainUtils.extractSingleInt(propValue)
+                    "qcom,mdss-dsi-h-right-border" -> hRB = DtboDomainUtils.extractSingleInt(propValue)
+                    "qcom,mdss-dsi-v-top-border" -> vTB = DtboDomainUtils.extractSingleInt(propValue)
+                    "qcom,mdss-dsi-v-bottom-border" -> vBB = DtboDomainUtils.extractSingleInt(propValue)
+                    "qcom,mdss-dsi-h-sync-pulse" -> hSync = DtboDomainUtils.extractSingleInt(propValue)
                 }
                 timingProps.add(DisplayProperty(propName, propValue))
             } else if (!line.contains("{") && !line.contains("}") && line.endsWith(";")) {
@@ -405,9 +406,9 @@ class DisplayDomainManager @Inject constructor() {
     ): DtsNode? {
         // 1. Search direct fragments first (Standard DTBO structure)
         for (child in root.children) {
-            if (isFragmentNode(child)) {
+            if (DtboDomainUtils.isFragmentNode(child)) {
                 if (fragmentIndex >= 0) {
-                    val idx = parseFragmentIndex(child.name)
+                    val idx = DtboDomainUtils.parseFragmentIndex(child.name)
                     if (idx != fragmentIndex) continue
                 }
                 
@@ -512,56 +513,8 @@ class DisplayDomainManager @Inject constructor() {
 
     // ---- Internal helpers ---------------------------------------------------
 
-    private fun isFragmentNode(node: DtsNode): Boolean {
-        return node.name.startsWith("fragment@")
-    }
-
     private fun isPanelNode(node: DtsNode): Boolean {
         return node.name.startsWith("qcom,mdss_dsi_")
-    }
-
-    private fun parseFragmentIndex(name: String): Int {
-        val suffix = name.substringAfter("fragment@", "")
-        // Try decimal first (user report: fragment@92 is being read as 0x92/146)
-        // If it fails (e.g. contains a-f), fallback to hex.
-        return suffix.toIntOrNull() ?: suffix.toIntOrNull(16) ?: -1
-    }
-
-    private fun extractSingleInt(rawValue: String): Int {
-        return extractSingleLong(rawValue).toInt()
-    }
-
-    private fun extractSingleLong(rawValue: String): Long {
-        val trimmed = rawValue.trim()
-        // Handle <0xNN> format
-        if (trimmed.startsWith("<") && trimmed.endsWith(">")) {
-            val inner = trimmed.substring(1, trimmed.length - 1).trim()
-            val parts = inner.split(Regex("\\s+"))
-            return try {
-                if (parts.size == 1) {
-                    val v = parts[0].trim()
-                    if (v.startsWith("0x", ignoreCase = true))
-                        java.lang.Long.decode(v)
-                    else v.toLongOrNull() ?: 0L
-                } else {
-                    // Multi-cell big-endian
-                    var result = 0L
-                    for (part in parts) {
-                        val cell = part.trim()
-                        val cellVal = if (cell.startsWith("0x", ignoreCase = true))
-                            java.lang.Long.decode(cell) else cell.toLong()
-                        result = (result shl 32) or (cellVal and 0xFFFFFFFFL)
-                    }
-                    result
-                }
-            } catch (_: Exception) { 0L }
-        }
-        // Plain decimal or hex
-        return try {
-            if (trimmed.startsWith("0x", ignoreCase = true))
-                java.lang.Long.decode(trimmed)
-            else trimmed.toLongOrNull() ?: 0L
-        } catch (_: Exception) { 0L }
     }
 
     private fun extractIntList(rawValue: String): List<Int> {
@@ -597,168 +550,5 @@ class DisplayDomainManager @Inject constructor() {
         } else {
             numeric.toString()
         }
-    }
-
-    // ---- Touch Overclock ---------------------------------------------------
-
-    /**
-     * Walks the DTBO AST and extracts touch panel nodes that have `spi-max-frequency`.
-     */
-    fun findTouchPanels(root: DtsNode): List<com.ireddragonicy.konabessnext.model.display.TouchPanel> {
-        val panels = ArrayList<com.ireddragonicy.konabessnext.model.display.TouchPanel>()
-        for (fragment in root.children) {
-            if (!isFragmentNode(fragment)) continue
-            val fragmentIndex = parseFragmentIndex(fragment.name)
-            val overlay = fragment.getChild("__overlay__") ?: continue
-
-            fun recurseSearch(node: DtsNode) {
-                if (node.getProperty("spi-max-frequency") != null) {
-                    val compatible = node.getProperty("compatible")?.originalValue?.removeSurrounding("\"") ?: ""
-                    val nodeNameLower = node.name.lowercase()
-                    
-                    // Exclude known non-touch SPI devices like Infrared Blasters
-                    if (!nodeNameLower.contains("ir-spi")) {
-                        val spiMaxFreq = extractSingleLong(node.getProperty("spi-max-frequency")?.originalValue ?: "0")
-                        panels.add(
-                            com.ireddragonicy.konabessnext.model.display.TouchPanel(
-                                fragmentIndex = fragmentIndex,
-                                nodeName = node.name,
-                                compatible = compatible,
-                                spiMaxFrequency = spiMaxFreq
-                            )
-                        )
-                    }
-                }
-                node.children.forEach { recurseSearch(it) }
-            }
-            recurseSearch(overlay)
-        }
-
-        for (topLevel in root.children) {
-            if (topLevel.name == "/" || topLevel.name == "root") {
-                panels.addAll(findTouchPanels(topLevel))
-            }
-        }
-        return panels.distinctBy { it.nodeName to it.fragmentIndex }
-    }
-
-    /**
-     * Walks the DTBO AST and extracts speaker amplifier nodes like AW882XX.
-     */
-    fun findSpeakerPanels(root: DtsNode): List<com.ireddragonicy.konabessnext.model.display.SpeakerPanel> {
-        val panels = ArrayList<com.ireddragonicy.konabessnext.model.display.SpeakerPanel>()
-        for (fragment in root.children) {
-            if (!isFragmentNode(fragment)) continue
-            val fragmentIndex = parseFragmentIndex(fragment.name)
-            val overlay = fragment.getChild("__overlay__") ?: continue
-
-            fun recurseSearch(node: DtsNode) {
-                val compatibleStr = node.getProperty("compatible")?.originalValue?.removeSurrounding("\"") ?: ""
-                
-                // Specifically target AW882xx for Speaker OC
-                if (compatibleStr.contains("awinic,aw882xx_smartpa", ignoreCase = true)) {
-                    val awReMin = extractSingleLong(node.getProperty("aw-re-min")?.originalValue ?: "0")
-                    val awReMax = extractSingleLong(node.getProperty("aw-re-max")?.originalValue ?: "0")
-                    
-                    panels.add(
-                        com.ireddragonicy.konabessnext.model.display.SpeakerPanel(
-                            fragmentIndex = fragmentIndex,
-                            nodeName = node.name,
-                            compatible = compatibleStr,
-                            awReMin = awReMin,
-                            awReMax = awReMax
-                        )
-                    )
-                }
-                node.children.forEach { recurseSearch(it) }
-            }
-            recurseSearch(overlay)
-        }
-
-        for (topLevel in root.children) {
-            if (topLevel.name == "/" || topLevel.name == "root") {
-                panels.addAll(findSpeakerPanels(topLevel))
-            }
-        }
-        return panels.distinctBy { it.nodeName to it.fragmentIndex }
-    }
-
-    /**
-     * Finds a specific speaker node by name and fragment.
-     */
-    fun findSpeakerNodeInTree(
-        root: DtsNode,
-        nodeName: String,
-        fragmentIndex: Int
-    ): DtsNode? {
-        val fragmentNodeName = "fragment@$fragmentIndex"
-        val fragmentNode = root.getChild(fragmentNodeName) ?: return null
-        val overlayNode = fragmentNode.getChild("__overlay__") ?: return null
-
-        fun findNode(current: DtsNode): DtsNode? {
-            if (current.name == nodeName) return current
-            for (child in current.children) {
-                val res = findNode(child)
-                if (res != null) return res
-            }
-            return null
-        }
-        return findNode(overlayNode)
-    }
-
-    /**
-     * Updates the aw-re-min and aw-re-max properties on a speaker node.
-     */
-    fun updateSpeakerReBounds(speakerNode: DtsNode, newReMin: String, newReMax: String): Boolean {
-        var success = updateTimingProperty(speakerNode, "aw-re-min", newReMin)
-        success = success && updateTimingProperty(speakerNode, "aw-re-max", newReMax)
-        return success
-    }
-
-    /**
-     * Finds a touch node in the AST by name across all overlay fragments.
-     */
-    fun findTouchNodeInTree(
-        root: DtsNode,
-        nodeName: String,
-        fragmentIndex: Int = -1
-    ): DtsNode? {
-        for (child in root.children) {
-            if (isFragmentNode(child)) {
-                if (fragmentIndex >= 0) {
-                    val idx = parseFragmentIndex(child.name)
-                    if (idx != fragmentIndex) continue
-                }
-
-                val overlay = child.getChild("__overlay__") ?: continue
-                var foundTarget: DtsNode? = null
-                fun recurseSearch(node: DtsNode) {
-                    if (foundTarget != null) return
-                    if (node.name == nodeName && node.getProperty("spi-max-frequency") != null) {
-                        foundTarget = node
-                        return
-                    }
-                    node.children.forEach { recurseSearch(it) }
-                }
-                recurseSearch(overlay)
-                if (foundTarget != null) return foundTarget
-            }
-        }
-
-        for (child in root.children) {
-            if (child.name == "/" || child.name == "root") {
-                val found = findTouchNodeInTree(child, nodeName, fragmentIndex)
-                if (found != null) return found
-            }
-        }
-
-        return null
-    }
-
-    /**
-     * Updates the spi-max-frequency property on a touch node.
-     */
-    fun updateTouchSpiFrequency(touchNode: DtsNode, newFrequencyHex: String): Boolean {
-        return updateTimingProperty(touchNode, "spi-max-frequency", newFrequencyHex)
     }
 }

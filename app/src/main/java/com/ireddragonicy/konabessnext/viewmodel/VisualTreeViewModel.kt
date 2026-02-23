@@ -4,7 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ireddragonicy.konabessnext.model.TargetPartition
 import com.ireddragonicy.konabessnext.model.dts.DtsNode
-import com.ireddragonicy.konabessnext.repository.DisplayRepository
+import com.ireddragonicy.konabessnext.repository.DtboRepository
 import com.ireddragonicy.konabessnext.repository.DtsDataProvider
 import com.ireddragonicy.konabessnext.repository.GpuRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -24,20 +24,20 @@ import javax.inject.Inject
  * - Tree scroll position persistence
  * - Tree-to-text synchronization
  *
- * Partition-aware: switches between [GpuRepository] and [DisplayRepository]
+ * Partition-aware: switches between [GpuRepository] and [DtboRepository]
  * based on the active partition set via [setActivePartition].
  */
 @HiltViewModel
 class VisualTreeViewModel @Inject constructor(
     private val gpuRepository: GpuRepository,
-    private val displayRepository: DisplayRepository
+    private val dtboRepository: DtboRepository
 ) : ViewModel() {
 
     // --- Partition-aware provider switching ---
     private val _activePartition = MutableStateFlow(TargetPartition.VENDOR_BOOT)
 
     private val activeProvider: DtsDataProvider
-        get() = if (_activePartition.value == TargetPartition.DTBO) displayRepository else gpuRepository
+        get() = if (_activePartition.value == TargetPartition.DTBO) dtboRepository else gpuRepository
 
     fun setActivePartition(partition: TargetPartition) {
         if (_activePartition.value == partition) return
@@ -49,7 +49,7 @@ class VisualTreeViewModel @Inject constructor(
     @OptIn(ExperimentalCoroutinesApi::class)
     val parsedTree: StateFlow<DtsNode?> = _activePartition
         .flatMapLatest { partition ->
-            if (partition == TargetPartition.DTBO) displayRepository.parsedTree
+            if (partition == TargetPartition.DTBO) dtboRepository.parsedTree
             else gpuRepository.parsedTree
         }
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
@@ -58,7 +58,7 @@ class VisualTreeViewModel @Inject constructor(
     @OptIn(ExperimentalCoroutinesApi::class)
     val dtsContent = _activePartition
         .flatMapLatest { partition ->
-            if (partition == TargetPartition.DTBO) displayRepository.dtsContent
+            if (partition == TargetPartition.DTBO) dtboRepository.dtsContent
             else gpuRepository.dtsContent
         }
 

@@ -144,7 +144,7 @@ open class GpuRepository @Inject constructor(
 
         if (addToHistory) {
             DtsEditorDebug.logHistorySnapshot(_dtsLines.value.size, newLines.size)
-            historyManager.snapshot(_dtsLines.value, newLines, description)
+            historyManager.snapshot(_dtsLines.value, newLines, description, _parsedTree.value)
         }
         
         _dtsLines.value = newLines
@@ -199,22 +199,26 @@ open class GpuRepository @Inject constructor(
 
     data class ParameterUpdate(val binIndex: Int, val levelIndex: Int, val paramKey: String, val newValue: String)
 
+    private fun getTreeCopy(): DtsNode? {
+        return ensureParsedTree()?.deepCopy()
+    }
+
     /**
      * Updates a specific parameter using AST-only mutation.
      */
     fun updateParameterInBin(binIndex: Int, levelIndex: Int, paramKey: String, newValue: String, historyDesc: String? = null) {
-        val root = ensureParsedTree() ?: return
+        val root = getTreeCopy() ?: return
         val binNode = gpuDomainManager.findBinNode(root, binIndex) ?: return
         val levelNode = gpuDomainManager.findLevelNode(binNode, levelIndex) ?: return
 
         setPropertyPreservingFormat(levelNode, paramKey, newValue)
 
         val desc = historyDesc ?: "Update $paramKey to $newValue (Bin $binIndex, Lvl $levelIndex)"
-        commitTreeChanges(desc)
+        commitTreeChanges(desc, root)
     }
     
     fun deleteLevel(binIndex: Int, levelIndex: Int) {
-        val root = ensureParsedTree() ?: return
+        val root = getTreeCopy() ?: return
         val binNode = gpuDomainManager.findBinNode(root, binIndex) ?: return
         val levelNode = gpuDomainManager.findLevelNode(binNode, levelIndex) ?: return
 
@@ -225,11 +229,11 @@ open class GpuRepository @Inject constructor(
         renumberLevelNodes(binNode)
         shiftHeaderPointersForDelete(binNode, levelIndex)
 
-        commitTreeChanges("Deleted Level $levelIndex from Bin $binIndex")
+        commitTreeChanges("Deleted Level $levelIndex from Bin $binIndex", root)
     }
     
     fun addLevel(binIndex: Int, toTop: Boolean) {
-        val root = ensureParsedTree() ?: return
+        val root = getTreeCopy() ?: return
         val binNode = gpuDomainManager.findBinNode(root, binIndex) ?: return
         val levelNodes = getLevelNodes(binNode)
         if (levelNodes.isEmpty()) return
@@ -252,11 +256,11 @@ open class GpuRepository @Inject constructor(
         renumberLevelNodes(binNode)
         shiftHeaderPointersForInsert(binNode, insertedLevelIndex)
 
-        commitTreeChanges("Added Level ${if (toTop) "at Top" else "at Bottom"} of Bin $binIndex")
+        commitTreeChanges("Added Level ${if (toTop) "at Top" else "at Bottom"} of Bin $binIndex", root)
     }
 
     fun duplicateLevelAt(binIndex: Int, levelIndex: Int) {
-        val root = ensureParsedTree() ?: return
+        val root = getTreeCopy() ?: return
         val binNode = gpuDomainManager.findBinNode(root, binIndex) ?: return
         val levelNode = gpuDomainManager.findLevelNode(binNode, levelIndex) ?: return
         val insertionIndex = binNode.children.indexOf(levelNode)
@@ -269,7 +273,7 @@ open class GpuRepository @Inject constructor(
         renumberLevelNodes(binNode)
         shiftHeaderPointersForInsert(binNode, levelIndex + 1)
 
-        commitTreeChanges("Duplicated Level $levelIndex in Bin $binIndex")
+        commitTreeChanges("Duplicated Level $levelIndex in Bin $binIndex", root)
     }
 
     private fun ensureParsedTree(): DtsNode? {
@@ -282,12 +286,23 @@ open class GpuRepository @Inject constructor(
         return parsedRoot
     }
 
-    private fun commitTreeChanges(description: String) {
-        val root = _parsedTree.value ?: return
+    private fun commitTreeChanges(description: String, mutatedRoot: DtsNode) {
         // NOTE: DtsNode currently does not preserve comments; AST round-trip favors safety/validity.
-        val newLines = DtsTreeHelper.generate(root).split("\n")
-        if (newLines == _dtsLines.value) return
-        updateContent(newLines, description, reparseTree = false)
+        val newLines = DtsTreeHelper.generate(mutatedRoot).split("\n")
+        val isSame = newLines == _dtsLines.value
+        
+        if (isSame) {
+            _parsedTree.value = mutatedRoot
+            _structuralChange.tryEmit(Unit)
+            return
+        }
+        
+        // At this point, _parsedTree.value is STILL the old clean tree!
+        // updateContent will use it for historyManager.snapshot
+        updateContent(newLines, description, addToHistory = true, reparseTree = false)
+        
+        // NOW we update _parsedTree to the mutated copy
+        _parsedTree.value = mutatedRoot
         _structuralChange.tryEmit(Unit)
     }
 
@@ -368,14 +383,14 @@ open class GpuRepository @Inject constructor(
     // --- OPP and Other Updates ---
     
     fun updateOppVoltage(frequency: Long, newVolt: Long, historyDesc: String? = null) {
-        val root = ensureParsedTree() ?: return
+        val root = getTreeCopy() ?: return
         val success = gpuDomainManager.updateOppVoltage(root, frequency, newVolt)
         if (!success) return
-        commitTreeChanges(historyDesc ?: "Updated OPP voltage")
+        commitTreeChanges(historyDesc ?: "Updated OPP voltage", root)
     }
 
     fun batchUpdateParameters(updates: List<ParameterUpdate>, description: String = "Batch Update") {
-        val root = ensureParsedTree() ?: return
+        val root = getTreeCopy() ?: return
         var anyChanged = false
         
         updates.forEach { update ->
@@ -390,7 +405,7 @@ open class GpuRepository @Inject constructor(
         }
         
         if (anyChanged) {
-            commitTreeChanges(description)
+            commitTreeChanges(description, root)
         }
     }
     
@@ -400,7 +415,9 @@ open class GpuRepository @Inject constructor(
      */
     override fun syncTreeToText(description: String) {
         if (ensureParsedTree() == null) return
-        commitTreeChanges(description)
+        // For visual tree sync, the tree is already mutated in place.
+        // We just generate text from it.
+        commitTreeChanges(description, _parsedTree.value!!)
     }
 
     fun applySnapshot(content: String) {
@@ -408,16 +425,16 @@ open class GpuRepository @Inject constructor(
     }
 
     fun updateOpps(newOpps: List<Opp>) {
-        val root = ensureParsedTree() ?: return
+        val root = getTreeCopy() ?: return
         val pattern = chipRepository.currentChip.value?.voltTablePattern ?: return
         val tableNode = gpuDomainManager.findNodeByNameOrCompatible(root, pattern) ?: return
         val oppNodes = newOpps.map(::buildOppNode)
         replaceOppChildren(tableNode, oppNodes)
-        commitTreeChanges("Updated OPP Table")
+        commitTreeChanges("Updated OPP Table", root)
     }
     
     fun importTable(lines: List<String>) {
-        val root = ensureParsedTree() ?: return
+        val root = getTreeCopy() ?: return
         val importedTree = parseExternalLinesToTree(lines) ?: return
         val importedBins = gpuDomainManager.findAllBinNodes(importedTree).map { it.deepCopy() }
         if (importedBins.isEmpty()) return
@@ -441,34 +458,46 @@ open class GpuRepository @Inject constructor(
             binNode.parent = insertParent
         }
 
-        commitTreeChanges("Imported Frequency Table")
+        commitTreeChanges("Imported Frequency Table", root)
     }
 
     fun importVoltTable(lines: List<String>) {
-        val root = ensureParsedTree() ?: return
+        val root = getTreeCopy() ?: return
         val pattern = chipRepository.currentChip.value?.voltTablePattern ?: return
         val tableNode = gpuDomainManager.findNodeByNameOrCompatible(root, pattern) ?: return
         val importedOppNodes = extractImportedOppNodes(lines, pattern)
         if (importedOppNodes.isEmpty()) return
 
         replaceOppChildren(tableNode, importedOppNodes)
-        commitTreeChanges("Imported Voltage Table")
+        commitTreeChanges("Imported Voltage Table", root)
     }
 
     override fun undo() {
         val currentState = _dtsLines.value
-        val revertedState = historyManager.undo(currentState)
-        if (revertedState != null) {
-            updateContent(revertedState, addToHistory = false)
+        val result = historyManager.undo(currentState, _parsedTree.value)
+        if (result != null) {
+            val (revertedState, cachedTree) = result
+            if (cachedTree != null) {
+                _parsedTree.value = cachedTree
+                updateContent(revertedState, description = "Undo", addToHistory = false, reparseTree = false)
+            } else {
+                updateContent(revertedState, description = "Undo", addToHistory = false, reparseTree = true)
+            }
             _structuralChange.tryEmit(Unit)
         }
     }
 
     override fun redo() {
         val currentState = _dtsLines.value
-        val revertedState = historyManager.redo(currentState)
-        if (revertedState != null) {
-            updateContent(revertedState, addToHistory = false)
+        val result = historyManager.redo(currentState)
+        if (result != null) {
+            val (revertedState, cachedTree) = result
+            if (cachedTree != null) {
+                _parsedTree.value = cachedTree
+                updateContent(revertedState, description = "Redo", addToHistory = false, reparseTree = false)
+            } else {
+                updateContent(revertedState, description = "Redo", addToHistory = false, reparseTree = true)
+            }
             _structuralChange.tryEmit(Unit)
         }
     }
@@ -548,17 +577,18 @@ open class GpuRepository @Inject constructor(
             updateContent(
                 patched,
                 description = "Renamed GPU to ${normalized.replace("\\\"", "\"")}",
-                reparseTree = true
+                reparseTree = true,
+                addToHistory = true
             )
             _structuralChange.tryEmit(Unit)
             return
         }
 
         // Fallback only when raw line path cannot locate qcom,gpu-model.
-        val root = ensureParsedTree() ?: return
+        val root = getTreeCopy() ?: return
         val modelNode = gpuDomainManager.findNodeContainingProperty(root, "qcom,gpu-model") ?: return
         modelNode.setProperty("qcom,gpu-model", "\"$normalized\"")
-        commitTreeChanges("Renamed GPU to ${normalized.replace("\\\"", "\"")}")
+        commitTreeChanges("Renamed GPU to ${normalized.replace("\\\"", "\"")}", root)
     }
 
     private fun normalizeGpuModelName(input: String): String {

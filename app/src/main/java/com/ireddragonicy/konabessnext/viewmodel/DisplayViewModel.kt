@@ -4,11 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ireddragonicy.konabessnext.model.display.DisplayPanel
 import com.ireddragonicy.konabessnext.model.display.DisplayTiming
-import com.ireddragonicy.konabessnext.repository.DisplayRepository
+import com.ireddragonicy.konabessnext.repository.DtboRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
-import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
@@ -16,11 +14,11 @@ import javax.inject.Inject
  *
  * This is the display counterpart of [SharedGpuViewModel].
  * It exposes display panels, timing snapshots, and mutation methods to the UI layer,
- * delegating all data/logic to [DisplayRepository].
+ * delegating all data/logic to [DtboRepository].
  */
 @HiltViewModel
 class DisplayViewModel @Inject constructor(
-    private val repository: DisplayRepository
+    private val repository: DtboRepository
 ) : ViewModel() {
 
     // --- State from Repository ---
@@ -32,15 +30,11 @@ class DisplayViewModel @Inject constructor(
         .map { all -> all.filter { it.timings.isNotEmpty() } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val touchPanels: StateFlow<List<com.ireddragonicy.konabessnext.model.display.TouchPanel>> = repository.touchPanels
-
-    val speakerPanels: StateFlow<List<com.ireddragonicy.konabessnext.model.display.SpeakerPanel>> = repository.speakerPanels
-
     val selectedPanelIndex: StateFlow<Int> = repository.selectedPanelIndex
 
     val selectedTimingIndex: StateFlow<Int> = repository.selectedTimingIndex
 
-    val displaySnapshot: StateFlow<DisplayRepository.DisplaySnapshot?> =
+    val displaySnapshot: StateFlow<DtboRepository.DisplaySnapshot?> =
         combine(
             repository.dtsLines,
             repository.parsedTree,
@@ -52,40 +46,7 @@ class DisplayViewModel @Inject constructor(
         .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
-    val isDirty: StateFlow<Boolean> = repository.isDirty
-    val canUndo: StateFlow<Boolean> = repository.canUndo
-    val canRedo: StateFlow<Boolean> = repository.canRedo
-    val history: StateFlow<List<String>> = repository.history
-
-    // --- Loading / State ---
-
-    val displayNavStep = MutableStateFlow(0)
-
-    private val _isLoading = MutableStateFlow(false)
-    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
-
-    private val _errorMessage = MutableStateFlow<String?>(null)
-    val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
-
     // --- Actions ---
-
-    fun loadData() {
-        _isLoading.value = true
-        _errorMessage.value = null
-        repository.selectPanel(0)  // Reset selection on fresh load (also resets timing)
-        viewModelScope.launch {
-            val result = repository.loadTable()
-            when (result) {
-                is com.ireddragonicy.konabessnext.core.model.DomainResult.Failure -> {
-                    _errorMessage.value = result.error.message
-                }
-                is com.ireddragonicy.konabessnext.core.model.DomainResult.Success -> {
-                    _errorMessage.value = null
-                }
-            }
-            _isLoading.value = false
-        }
-    }
 
     /**
      * Select a panel by its index in the panels-with-timings list.
@@ -168,35 +129,4 @@ class DisplayViewModel @Inject constructor(
         return repository.updateDfpsList(fpsList)
     }
 
-    /**
-     * Updates the spi-max-frequency property on a touch node.
-     */
-    fun updateTouchSpiFrequency(
-        nodeName: String,
-        fragmentIndex: Int,
-        newFrequency: Long
-    ): Boolean {
-        return repository.updateTouchSpiFrequency(nodeName, fragmentIndex, newFrequency)
-    }
-
-    /**
-     * Updates the aw-re-min and aw-re-max properties on a speaker node.
-     */
-    fun updateSpeakerReBounds(
-        nodeName: String,
-        fragmentIndex: Int,
-        newReMin: Long,
-        newReMax: Long
-    ): Boolean {
-        return repository.updateSpeakerReBounds(nodeName, fragmentIndex, newReMin, newReMax)
-    }
-
-    fun undo() = repository.undo()
-    fun redo() = repository.redo()
-
-    fun save() {
-        viewModelScope.launch {
-            repository.saveTable()
-        }
-    }
 }
