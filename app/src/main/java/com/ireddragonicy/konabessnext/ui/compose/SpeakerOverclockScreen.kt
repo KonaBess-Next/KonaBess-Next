@@ -166,8 +166,8 @@ fun SpeakerOverclockScreen(
             },
             confirmButton = {
                 TextButton(onClick = {
-                    val newMin = inputReMin.toLongOrNull()
-                    val newMax = inputReMax.toLongOrNull()
+                    val newMin = parseLongSafe(inputReMin)
+                    val newMax = parseLongSafe(inputReMax)
                     if (newMin != null && newMax != null) {
                         onSaveReBounds(selectedPanel!!.nodeName, selectedPanel!!.fragmentIndex, newMin, newMax)
                     }
@@ -182,5 +182,18 @@ fun SpeakerOverclockScreen(
                 }
             }
         )
+    }
+}
+
+private fun parseLongSafe(input: String): Long? {
+    val trimmed = input.trim()
+    return try {
+        if (trimmed.startsWith("0x", ignoreCase = true)) {
+            java.lang.Long.decode(trimmed)
+        } else {
+            trimmed.toLongOrNull()
+        }
+    } catch (e: Exception) {
+        null
     }
 }

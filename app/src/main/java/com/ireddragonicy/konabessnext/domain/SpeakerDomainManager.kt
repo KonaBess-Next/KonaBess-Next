@@ -32,13 +32,39 @@ class SpeakerDomainManager @Inject constructor() {
     }
 
     fun findSpeakerNodeInTree(root: DtsNode, nodeName: String, fragmentIndex: Int): DtsNode? {
-        val overlay = root.getChild("fragment@$fragmentIndex")?.getChild("__overlay__") ?: return null
         fun search(curr: DtsNode): DtsNode? {
             if (curr.name == nodeName) return curr
             curr.children.forEach { search(it)?.let { res -> return res } }
             return null
         }
-        return search(overlay)
+
+        if (fragmentIndex == -1) {
+            // Search in root hierarchy directly
+            root.children.filter { it.name == "/" || it.name == "root" }.forEach { 
+                search(it)?.let { res -> return res }
+            }
+            return null
+        }
+
+        // Robustly search fragments
+        for (fragment in root.children) {
+            if (DtboDomainUtils.isFragmentNode(fragment)) {
+                val idx = DtboDomainUtils.parseFragmentIndex(fragment.name)
+                if (idx == fragmentIndex) {
+                    val overlay = fragment.getChild("__overlay__") ?: continue
+                    search(overlay)?.let { return it }
+                }
+            }
+        }
+        
+        // FIX: Recursively search inside "/" or "root" nodes if not found at top level
+        for (child in root.children) {
+            if (child.name == "/" || child.name == "root") {
+                findSpeakerNodeInTree(child, nodeName, fragmentIndex)?.let { return it }
+            }
+        }
+        
+        return null
     }
 
     fun updateSpeakerReBounds(node: DtsNode, min: String, max: String): Boolean {

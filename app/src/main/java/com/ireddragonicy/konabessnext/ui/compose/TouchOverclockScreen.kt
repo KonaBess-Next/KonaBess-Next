@@ -126,7 +126,7 @@ fun TouchOverclockScreen(
             },
             confirmButton = {
                 TextButton(onClick = {
-                    inputFreq.toLongOrNull()?.let { newFreq ->
+                    parseLongSafe(inputFreq)?.let { newFreq ->
                         onSaveFrequency(selectedPanel!!.nodeName, selectedPanel!!.fragmentIndex, newFreq)
                     }
                     showEditDialog = false
@@ -140,5 +140,18 @@ fun TouchOverclockScreen(
                 }
             }
         )
+    }
+}
+
+private fun parseLongSafe(input: String): Long? {
+    val trimmed = input.trim()
+    return try {
+        if (trimmed.startsWith("0x", ignoreCase = true)) {
+            java.lang.Long.decode(trimmed)
+        } else {
+            trimmed.toLongOrNull()
+        }
+    } catch (e: Exception) {
+        null
     }
 }
