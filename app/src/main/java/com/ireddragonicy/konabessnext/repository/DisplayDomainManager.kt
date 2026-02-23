@@ -598,4 +598,167 @@ class DisplayDomainManager @Inject constructor() {
             numeric.toString()
         }
     }
+
+    // ---- Touch Overclock ---------------------------------------------------
+
+    /**
+     * Walks the DTBO AST and extracts touch panel nodes that have `spi-max-frequency`.
+     */
+    fun findTouchPanels(root: DtsNode): List<com.ireddragonicy.konabessnext.model.display.TouchPanel> {
+        val panels = ArrayList<com.ireddragonicy.konabessnext.model.display.TouchPanel>()
+        for (fragment in root.children) {
+            if (!isFragmentNode(fragment)) continue
+            val fragmentIndex = parseFragmentIndex(fragment.name)
+            val overlay = fragment.getChild("__overlay__") ?: continue
+
+            fun recurseSearch(node: DtsNode) {
+                if (node.getProperty("spi-max-frequency") != null) {
+                    val compatible = node.getProperty("compatible")?.originalValue?.removeSurrounding("\"") ?: ""
+                    val nodeNameLower = node.name.lowercase()
+                    
+                    // Exclude known non-touch SPI devices like Infrared Blasters
+                    if (!nodeNameLower.contains("ir-spi")) {
+                        val spiMaxFreq = extractSingleLong(node.getProperty("spi-max-frequency")?.originalValue ?: "0")
+                        panels.add(
+                            com.ireddragonicy.konabessnext.model.display.TouchPanel(
+                                fragmentIndex = fragmentIndex,
+                                nodeName = node.name,
+                                compatible = compatible,
+                                spiMaxFrequency = spiMaxFreq
+                            )
+                        )
+                    }
+                }
+                node.children.forEach { recurseSearch(it) }
+            }
+            recurseSearch(overlay)
+        }
+
+        for (topLevel in root.children) {
+            if (topLevel.name == "/" || topLevel.name == "root") {
+                panels.addAll(findTouchPanels(topLevel))
+            }
+        }
+        return panels.distinctBy { it.nodeName to it.fragmentIndex }
+    }
+
+    /**
+     * Walks the DTBO AST and extracts speaker amplifier nodes like AW882XX.
+     */
+    fun findSpeakerPanels(root: DtsNode): List<com.ireddragonicy.konabessnext.model.display.SpeakerPanel> {
+        val panels = ArrayList<com.ireddragonicy.konabessnext.model.display.SpeakerPanel>()
+        for (fragment in root.children) {
+            if (!isFragmentNode(fragment)) continue
+            val fragmentIndex = parseFragmentIndex(fragment.name)
+            val overlay = fragment.getChild("__overlay__") ?: continue
+
+            fun recurseSearch(node: DtsNode) {
+                val compatibleStr = node.getProperty("compatible")?.originalValue?.removeSurrounding("\"") ?: ""
+                
+                // Specifically target AW882xx for Speaker OC
+                if (compatibleStr.contains("awinic,aw882xx_smartpa", ignoreCase = true)) {
+                    val awReMin = extractSingleLong(node.getProperty("aw-re-min")?.originalValue ?: "0")
+                    val awReMax = extractSingleLong(node.getProperty("aw-re-max")?.originalValue ?: "0")
+                    
+                    panels.add(
+                        com.ireddragonicy.konabessnext.model.display.SpeakerPanel(
+                            fragmentIndex = fragmentIndex,
+                            nodeName = node.name,
+                            compatible = compatibleStr,
+                            awReMin = awReMin,
+                            awReMax = awReMax
+                        )
+                    )
+                }
+                node.children.forEach { recurseSearch(it) }
+            }
+            recurseSearch(overlay)
+        }
+
+        for (topLevel in root.children) {
+            if (topLevel.name == "/" || topLevel.name == "root") {
+                panels.addAll(findSpeakerPanels(topLevel))
+            }
+        }
+        return panels.distinctBy { it.nodeName to it.fragmentIndex }
+    }
+
+    /**
+     * Finds a specific speaker node by name and fragment.
+     */
+    fun findSpeakerNodeInTree(
+        root: DtsNode,
+        nodeName: String,
+        fragmentIndex: Int
+    ): DtsNode? {
+        val fragmentNodeName = "fragment@$fragmentIndex"
+        val fragmentNode = root.getChild(fragmentNodeName) ?: return null
+        val overlayNode = fragmentNode.getChild("__overlay__") ?: return null
+
+        fun findNode(current: DtsNode): DtsNode? {
+            if (current.name == nodeName) return current
+            for (child in current.children) {
+                val res = findNode(child)
+                if (res != null) return res
+            }
+            return null
+        }
+        return findNode(overlayNode)
+    }
+
+    /**
+     * Updates the aw-re-min and aw-re-max properties on a speaker node.
+     */
+    fun updateSpeakerReBounds(speakerNode: DtsNode, newReMin: String, newReMax: String): Boolean {
+        var success = updateTimingProperty(speakerNode, "aw-re-min", newReMin)
+        success = success && updateTimingProperty(speakerNode, "aw-re-max", newReMax)
+        return success
+    }
+
+    /**
+     * Finds a touch node in the AST by name across all overlay fragments.
+     */
+    fun findTouchNodeInTree(
+        root: DtsNode,
+        nodeName: String,
+        fragmentIndex: Int = -1
+    ): DtsNode? {
+        for (child in root.children) {
+            if (isFragmentNode(child)) {
+                if (fragmentIndex >= 0) {
+                    val idx = parseFragmentIndex(child.name)
+                    if (idx != fragmentIndex) continue
+                }
+
+                val overlay = child.getChild("__overlay__") ?: continue
+                var foundTarget: DtsNode? = null
+                fun recurseSearch(node: DtsNode) {
+                    if (foundTarget != null) return
+                    if (node.name == nodeName && node.getProperty("spi-max-frequency") != null) {
+                        foundTarget = node
+                        return
+                    }
+                    node.children.forEach { recurseSearch(it) }
+                }
+                recurseSearch(overlay)
+                if (foundTarget != null) return foundTarget
+            }
+        }
+
+        for (child in root.children) {
+            if (child.name == "/" || child.name == "root") {
+                val found = findTouchNodeInTree(child, nodeName, fragmentIndex)
+                if (found != null) return found
+            }
+        }
+
+        return null
+    }
+
+    /**
+     * Updates the spi-max-frequency property on a touch node.
+     */
+    fun updateTouchSpiFrequency(touchNode: DtsNode, newFrequencyHex: String): Boolean {
+        return updateTimingProperty(touchNode, "spi-max-frequency", newFrequencyHex)
+    }
 }

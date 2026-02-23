@@ -8,6 +8,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.zIndex
+import com.ireddragonicy.konabessnext.R
 import com.ireddragonicy.konabessnext.model.TargetPartition
 import com.ireddragonicy.konabessnext.viewmodel.*
 
@@ -37,11 +39,18 @@ fun GuiEditorContent(
 
     val currentChip = sharedViewModel.currentChip.collectAsState().value
 
+    val displayNavStep by displayViewModel.displayNavStep.collectAsState()
+    val touchPanels by displayViewModel.touchPanels.collectAsState()
+    val speakerPanels by displayViewModel.speakerPanels.collectAsState()
+
     // Back Handler Logic
     androidx.activity.compose.BackHandler(
-        enabled = selectedPartition != TargetPartition.DTBO && (navigationStep > 0 || selectedBinIndex != -1)
+        enabled = (selectedPartition == TargetPartition.DTBO && displayNavStep > 0) || 
+                  (selectedPartition != TargetPartition.DTBO && (navigationStep > 0 || selectedBinIndex != -1))
     ) {
-        if (selectedLevelIndex != -1) {
+        if (selectedPartition == TargetPartition.DTBO) {
+            displayViewModel.displayNavStep.value = 0
+        } else if (selectedLevelIndex != -1) {
             gpuFrequencyViewModel.selectedLevelIndex.value = -1
         } else if (selectedBinIndex != -1) {
             gpuFrequencyViewModel.selectedBinIndex.value = -1
@@ -75,7 +84,66 @@ fun GuiEditorContent(
     val showUnsupportedState = !isPrepared && !isDtboMode
 
     if (isDtboMode) {
-        DtboTimingEditor(displayViewModel = displayViewModel)
+        androidx.compose.animation.Crossfade(targetState = displayNavStep, label = "DtboNav") { step ->
+            when (step) {
+                0 -> {
+                    DtboDashboard(
+                        onNavigateToTimings = { displayViewModel.displayNavStep.value = 1 },
+                        onNavigateToTouch = { displayViewModel.displayNavStep.value = 2 },
+                        onNavigateToSpeaker = { displayViewModel.displayNavStep.value = 3 }
+                    )
+                }
+                1 -> {
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        Surface(
+                            tonalElevation = 3.dp,
+                            shadowElevation = 3.dp,
+                            modifier = Modifier.zIndex(1f)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Button(
+                                    onClick = { displayViewModel.displayNavStep.value = 0 },
+                                    modifier = Modifier.weight(1f),
+                                    shape = MaterialTheme.shapes.medium,
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                    )
+                                ) {
+                                    Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_arrow_back), null, modifier = Modifier.size(18.dp))
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(androidx.compose.ui.res.stringResource(R.string.btn_back))
+                                }
+                            }
+                        }
+                        DtboTimingEditor(displayViewModel = displayViewModel)
+                    }
+                }
+                2 -> {
+                    TouchOverclockScreen(
+                        touchPanels = touchPanels,
+                        onBack = { displayViewModel.displayNavStep.value = 0 },
+                        onSaveFrequency = { nodeName, fragmentIndex, newFreq ->
+                            displayViewModel.updateTouchSpiFrequency(nodeName, fragmentIndex, newFreq)
+                        }
+                    )
+                }
+                3 -> {
+                    SpeakerOverclockScreen(
+                        speakerPanels = speakerPanels,
+                        onBack = { displayViewModel.displayNavStep.value = 0 },
+                        onSaveReBounds = { nodeName, fragmentIndex, newMin, newMax ->
+                            displayViewModel.updateSpeakerReBounds(nodeName, fragmentIndex, newMin, newMax)
+                        }
+                    )
+                }
+            }
+        }
     } else if (showUnsupportedState) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(32.dp)) {

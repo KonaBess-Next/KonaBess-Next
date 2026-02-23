@@ -32,6 +32,10 @@ class DisplayViewModel @Inject constructor(
         .map { all -> all.filter { it.timings.isNotEmpty() } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val touchPanels: StateFlow<List<com.ireddragonicy.konabessnext.model.display.TouchPanel>> = repository.touchPanels
+
+    val speakerPanels: StateFlow<List<com.ireddragonicy.konabessnext.model.display.SpeakerPanel>> = repository.speakerPanels
+
     val selectedPanelIndex: StateFlow<Int> = repository.selectedPanelIndex
 
     val selectedTimingIndex: StateFlow<Int> = repository.selectedTimingIndex
@@ -54,6 +58,8 @@ class DisplayViewModel @Inject constructor(
     val history: StateFlow<List<String>> = repository.history
 
     // --- Loading / State ---
+
+    val displayNavStep = MutableStateFlow(0)
 
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
@@ -160,6 +166,29 @@ class DisplayViewModel @Inject constructor(
      */
     fun updateDfpsList(fpsList: List<Int>): Boolean {
         return repository.updateDfpsList(fpsList)
+    }
+
+    /**
+     * Updates the spi-max-frequency property on a touch node.
+     */
+    fun updateTouchSpiFrequency(
+        nodeName: String,
+        fragmentIndex: Int,
+        newFrequency: Long
+    ): Boolean {
+        return repository.updateTouchSpiFrequency(nodeName, fragmentIndex, newFrequency)
+    }
+
+    /**
+     * Updates the aw-re-min and aw-re-max properties on a speaker node.
+     */
+    fun updateSpeakerReBounds(
+        nodeName: String,
+        fragmentIndex: Int,
+        newReMin: Long,
+        newReMax: Long
+    ): Boolean {
+        return repository.updateSpeakerReBounds(nodeName, fragmentIndex, newReMin, newReMax)
     }
 
     fun undo() = repository.undo()

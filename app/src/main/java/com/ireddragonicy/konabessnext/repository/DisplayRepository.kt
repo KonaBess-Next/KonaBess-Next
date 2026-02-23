@@ -81,6 +81,24 @@ class DisplayRepository @Inject constructor(
     private val _parsedTree = MutableStateFlow<DtsNode?>(null)
     override val parsedTree: StateFlow<DtsNode?> = _parsedTree.asStateFlow()
 
+    val touchPanels: StateFlow<List<com.ireddragonicy.konabessnext.model.display.TouchPanel>> = combine(
+        _parsedTree,
+        _structuralChange.onStart { emit(Unit) }
+    ) { root, _ ->
+        if (root == null) emptyList() else displayDomainManager.findTouchPanels(root)
+    }
+        .flowOn(Dispatchers.Default)
+        .stateIn(repoScope, SharingStarted.Lazily, emptyList())
+
+    val speakerPanels: StateFlow<List<com.ireddragonicy.konabessnext.model.display.SpeakerPanel>> = combine(
+        _parsedTree,
+        _structuralChange.onStart { emit(Unit) }
+    ) { root, _ ->
+        if (root == null) emptyList() else displayDomainManager.findSpeakerPanels(root)
+    }
+        .flowOn(Dispatchers.Default)
+        .stateIn(repoScope, SharingStarted.Lazily, emptyList())
+
     override val canUndo: StateFlow<Boolean> = historyManager.canUndo
     override val canRedo: StateFlow<Boolean> = historyManager.canRedo
     val history = historyManager.history
@@ -289,6 +307,47 @@ class DisplayRepository @Inject constructor(
         displayDomainManager.updateDfpsList(panelNode, fpsList)
         DtsEditorDebug.logDisplayUpdate("updateDfpsList", panel.nodeName, -1, true, "list=$fpsList")
         commitTreeChanges("Updated DFPS list to ${fpsList.joinToString(", ")}Hz")
+        return true
+    }
+
+    /**
+     * Updates the spi-max-frequency property on a touch node.
+     */
+    fun updateTouchSpiFrequency(
+        nodeName: String,
+        fragmentIndex: Int,
+        newFrequency: Long,
+        historyDesc: String? = null
+    ): Boolean {
+        val root = ensureParsedTree() ?: return false
+        val touchNode = displayDomainManager.findTouchNodeInTree(root, nodeName, fragmentIndex) ?: return false
+
+        val success = displayDomainManager.updateTouchSpiFrequency(touchNode, newFrequency.toString())
+        if (!success) return false
+
+        DtsEditorDebug.logDisplayUpdate("updateTouchSpiFrequency", nodeName, -1, true, "newFrequency=$newFrequency")
+        commitTreeChanges(historyDesc ?: "Updated touch panel $nodeName SPI frequency to $newFrequency")
+        return true
+    }
+
+    /**
+     * Updates the aw-re-min and aw-re-max properties on a speaker node.
+     */
+    fun updateSpeakerReBounds(
+        nodeName: String,
+        fragmentIndex: Int,
+        newReMin: Long,
+        newReMax: Long,
+        historyDesc: String? = null
+    ): Boolean {
+        val root = ensureParsedTree() ?: return false
+        val speakerNode = displayDomainManager.findSpeakerNodeInTree(root, nodeName, fragmentIndex) ?: return false
+
+        val success = displayDomainManager.updateSpeakerReBounds(speakerNode, newReMin.toString(), newReMax.toString())
+        if (!success) return false
+
+        DtsEditorDebug.logDisplayUpdate("updateSpeakerReBounds", nodeName, -1, true, "newReMin=$newReMin, newReMax=$newReMax")
+        commitTreeChanges(historyDesc ?: "Updated speaker $nodeName resonance bounds to Min: $newReMin, Max: $newReMax")
         return true
     }
 
