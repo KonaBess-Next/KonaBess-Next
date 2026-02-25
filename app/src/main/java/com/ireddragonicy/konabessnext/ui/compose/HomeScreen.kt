@@ -442,6 +442,7 @@ fun GpuEditorMainContent(
                 onInstallToInactiveSlot = { showInactiveInstallDialog = true },
                 onExportDts = { launchExportDts() },
                 onExportImg = { launchExportImage() },
+                onDryRunClick = { deviceViewModel.dryRun() }, // <-- ADD THIS LINE
                 canFlashOrRepack = canFlashOrRepack,
                 isRootMode = isRootMode
             )

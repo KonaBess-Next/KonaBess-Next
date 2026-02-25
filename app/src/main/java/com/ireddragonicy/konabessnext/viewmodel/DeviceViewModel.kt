@@ -732,4 +732,29 @@ class DeviceViewModel @Inject constructor(
     fun clearRepackState() {
         _repackState.value = null
     }
+
+    // --- DRY RUN FEATURE ---
+    fun dryRun() {
+        _repackState.value = UiState.Loading
+        viewModelScope.launch(Dispatchers.IO) {
+            when (val result = repository.dts2bootImage()) {
+                is DomainResult.Failure -> {
+                    // Automatically shows error dialog with dtc syntax error stack trace
+                    applyRepackFailure(result.error)
+                }
+                is DomainResult.Success -> {
+                    // Dry run success. Delete the repacked image to save storage space.
+                    val repackedFile = result.data
+                    if (repackedFile.exists()) {
+                        repackedFile.delete()
+                    }
+                    
+                    // Trigger success dialog
+                    _repackState.value = UiState.Success(
+                        UiText.StringResource(R.string.dry_run_success)
+                    )
+                }
+            }
+        }
+    }
 }

@@ -53,6 +53,7 @@ fun GpuEditorToolbar(
     onInstallToInactiveSlot: () -> Unit,
     onExportDts: () -> Unit,
     onExportImg: () -> Unit,
+    onDryRunClick: () -> Unit = {},
     canFlashOrRepack: Boolean,
     isRootMode: Boolean = true,
     applyStatusBarPadding: Boolean = true,
@@ -255,6 +256,15 @@ fun GpuEditorToolbar(
                                 showBuildMenu = false 
                             },
                             leadingIcon = { Icon(Icons.Rounded.Code, null) }
+                        )
+
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.dry_run)) },
+                            onClick = {
+                                onDryRunClick()
+                                showBuildMenu = false
+                            },
+                            leadingIcon = { Icon(Icons.Rounded.CheckCircle, null) }
                         )
 
                         if (isRootMode || showImageActions) {

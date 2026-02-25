@@ -127,16 +127,20 @@ class MainActivity : ComponentActivity() {
                 }
             }
             is UiState.Success -> {
+                val successMessage = (repackState as UiState.Success).data.asString()
+                val isDryRun = successMessage == stringResource(R.string.dry_run_success)
                 AlertDialog(
                     onDismissRequest = { deviceViewModel.clearRepackState() },
                     title = { Text(stringResource(R.string.success)) },
-                    text = { Text((repackState as UiState.Success).data.asString()) },
+                    text = { Text(successMessage) },
                     confirmButton = {
-                        TextButton(onClick = {
-                            deviceViewModel.reboot()
-                            deviceViewModel.clearRepackState()
-                        }) {
-                            Text(stringResource(R.string.reboot))
+                        if (!isDryRun) {
+                            TextButton(onClick = {
+                                deviceViewModel.reboot()
+                                deviceViewModel.clearRepackState()
+                            }) {
+                                Text(stringResource(R.string.reboot))
+                            }
                         }
                     },
                     dismissButton = {
