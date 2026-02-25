@@ -8,6 +8,7 @@ import io.github.rosemoe.sora.lang.analysis.StyleReceiver
 import io.github.rosemoe.sora.lang.completion.CompletionPublisher
 import io.github.rosemoe.sora.lang.format.Formatter
 import io.github.rosemoe.sora.lang.smartEnter.NewlineHandler
+import io.github.rosemoe.sora.lang.styling.CodeBlock
 import io.github.rosemoe.sora.lang.styling.MappedSpans
 import io.github.rosemoe.sora.lang.styling.Span
 import io.github.rosemoe.sora.lang.styling.Styles
@@ -145,6 +146,8 @@ private class DtsAnalyzeManager : BaseAnalyzeManager() {
         if (lineCount == 0) return
 
         val spans = MappedSpans.Builder()
+        val blocks = mutableListOf<CodeBlock>()
+        val blockStack = java.util.Stack<CodeBlock>()
         var inBlockComment = false
 
         for (line in 0 until lineCount) {
@@ -188,7 +191,27 @@ private class DtsAnalyzeManager : BaseAnalyzeManager() {
             }
 
             // Build Sora spans
-            emitSpansForLine(line, lineLength, tokenSpans, spans)
+            val colorMap = emitSpansForLine(line, lineLength, tokenSpans, spans)
+            
+            // Extract code blocks from resolved brackets
+            for (i in 0 until lineLength) {
+                if (colorMap.isNotEmpty() && colorMap[i] == DtsTokenColorIds.BRACKET) {
+                    val ch = lineText[i]
+                    if (ch == '{') {
+                        val b = CodeBlock()
+                        b.startLine = line
+                        b.startColumn = i
+                        blockStack.push(b)
+                    } else if (ch == '}') {
+                        if (blockStack.isNotEmpty()) {
+                            val b = blockStack.pop()
+                            b.endLine = line
+                            b.endColumn = i + 1
+                            blocks.add(b)
+                        }
+                    }
+                }
+            }
         }
 
         // Finalize spans builder
@@ -197,6 +220,10 @@ private class DtsAnalyzeManager : BaseAnalyzeManager() {
         if (Thread.currentThread().isInterrupted) return
 
         val styles = Styles(spans.build(), true)
+        for (block in blocks) {
+            styles.addCodeBlock(block)
+        }
+        styles.finishBuilding()
         receiver.setStyles(this, styles)
     }
 
@@ -301,12 +328,12 @@ private class DtsAnalyzeManager : BaseAnalyzeManager() {
         lineLength: Int,
         tokenSpans: List<TokenSpan>,
         builder: MappedSpans.Builder
-    ) {
+    ): IntArray {
         if (tokenSpans.isEmpty() || lineLength == 0) {
             builder.add(line, Span.obtain(
                 0, TextStyle.makeStyle(EditorColorScheme.TEXT_NORMAL)
             ))
-            return
+            return IntArray(0)
         }
 
         // Build per-character color map (0 = TEXT_NORMAL)
@@ -330,6 +357,8 @@ private class DtsAnalyzeManager : BaseAnalyzeManager() {
                 builder.add(line, Span.obtain(i, TextStyle.makeStyle(resolveColorId(currentColor))))
             }
         }
+        
+        return colorMap
     }
 
     private fun resolveColorId(colorId: Int): Int {

@@ -144,8 +144,23 @@ fun DtsEditor(
                 isHighlightCurrentLine = true
                 tabWidth = 4
 
-                // Word wrap (default off, user can toggle)
-                isWordwrap = soraEditorState.isWordWrapEnabled
+                // Additional optimizations based on Sora Editor API Analysis
+                props.apply {
+                    // Performance
+                    cacheRenderNodeForLongLines = true // Crucial for long hex arrays in DTS
+                    
+                    // User Experience
+                    stickyScroll = true // Keeps block headers like &gpu { visible
+                    stickyScrollMaxLines = 3 // Max lines to stick at top
+                    overScrollEnabled = true // iOS-style bounce back
+                    symbolPairAutoCompletion = true // Auto-brackets (), {}, []
+                    deleteEmptyLineFast = true // Instantly delete empty/whitespace lines
+                    drawSideBlockLine = true // Draw scope indentation lines for clarity
+                    highlightMatchingDelimiters = true // Highlight {} pairs
+                    boldMatchingDelimiters = true
+                    enhancedHomeAndEnd = true // Smart Home/End keys
+                    adjustToSelectionOnResize = true // Keep cursor visible when keyboard opens
+                }
 
                 // --- Fix: Prevent horizontal swipe from being intercepted by parent HorizontalPager ---
                 // When the editor needs to scroll horizontally (non-wrap mode),
@@ -270,6 +285,7 @@ fun DtsEditor(
                     }
 
                     try {
+                        editor.text.beginBatchEdit()
                         // Delete old text segment
                         if (oldMiddleEnd > oldMiddleStart) {
                             editor.text.delete(startLine, startCol, endLine, endCol)
@@ -283,6 +299,8 @@ fun DtsEditor(
                         e.printStackTrace()
                         // Fallback: full setText (which resets scroller internally)
                         editor.setText(content)
+                    } finally {
+                        editor.text.endBatchEdit()
                     }
 
                     // Restore cursor WITHOUT auto-scrolling (3rd param = false)
