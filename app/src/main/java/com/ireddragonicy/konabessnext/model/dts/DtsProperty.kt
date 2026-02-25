@@ -1,5 +1,6 @@
 package com.ireddragonicy.konabessnext.model.dts
 
+import androidx.compose.runtime.Stable
 import java.lang.StringBuilder
 import java.util.regex.Pattern
 
@@ -7,6 +8,7 @@ import java.util.regex.Pattern
  * Represents a single property line in a DTS file.
  * Example: property = <value>;
  */
+@Stable
 class DtsProperty(name: String?, originalValue: String?) {
     @JvmField
     var name: String = name?.trim() ?: ""

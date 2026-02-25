@@ -1,11 +1,13 @@
 package com.ireddragonicy.konabessnext.model.dts
 
+import androidx.compose.runtime.Stable
 import java.util.ArrayList
 
 /**
  * Represents a Node in the DTS tree.
  * Example: node_name { ... };
  */
+@Stable
 class DtsNode(name: String?) {
     @JvmField
     var name: String = name?.trim() ?: "root"

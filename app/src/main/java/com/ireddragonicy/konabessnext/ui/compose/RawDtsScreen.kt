@@ -19,6 +19,7 @@ fun RawDtsScreen(
 ) {
     val dtsContent by textViewModel.dtsContent.collectAsState()
     val parsedTree by treeViewModel.parsedTree.collectAsState()
+    val flattenedList by treeViewModel.flattenedTreeState.collectAsState()
 
     // View Mode (Local switch for standalone activity)
     var isVisualMode by remember { mutableStateOf(false) }
@@ -26,10 +27,15 @@ fun RawDtsScreen(
     // Sora editor state for text mode search
     val soraEditorState = rememberSoraEditorState()
 
-    // Tree mode search state (local — not in Sora)
-    var treeSearchQuery by remember { mutableStateOf("") }
-    var treeMatchCount by remember { mutableIntStateOf(0) }
+    // Tree mode search state
+    val treeSearchQuery by treeViewModel.treeSearchQuery.collectAsState()
+    val searchMatches by treeViewModel.searchMatches.collectAsState()
     var treeCurrentIndex by remember { mutableIntStateOf(-1) }
+
+    // Reset tree search index when query changes
+    LaunchedEffect(treeSearchQuery) {
+        treeCurrentIndex = if (treeSearchQuery.isNotEmpty()) 0 else -1
+    }
 
     // Tree Editor Scroll State
     val initialTreeScrollIdx = remember { treeViewModel.treeScrollIndex.value }
@@ -83,19 +89,19 @@ fun RawDtsScreen(
 
         if (isVisualMode) {
             DtsTreeScreen(
-                rootNode = parsedTree,
+                rootNode = parsedTree, // null check inside DtsTreeScreen
+                flattenedList = flattenedList,
                 listState = treeListState,
                 searchQuery = treeSearchQuery,
+                searchMatches = searchMatches,
                 searchMatchIndex = treeCurrentIndex,
                 onNodeToggle = { path, expanded ->
                     treeViewModel.toggleNodeExpansion(path, expanded)
                 },
-                onSearchMatchesChanged = { count ->
-                    treeMatchCount = count
-                    if (treeCurrentIndex >= count) {
-                        treeCurrentIndex = if (count > 0) 0 else -1
-                    }
+                onExpandAncestors = { node ->
+                    treeViewModel.expandAncestors(node)
                 },
+                onSearchMatchesChanged = { /* Now handled by ViewModel */ },
                 onTreeModified = { treeViewModel.syncTreeToText() }
             )
         } else {

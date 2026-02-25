@@ -24,12 +24,20 @@ fun VisualTreeContent(
 ) {
     // Use Cached Tree from VM to persist object state (isExpanded flags)
     val rootNode by treeViewModel.parsedTree.collectAsState()
+    val flattenedList by treeViewModel.flattenedTreeState.collectAsState()
     val dtsContent by treeViewModel.dtsContent.collectAsState(initial = "")
     @Suppress("DEPRECATION")
     val clipboardManager = LocalClipboardManager.current
     
-    // Tree view keeps local query to avoid triggering line-search pipeline.
-    var treeQuery by rememberSaveable { mutableStateOf("") }
+    // Tree mode search state
+    val treeSearchQuery by treeViewModel.treeSearchQuery.collectAsState()
+    val searchMatches by treeViewModel.searchMatches.collectAsState()
+    var treeCurrentIndex by remember { mutableIntStateOf(-1) }
+    
+    // Reset tree search index when query changes
+    LaunchedEffect(treeSearchQuery) {
+        treeCurrentIndex = if (treeSearchQuery.isNotEmpty()) 0 else -1
+    }
     
     // Read initial persisted scroll once; then sync back with throttling.
     val initialScrollIndex = remember { treeViewModel.treeScrollIndex.value }
@@ -81,14 +89,7 @@ fun VisualTreeContent(
             }
     }
 
-    // Tree-local search navigation — separate from ViewModel's line-based results
-    var treeMatchCount by remember { mutableIntStateOf(0) }
-    var treeCurrentIndex by remember { mutableIntStateOf(-1) }
 
-    // Reset tree search index when query changes
-    LaunchedEffect(treeQuery) {
-        treeCurrentIndex = if (treeQuery.isNotEmpty()) 0 else -1
-    }
 
     if (rootNode == null) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -97,38 +98,38 @@ fun VisualTreeContent(
     } else {
         Column {
              SearchAndToolsBar(
-                query = treeQuery,
-                matchCount = treeMatchCount,
+                query = treeSearchQuery,
+                matchCount = searchMatches.size,
                 currentMatchIndex = treeCurrentIndex,
-                onQueryChange = { treeQuery = it },
+                onQueryChange = { treeViewModel.treeSearchQuery.value = it },
                 onNext = {
-                    if (treeMatchCount > 0) {
-                        treeCurrentIndex = (treeCurrentIndex + 1) % treeMatchCount
+                    if (searchMatches.isNotEmpty()) {
+                        treeCurrentIndex = (treeCurrentIndex + 1) % searchMatches.size
                     }
                 },
                 onPrev = {
-                    if (treeMatchCount > 0) {
-                        treeCurrentIndex = if (treeCurrentIndex - 1 < 0) treeMatchCount - 1 else treeCurrentIndex - 1
+                    if (searchMatches.isNotEmpty()) {
+                        treeCurrentIndex = if (treeCurrentIndex - 1 < 0) searchMatches.size - 1 else treeCurrentIndex - 1
                     }
                 },
                 onCopyAll = { clipboardManager.setText(AnnotatedString(dtsContent)) }
             )
 
             DtsTreeScreen(
-                rootNode = rootNode!!,
+                modifier = Modifier.fillMaxSize(),
+                rootNode = rootNode, // Can be null, tree screen handles it
+                flattenedList = flattenedList,
                 listState = listState,
-                searchQuery = treeQuery,
+                searchQuery = treeSearchQuery,
+                searchMatches = searchMatches,
                 searchMatchIndex = treeCurrentIndex,
                 onNodeToggle = { path, expanded ->
                     treeViewModel.toggleNodeExpansion(path, expanded)
                 },
-                onSearchMatchesChanged = { count ->
-                    treeMatchCount = count
-                    // Clamp current index if matches shrunk
-                    if (treeCurrentIndex >= count) {
-                        treeCurrentIndex = if (count > 0) 0 else -1
-                    }
+                onExpandAncestors = { node ->
+                    treeViewModel.expandAncestors(node)
                 },
+                onSearchMatchesChanged = { /* Now handled by ViewModel */ },
                 onTreeModified = { treeViewModel.syncTreeToText() }
             )
         }

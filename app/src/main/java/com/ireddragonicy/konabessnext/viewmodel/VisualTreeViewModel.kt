@@ -16,7 +16,15 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
 import javax.inject.Inject
+import com.ireddragonicy.konabessnext.model.dts.TreeItem
+import com.ireddragonicy.konabessnext.model.dts.ItemType
+import com.ireddragonicy.konabessnext.model.dts.DeepMatch
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
+import androidx.compose.ui.unit.dp
 
 /**
  * ViewModel responsible for the visual tree view:
@@ -84,6 +92,38 @@ class VisualTreeViewModel @Inject constructor(
     val treeScrollIndex = MutableStateFlow(0)
     val treeScrollOffset = MutableStateFlow(0)
 
+    // --- Background Flattened Tree ---
+    private val _flattenedTreeState = MutableStateFlow<List<TreeItem>>(emptyList())
+    val flattenedTreeState: StateFlow<List<TreeItem>> = _flattenedTreeState.asStateFlow()
+
+    init {
+        // Automatically re-flatten when the AST or active partition changes
+        viewModelScope.launch(Dispatchers.Default) {
+            parsedTree.collect { root ->
+                if (root != null) {
+                    _flattenedTreeState.value = flattenTree(root)
+                } else {
+                    _flattenedTreeState.value = emptyList()
+                }
+            }
+        }
+    }
+
+    // --- Tree Search ---
+    val treeSearchQuery = MutableStateFlow("")
+
+    @OptIn(kotlinx.coroutines.FlowPreview::class)
+    val searchMatches: StateFlow<List<DeepMatch>> = combine(
+        parsedTree,
+        treeSearchQuery.debounce(150L) // Add light debounce for fast typing
+    ) { tree, query ->
+        if (tree != null && query.isNotEmpty()) {
+            deepSearchTree(tree, query)
+        } else {
+            emptyList()
+        }
+    }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
     // --- Expansion State ---
     private val _expandedNodePaths = MutableStateFlow<Set<String>>(setOf("root"))
     val expandedNodePaths: StateFlow<Set<String>> = _expandedNodePaths.asStateFlow()
@@ -99,6 +139,35 @@ class VisualTreeViewModel @Inject constructor(
         val root = parsedTree.value
         if (root != null) {
             findNode(root, path)?.isExpanded = expanded
+            // Re-flatten on background thread immediately
+            viewModelScope.launch(Dispatchers.Default) {
+                _flattenedTreeState.value = flattenTree(root)
+            }
+        }
+    }
+
+    fun expandAncestors(node: DtsNode) {
+        val set = _expandedNodePaths.value.toMutableSet()
+        var current: DtsNode? = node.parent
+        var changed = false
+        
+        while (current != null) {
+            val path = current.getFullPath()
+            if (set.add(path)) {
+                current.isExpanded = true
+                changed = true
+            }
+            current = current.parent
+        }
+        
+        if (changed) {
+            _expandedNodePaths.value = set
+            val root = parsedTree.value
+            if (root != null) {
+                viewModelScope.launch(Dispatchers.Default) {
+                    _flattenedTreeState.value = flattenTree(root)
+                }
+            }
         }
     }
 
@@ -111,6 +180,7 @@ class VisualTreeViewModel @Inject constructor(
         treeScrollIndex.value = 0
         treeScrollOffset.value = 0
         _expandedNodePaths.value = setOf("root")
+        treeSearchQuery.value = ""
     }
 
     // --- Private Helpers ---
@@ -122,5 +192,101 @@ class VisualTreeViewModel @Inject constructor(
             if (found != null) return found
         }
         return null
+    }
+
+    private fun deepSearchTree(root: DtsNode, query: String): List<DeepMatch> {
+        if (query.isEmpty()) return emptyList()
+        val results = mutableListOf<DeepMatch>()
+
+        fun recurse(node: DtsNode) {
+            val nodePath = node.getFullPath()
+            if (node.name != "root" && node.name.contains(query, ignoreCase = true)) {
+                results.add(DeepMatch(node, null, -1, "node:$nodePath"))
+            }
+            node.properties.forEachIndexed { idx, prop ->
+                val hit = prop.name.contains(query, ignoreCase = true)
+                        || prop.originalValue.contains(query, ignoreCase = true)
+                        || prop.getDisplayValue().contains(query, ignoreCase = true)
+                if (hit) {
+                    results.add(DeepMatch(node, prop, idx, "prop:$nodePath/${prop.name}#$idx"))
+                }
+            }
+            node.children.forEach { recurse(it) }
+        }
+
+        recurse(root)
+        return results
+    }
+
+    private fun isVisualDtsRootNode(node: DtsNode, depth: Int): Boolean {
+        return depth == 0 && node.name == "/"
+    }
+
+    private fun flattenTree(root: DtsNode): List<TreeItem> {
+        val result = ArrayList<TreeItem>(512)
+
+        fun recurse(node: DtsNode, depth: Int) {
+            val nodePath = node.getFullPath()
+            val isVisualRoot = isVisualDtsRootNode(node, depth)
+
+            if (!isVisualRoot && (node.name != "root" || depth > 0)) {
+                result.add(TreeItem(
+                    id = "node:$nodePath",
+                    display = node.name,
+                    depth = depth,
+                    type = ItemType.NODE,
+                    node = node,
+                    isExpanded = node.isExpanded,
+                    childCount = node.children.size + node.properties.size,
+                    indent = (16 + depth * 20).dp
+                ))
+            }
+
+            if (node.isExpanded || (node.name == "root" && depth == 0) || isVisualRoot) {
+                val nextDepth = when {
+                    node.name == "root" && depth == 0 -> 0
+                    isVisualRoot -> depth
+                    else -> depth + 1
+                }
+                val nextIndent = (16 + nextDepth * 20).dp
+
+                node.properties.forEachIndexed { idx, prop ->
+                    result.add(TreeItem(
+                        id = "prop:$nodePath/${prop.name}#$idx",
+                        display = prop.name,
+                        depth = nextDepth,
+                        type = ItemType.PROPERTY,
+                        node = node,
+                        property = prop,
+                        indent = nextIndent
+                    ))
+                }
+
+                node.children.forEach { child ->
+                    recurse(child, nextDepth)
+                }
+            }
+        }
+
+        if (root.name == "root") {
+            root.properties.forEachIndexed { idx, prop ->
+                result.add(TreeItem(
+                    id = "prop:root/${prop.name}#$idx",
+                    display = prop.name,
+                    depth = 0,
+                    type = ItemType.PROPERTY,
+                    node = root,
+                    property = prop,
+                    indent = 16.dp
+                ))
+            }
+            root.children.forEach { child ->
+                recurse(child, 0)
+            }
+        } else {
+            recurse(root, 0)
+        }
+
+        return result
     }
 }
