@@ -172,6 +172,9 @@ fun DtsEditor(
                 if (content.isNotEmpty()) {
                     setText(content)
                     syncState.lastPushedContent = content
+                    // Force cursor to the start so the editor shows the top of the file,
+                    // not the bottom (Sora may leave cursor at end after setText).
+                    setSelection(0, 0, true)
                 }
 
                 // Listen for search result updates
@@ -217,8 +220,11 @@ fun DtsEditor(
                     val oldText = editor.text.toString()
                     val oldLine = editor.cursor.leftLine
                     val oldCol = editor.cursor.leftColumn
-                    val oldScrollX = editor.scrollX
-                    val oldScrollY = editor.scrollY
+                    // IMPORTANT: Use Sora's internal scroll API, NOT View.scrollX/scrollY.
+                    // Sora manages its own scroll position via an OverScroller accessible
+                    // through getOffsetX()/getOffsetY(), not Android View scroll.
+                    val soraScrollX = editor.offsetX
+                    val soraScrollY = editor.offsetY
 
                     var prefixLen = 0
                     val minLen = minOf(oldText.length, content.length)
@@ -275,21 +281,23 @@ fun DtsEditor(
                         }
                     } catch (e: Exception) {
                         e.printStackTrace()
-                        // Fallback
+                        // Fallback: full setText (which resets scroller internally)
                         editor.setText(content)
                     }
 
-                    // Restore cursor, clamped to new text bounds
+                    // Restore cursor WITHOUT auto-scrolling (3rd param = false)
                     val maxLine = editor.text.lineCount - 1
                     val line = oldLine.coerceIn(0, maxLine)
                     val maxCol = editor.text.getColumnCount(line)
                     val col = oldCol.coerceIn(0, maxCol)
-                    editor.setSelection(line, col)
-                    
-                    // Restore scroll position
-                    editor.post {
-                        editor.scrollTo(oldScrollX, oldScrollY)
-                    }
+                    editor.setSelection(line, col, false)
+
+                    // Restore Sora's internal scroll position synchronously (no post{})
+                    // to avoid a flash frame where the editor shows the wrong position.
+                    val scroller = editor.eventHandler.scroller
+                    scroller.startScroll(soraScrollX, soraScrollY, 0, 0, 0)
+                    scroller.abortAnimation()
+                    editor.invalidate()
                 }
             }
         },

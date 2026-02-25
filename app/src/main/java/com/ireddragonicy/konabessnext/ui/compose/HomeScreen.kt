@@ -1,10 +1,16 @@
 package com.ireddragonicy.konabessnext.ui.compose
 
-import androidx.compose.animation.Crossfade
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -22,6 +28,8 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -400,19 +408,12 @@ fun GpuEditorMainContent(
         onImportDts = { uri -> deviceViewModel.importExternalDts(context, uri) }
     )
 
-    if (activeCurveEditorBinId != -1) {
-        CurveEditorScreen(
-            binId = activeCurveEditorBinId,
-            sharedViewModel = sharedViewModel,
-            onBack = { activeCurveEditorBinId = -1 },
-            onRepack = onStartRepack,
-            onInstallToInactiveSlot = { showInactiveInstallDialog = true },
-            onExportDts = { launchExportDts() },
-            onExportImg = { launchExportImage() },
-            canFlashOrRepack = canFlashOrRepack,
-            isRootMode = isRootMode
-        )
-    } else {
+    // --- EXPERT OPTIMIZATION: View Stacking instead of Crossfade ---
+    // Keeps Sora Editor and Tree LazyColumn alive in composition to prevent 
+    // scroll reset and syntax re-highlighting when switching view modes.
+    Box(modifier = Modifier.fillMaxSize()) {
+        
+        // Base Content (Toolbar + Editor Modes)
         Column(modifier = Modifier.fillMaxSize()) {
             GpuEditorToolbar(
                 isDirty = isDirty,
@@ -444,24 +445,74 @@ fun GpuEditorMainContent(
                 canFlashOrRepack = canFlashOrRepack,
                 isRootMode = isRootMode
             )
-    
-            Crossfade(targetState = currentMode, label = "ViewModeSwitch") { mode ->
-                Box(modifier = Modifier.fillMaxSize()) {
-                    when (mode) {
-                        SharedGpuViewModel.ViewMode.MAIN_EDITOR -> GuiEditorContent(
-                            sharedViewModel, 
-                            deviceViewModel, 
-                            gpuFrequencyViewModel,
-                            displayViewModel = displayViewModel,
-                            onOpenCurveEditor = { binId -> activeCurveEditorBinId = binId }
-                        )
-                        SharedGpuViewModel.ViewMode.TEXT_ADVANCED -> UnifiedDtsEditorScreen(
-                            onSelectionDragStateChanged = onSelectionDragStateChanged
-                        )
-                        SharedGpuViewModel.ViewMode.VISUAL_TREE -> VisualTreeContent()
+
+            // Editor Mode Stack
+            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                
+                // GUI Mode
+                val isGui = currentMode == SharedGpuViewModel.ViewMode.MAIN_EDITOR
+                val guiAlpha by animateFloatAsState(targetValue = if (isGui) 1f else 0f, label = "guiAlpha")
+                Box(
+                    modifier = Modifier.fillMaxSize().graphicsLayer {
+                        alpha = guiAlpha
+                        // Move far offscreen when inactive to prevent touch interception
+                        translationX = if (isGui || guiAlpha > 0f) 0f else 100000f
                     }
+                ) {
+                    GuiEditorContent(
+                        sharedViewModel = sharedViewModel,
+                        deviceViewModel = deviceViewModel,
+                        gpuFrequencyViewModel = gpuFrequencyViewModel,
+                        displayViewModel = displayViewModel,
+                        onOpenCurveEditor = { binId -> activeCurveEditorBinId = binId }
+                    )
+                }
+
+                // Text Mode (Sora Editor)
+                val isText = currentMode == SharedGpuViewModel.ViewMode.TEXT_ADVANCED
+                val textAlpha by animateFloatAsState(targetValue = if (isText) 1f else 0f, label = "textAlpha")
+                Box(
+                    modifier = Modifier.fillMaxSize().graphicsLayer {
+                        alpha = textAlpha
+                        translationX = if (isText || textAlpha > 0f) 0f else 100000f
+                    }
+                ) {
+                    UnifiedDtsEditorScreen(onSelectionDragStateChanged = onSelectionDragStateChanged)
+                }
+
+                // Tree Mode
+                val isTree = currentMode == SharedGpuViewModel.ViewMode.VISUAL_TREE
+                val treeAlpha by animateFloatAsState(targetValue = if (isTree) 1f else 0f, label = "treeAlpha")
+                Box(
+                    modifier = Modifier.fillMaxSize().graphicsLayer {
+                        alpha = treeAlpha
+                        translationX = if (isTree || treeAlpha > 0f) 0f else 100000f
+                    }
+                ) {
+                    VisualTreeContent()
                 }
             }
+        }
+
+        // Curve Editor Overlay
+        // Stacking this ensures opening the curve editor doesn't destroy the underlying editors either!
+        AnimatedVisibility(
+            visible = activeCurveEditorBinId != -1,
+            enter = slideInVertically { it } + fadeIn(),
+            exit = slideOutVertically { it } + fadeOut(),
+            modifier = Modifier.fillMaxSize().zIndex(10f)
+        ) {
+            CurveEditorScreen(
+                binId = activeCurveEditorBinId,
+                sharedViewModel = sharedViewModel,
+                onBack = { activeCurveEditorBinId = -1 },
+                onRepack = onStartRepack,
+                onInstallToInactiveSlot = { showInactiveInstallDialog = true },
+                onExportDts = { launchExportDts() },
+                onExportImg = { launchExportImage() },
+                canFlashOrRepack = canFlashOrRepack,
+                isRootMode = isRootMode
+            )
         }
     }
 }

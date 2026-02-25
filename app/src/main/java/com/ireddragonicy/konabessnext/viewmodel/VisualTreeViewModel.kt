@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
 
@@ -51,6 +52,23 @@ class VisualTreeViewModel @Inject constructor(
         .flatMapLatest { partition ->
             if (partition == TargetPartition.DTBO) dtboRepository.parsedTree
             else gpuRepository.parsedTree
+        }
+        .map { tree ->
+            // --- EXPERT OPTIMIZATION: Synchronous Expansion Restoration ---
+            // If the GUI modifies the file, the parser generates a brand new AST where
+            // all nodes default to isExpanded = false. If LazyColumn sees this collapsed 
+            // tree, its size shrinks and the scroll index resets to 0.
+            // By applying the persisted paths HERE, LazyColumn never sees the collapsed state.
+            tree?.let { root ->
+                val paths = _expandedNodePaths.value
+                fun applyExpansion(node: DtsNode) {
+                    // Force root to be expanded, lookup others in persisted set
+                    node.isExpanded = node.name == "root" || paths.contains(node.getFullPath())
+                    node.children.forEach { applyExpansion(it) }
+                }
+                applyExpansion(root)
+            }
+            tree
         }
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
