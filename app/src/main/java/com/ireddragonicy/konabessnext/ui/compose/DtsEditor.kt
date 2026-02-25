@@ -260,29 +260,13 @@ fun DtsEditor(
 
                     val replacement = content.substring(newMiddleStart, newMiddleEnd)
 
-                    // Calculate positions
-                    var startLine = 0
-                    var startCol = 0
-                    var endLine = 0
-                    var endCol = 0
+                    val startPos = getLineCol(oldText, oldMiddleStart)
+                    var startLine = startPos.first
+                    var startCol = startPos.second
 
-                    // Custom index calculation since we don't know Sora's getCharPosition exactly
-                    for (i in 0 until oldMiddleEnd) {
-                        if (i == oldMiddleStart) {
-                            startLine = endLine
-                            startCol = endCol
-                        }
-                        if (oldText[i] == '\n') {
-                            endLine++
-                            endCol = 0
-                        } else {
-                            endCol++
-                        }
-                    }
-                    if (oldMiddleStart == oldMiddleEnd) {
-                        startLine = endLine
-                        startCol = endCol
-                    }
+                    val endPos = getLineCol(oldText, oldMiddleEnd)
+                    var endLine = endPos.first
+                    var endCol = endPos.second
 
                     try {
                         editor.text.beginBatchEdit()
@@ -325,6 +309,18 @@ fun DtsEditor(
             editor.release()
         }
     )
+}
+
+fun getLineCol(text: String, offset: Int): Pair<Int, Int> {
+    var line = 0
+    var lastNewline = -1
+    var idx = text.indexOf('\n')
+    while (idx != -1 && idx < offset) {
+        line++
+        lastNewline = idx
+        idx = text.indexOf('\n', idx + 1)
+    }
+    return line to (offset - lastNewline - 1)
 }
 
 /**

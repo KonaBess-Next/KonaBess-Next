@@ -121,6 +121,8 @@ private class DtsAnalyzeManager : BaseAnalyzeManager() {
         analyzeThread?.interrupt()
         analyzeThread = Thread {
             try {
+                // Debounce to allow Sora's internal O(1) incremental span shifts to settle
+                Thread.sleep(250) 
                 runAnalysis()
             } catch (_: InterruptedException) {
                 // Cancelled — expected
@@ -252,24 +254,24 @@ private class DtsAnalyzeManager : BaseAnalyzeManager() {
      * Tokenize a single line starting from [startOffset], appending results to [tokens].
      */
     private fun tokenizeLine(
-        lineText: String,
+        lineText: CharSequence,
         tokens: MutableList<TokenSpan>,
         startOffset: Int
     ) {
         if (startOffset >= lineText.length) return
-        val sub = if (startOffset > 0) lineText.substring(startOffset) else lineText
+        val sub = if (startOffset > 0) lineText.subSequence(startOffset, lineText.length) else lineText
         val offset = startOffset
 
         // Line comment overrides everything after it
         val commentMatcher = PATTERN_COMMENT_LINE.matcher(sub)
-        val textToTokenize: String
+        val textToTokenize: CharSequence
         if (commentMatcher.find()) {
             tokens.add(TokenSpan(
                 commentMatcher.start() + offset,
                 commentMatcher.end() + offset,
                 DtsTokenColorIds.COMMENT
             ))
-            textToTokenize = sub.substring(0, commentMatcher.start())
+            textToTokenize = sub.subSequence(0, commentMatcher.start())
         } else {
             textToTokenize = sub
         }
@@ -289,7 +291,7 @@ private class DtsAnalyzeManager : BaseAnalyzeManager() {
 
     private fun applyPattern(
         pattern: Pattern,
-        text: String,
+        text: CharSequence,
         offset: Int,
         colorId: Int,
         tokens: MutableList<TokenSpan>
@@ -302,7 +304,7 @@ private class DtsAnalyzeManager : BaseAnalyzeManager() {
 
     private fun applyPatternGroup(
         pattern: Pattern,
-        text: String,
+        text: CharSequence,
         offset: Int,
         colorId: Int,
         tokens: MutableList<TokenSpan>,

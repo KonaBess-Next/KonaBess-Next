@@ -339,7 +339,7 @@ class DtboRepository @Inject constructor(
     override fun currentDtsPath(): String? = dtsFileRepository.currentDtsPath()
 
     override fun syncTreeToText(description: String) {
-        repoScope.launch {
+        repoScope.launch(Dispatchers.Default) {
             if (ensureParsedTree() == null) return@launch
             commitTreeChanges(description, _parsedTree.value!!)
         }
@@ -356,17 +356,17 @@ class DtboRepository @Inject constructor(
     }
 
     private fun commitTreeChanges(description: String, mutatedRoot: DtsNode) {
-        val newText = DtsTreeHelper.generate(mutatedRoot)
-        val newLines = newText.split("\n")
-        
-        if (newLines == _dtsLines.value) {
-            _parsedTree.value = mutatedRoot
-            _structuralChange.tryEmit(Unit)
-            return
+        repoScope.launch(Dispatchers.Default) {
+            val newText = DtsTreeHelper.generate(mutatedRoot)
+            val newLines = newText.split("\n")
+            
+            kotlinx.coroutines.withContext(Dispatchers.Main) {
+                if (newLines != _dtsLines.value) {
+                    updateContent(newLines, description, addToHistory = true, reparseTree = false)
+                }
+                _parsedTree.value = mutatedRoot
+                _structuralChange.tryEmit(Unit)
+            }
         }
-
-        updateContent(newLines, description, addToHistory = true, reparseTree = false)
-        _parsedTree.value = mutatedRoot
-        _structuralChange.tryEmit(Unit)
     }
 }

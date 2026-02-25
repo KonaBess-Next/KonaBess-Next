@@ -42,6 +42,8 @@ fun DtsTreeScreen(
         }
         return
     }
+    
+    var forceDraw by remember { mutableIntStateOf(0) }
 
     val currentOnNodeToggle by rememberUpdatedState(onNodeToggle)
     val currentOnTreeModified by rememberUpdatedState(onTreeModified)
@@ -108,8 +110,14 @@ fun DtsTreeScreen(
             confirmButton = {
                 TextButton(
                     onClick = {
+                        // 1. O(1) Memory Mutation
                         editingProperty?.updateFromDisplayValue(editingValue.text)
-                        currentOnTreeModified?.invoke()
+                        
+                        // 2. Force instant canvas redraw
+                        forceDraw++ 
+                        
+                        // 3. Trigger background text sync
+                        currentOnTreeModified?.invoke() 
                         editingProperty = null
                     }
                 ) {
@@ -150,6 +158,9 @@ fun DtsTreeScreen(
             }
         },
         update = { view ->
+            // Read state to trigger recomposition
+            forceDraw 
+            
             view.setColors(
                 surface = surfaceColor,
                 primary = primaryColor,
@@ -163,6 +174,9 @@ fun DtsTreeScreen(
             if (activeMatchId.isNotEmpty()) {
                 view.scrollToMatch(activeMatchId)
             }
+            
+            // Force immediate UI update using the mutated memory data
+            view.invalidate() 
         }
     )
 }
