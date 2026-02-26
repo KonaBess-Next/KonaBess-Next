@@ -1,5 +1,6 @@
 package com.ireddragonicy.konabessnext.model.dts
 
+import androidx.compose.runtime.Stable
 import java.lang.StringBuilder
 import java.util.regex.Pattern
 
@@ -7,6 +8,7 @@ import java.util.regex.Pattern
  * Represents a single property line in a DTS file.
  * Example: property = <value>;
  */
+@Stable
 class DtsProperty(name: String?, originalValue: String?) {
     @JvmField
     var name: String = name?.trim() ?: ""
@@ -17,17 +19,29 @@ class DtsProperty(name: String?, originalValue: String?) {
     @JvmField
     var isHexArray: Boolean = detectHexArray(this.originalValue)
 
+    @JvmField
+    var isByteArray: Boolean = detectByteArray(this.originalValue)
+
     private fun detectHexArray(value: String): Boolean {
         // Check if enclosed in < ... >
         if (value.isEmpty()) return false
         val v = value.trim()
         if (!v.startsWith("<") || !v.endsWith(">")) return false
 
-        // It must contain at least one 0x number to be worth converting
-        // But strictly it should be a list of numbers.
-        // We assume anything inside < > is a potential number list in DTS.
-        // A standard DTS array is like <0x1 0x2 123>
-        return true
+        val inner = v.substring(1, v.length - 1).trim()
+        if (inner.isEmpty()) return false
+
+        // Only treat pure numeric/cell arrays as editable hex arrays.
+        // This avoids rewriting phandle/ref arrays like <&foo 0x1>.
+        val parts = inner.split(Regex("\\s+"))
+        return parts.all { token ->
+            token.matches(Regex("0[xX][0-9a-fA-F]+")) || token.matches(Regex("-?\\d+"))
+        }
+    }
+
+    private fun detectByteArray(value: String): Boolean {
+        val v = value.trim()
+        return v.startsWith("[") && v.endsWith("]")
     }
 
     fun getDisplayValue(): String {
@@ -71,13 +85,19 @@ class DtsProperty(name: String?, originalValue: String?) {
     }
 
     fun updateFromDisplayValue(displayValue: String?) {
-        var dVal = displayValue ?: ""
+        var dVal = displayValue?.trim() ?: ""
 
         if (isHexArray) {
+            // Fix: If the input is already wrapped in < >, strip them first.
+            // This prevents "double wrapping" (e.g. <<0x...>>) which corrupts the AST.
+            if (dVal.startsWith("<") && dVal.endsWith(">")) {
+                dVal = dVal.substring(1, dVal.length - 1).trim()
+            }
+
             // Assume the user is inputting a space-separated list of decimal numbers (or hex if they want)
             // We want to convert everything back to hex format <0x...> if it looks like a number
             
-            val tokens = dVal.trim().split("\\s+".toRegex())
+            val tokens = dVal.split("\\s+".toRegex())
             val sb = StringBuilder()
             sb.append("<")
 

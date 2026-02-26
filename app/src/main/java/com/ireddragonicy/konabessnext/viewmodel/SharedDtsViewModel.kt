@@ -19,6 +19,12 @@ import com.ireddragonicy.konabessnext.utils.BinDiffResult
 import com.ireddragonicy.konabessnext.utils.BinDiffUtil
 import com.ireddragonicy.konabessnext.utils.DtsChangeDiffUtil
 import com.ireddragonicy.konabessnext.utils.DtsEditorDebug
+import com.ireddragonicy.konabessnext.utils.DtboDiffUtil
+import com.ireddragonicy.konabessnext.domain.TouchDomainManager
+import com.ireddragonicy.konabessnext.domain.SpeakerDomainManager
+import com.ireddragonicy.konabessnext.repository.DisplayDomainManager
+import com.ireddragonicy.konabessnext.model.TargetPartition
+import com.ireddragonicy.konabessnext.utils.DtsTreeHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
@@ -29,7 +35,7 @@ import kotlin.math.abs
 import javax.inject.Inject
 
 /**
- * Slimmed-down SharedGpuViewModel — retains only global coordination:
+ * Slimmed-down SharedDtsViewModel — retains only global coordination:
  * - ViewMode switching
  * - Loading / Workbench state
  * - GUI editor state (bins, opps, binUiModels, binOffsets)
@@ -41,14 +47,23 @@ import javax.inject.Inject
  * Visual tree manipulation and tree scroll are in [VisualTreeViewModel].
  */
 @HiltViewModel
-class SharedGpuViewModel @Inject constructor(
+class SharedDtsViewModel @Inject constructor(
     private val application: Application,
-    private val repository: GpuRepository,
+    val gpuRepository: GpuRepository,
+    val dtboRepository: com.ireddragonicy.konabessnext.repository.DtboRepository,
     private val deviceRepository: DeviceRepositoryInterface,
     private val chipRepository: com.ireddragonicy.konabessnext.repository.ChipRepository,
     private val settingsRepository: com.ireddragonicy.konabessnext.repository.SettingsRepository,
-    private val userMessageManager: com.ireddragonicy.konabessnext.utils.UserMessageManager
+    private val userMessageManager: com.ireddragonicy.konabessnext.utils.UserMessageManager,
+    private val displayDomainManager: DisplayDomainManager,
+    private val touchDomainManager: TouchDomainManager,
+    private val speakerDomainManager: SpeakerDomainManager
 ) : AndroidViewModel(application) {
+
+    private val repository get() = gpuRepository
+
+    private val activeProvider: com.ireddragonicy.konabessnext.repository.DtsDataProvider
+        get() = if (deviceRepository.selectedPartition == TargetPartition.DTBO) dtboRepository else gpuRepository
 
     enum class ViewMode { MAIN_EDITOR, TEXT_ADVANCED, VISUAL_TREE }
 
@@ -69,7 +84,9 @@ class SharedGpuViewModel @Inject constructor(
 
     // --- State Proxies from Repository (SSOT) ---
 
-    val dtsContent: StateFlow<String> = repository.dtsContent
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val dtsContent: StateFlow<String> = deviceRepository.selectedPartitionFlow
+        .flatMapLatest { activeProvider.dtsContent }
         .stateIn(viewModelScope, SharingStarted.Lazily, "")
     val bins: StateFlow<List<Bin>> = repository.bins
     val opps: StateFlow<List<Opp>> = repository.opps
@@ -86,10 +103,25 @@ class SharedGpuViewModel @Inject constructor(
     private val _originalDtsLines = MutableStateFlow<List<String>>(emptyList())
     val originalDtsLines: StateFlow<List<String>> = _originalDtsLines.asStateFlow()
 
-    val isDirty = repository.isDirty
-    val canUndo = repository.canUndo
-    val canRedo = repository.canRedo
-    val history = repository.history
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val isDirty: StateFlow<Boolean> = deviceRepository.selectedPartitionFlow
+        .flatMapLatest { activeProvider.isDirty }
+        .stateIn(viewModelScope, SharingStarted.Lazily, false)
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val canUndo: StateFlow<Boolean> = deviceRepository.selectedPartitionFlow
+        .flatMapLatest { activeProvider.canUndo }
+        .stateIn(viewModelScope, SharingStarted.Lazily, false)
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val canRedo: StateFlow<Boolean> = deviceRepository.selectedPartitionFlow
+        .flatMapLatest { activeProvider.canRedo }
+        .stateIn(viewModelScope, SharingStarted.Lazily, false)
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val history: StateFlow<List<String>> = deviceRepository.selectedPartitionFlow
+        .flatMapLatest { activeProvider.history }
+        .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
     val currentChip = chipRepository.currentChip
 
@@ -139,23 +171,28 @@ class SharedGpuViewModel @Inject constructor(
 
         viewModelScope.launch {
             try {
-                val loadResult = repository.loadTable()
+                val loadResult = activeProvider.loadTable()
                 if (loadResult is com.ireddragonicy.konabessnext.core.model.DomainResult.Failure) {
                     _isLoading.value = false
                     _workbenchState.value = WorkbenchState.Error(loadResult.error.message)
                     return@launch
                 }
 
-                val lines = repository.dtsLines.value
+                val lines = activeProvider.dtsLines.value
                 if (lines.isNotEmpty()) {
                     withTimeoutOrNull(3000) {
-                        repository.bins.drop(1).first()
+                        if (activeProvider is GpuRepository) {
+                            (activeProvider as GpuRepository).bins.drop(1).first()
+                        }
                     }
                 }
 
-                _originalDtsLines.value = repository.dtsLines.value.toList()
-                _originalBins.value = deepCopyBins(repository.bins.value)
-                detectActiveBinIndex(repository.bins.value)
+                _originalDtsLines.value = activeProvider.dtsLines.value.toList()
+                if (activeProvider is GpuRepository) {
+                    val gpuRepo = activeProvider as GpuRepository
+                    _originalBins.value = deepCopyBins(gpuRepo.bins.value)
+                    detectActiveBinIndex(gpuRepo.bins.value)
+                }
 
                 _isLoading.value = false
                 _workbenchState.value = WorkbenchState.Ready
@@ -183,33 +220,42 @@ class SharedGpuViewModel @Inject constructor(
     }
 
     suspend fun calculateDiff(includeUnchanged: Boolean = false): List<BinDiffResult> {
-        val originalSnapshot = deepCopyBins(_originalBins.value)
-        val currentSnapshot = deepCopyBins(repository.bins.value)
+        val isDtbo = deviceRepository.selectedPartition == TargetPartition.DTBO
         val originalLines = _originalDtsLines.value.toList()
-        val currentLines = repository.dtsLines.value.toList()
+        val currentLines = activeProvider.dtsLines.value.toList()
+
         return withContext(Dispatchers.Default) {
-            val semanticBinDiff = BinDiffUtil.calculateDiff(
-                originalBins = originalSnapshot,
-                currentBins = currentSnapshot,
-                includeUnchanged = includeUnchanged
-            )
-            val comprehensiveDiff = ArrayList<BinDiffResult>(semanticBinDiff.size + 1)
-            DtsChangeDiffUtil.calculateGeneralDiff(
-                originalLines = originalLines,
-                currentLines = currentLines
-            )?.let { comprehensiveDiff.add(it) }
-            comprehensiveDiff.addAll(semanticBinDiff)
+            val comprehensiveDiff = ArrayList<BinDiffResult>()
+
+            if (isDtbo) {
+                val oldTree = DtsTreeHelper.parse(originalLines.joinToString("\n"))
+                val newTree = DtsTreeHelper.parse(currentLines.joinToString("\n"))
+                comprehensiveDiff.addAll(
+                    DtboDiffUtil.calculateDiff(oldTree, newTree, displayDomainManager, touchDomainManager, speakerDomainManager)
+                )
+            } else {
+                val semanticBinDiff = BinDiffUtil.calculateDiff(
+                    originalBins = _originalBins.value.map { it.copyBin() },
+                    currentBins = gpuRepository.bins.value.map { it.copyBin() },
+                    includeUnchanged = includeUnchanged
+                )
+                comprehensiveDiff.addAll(semanticBinDiff)
+            }
+
+            DtsChangeDiffUtil.calculateGeneralDiff(originalLines, currentLines)?.let { rawDiff ->
+                comprehensiveDiff.add(rawDiff)
+            }
+
             comprehensiveDiff
         }
     }
 
-    fun undo() = repository.undo()
-    fun redo() = repository.redo()
+    fun undo() = activeProvider.undo()
+    fun redo() = activeProvider.redo()
 
     fun save(showToast: Boolean = true) {
         viewModelScope.launch {
-        viewModelScope.launch {
-            val result = repository.saveTable()
+            val result = activeProvider.saveTable()
             if (result is com.ireddragonicy.konabessnext.core.model.DomainResult.Failure) {
                 userMessageManager.emitError("Save Failed", result.error.message)
             } else if (showToast) {
@@ -217,7 +263,6 @@ class SharedGpuViewModel @Inject constructor(
                     Toast.makeText(application, "Saved successfully", Toast.LENGTH_SHORT).show()
                 }
             }
-        }
         }
     }
 

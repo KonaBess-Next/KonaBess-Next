@@ -760,7 +760,7 @@ class DtsParser(tokens: List<Token>) {
         private const val MISSING_BRACE_LOOKAHEAD = 16
         private const val MAX_RECOVERY_LOOKAHEAD = 48
         private const val MAX_RECOVERY_SKIP = 512
-        private const val MAX_VALUE_TOKENS = 4096
+        private const val MAX_VALUE_TOKENS = 131072
 
         private val DEFAULT_OPTIONS = ParseOptions()
     }

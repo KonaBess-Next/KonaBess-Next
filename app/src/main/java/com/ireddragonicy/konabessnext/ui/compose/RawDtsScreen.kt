@@ -17,97 +17,50 @@ fun RawDtsScreen(
     textViewModel: TextEditorViewModel = hiltViewModel(),
     treeViewModel: VisualTreeViewModel = hiltViewModel()
 ) {
-    val searchState by textViewModel.searchState.collectAsState()
-    val foldSessionKey by textViewModel.dtsEditorSessionKey.collectAsState()
-    val editorState = textViewModel.dtsEditorState
-    val persistedCollapsedFolds = remember(foldSessionKey) {
-        textViewModel.getCollapsedFolds(foldSessionKey)
-    }
-    
-    // Read initial persisted positions once; then sync back with throttling.
-    val initialTextScrollIdx = remember { textViewModel.textScrollIndex.value }
-    val initialTextScrollOff = remember { textViewModel.textScrollOffset.value }
-    val initialTreeScrollIdx = remember { treeViewModel.treeScrollIndex.value }
-    val initialTreeScrollOff = remember { treeViewModel.treeScrollOffset.value }
-
+    val dtsContent by textViewModel.dtsContent.collectAsState()
     val parsedTree by treeViewModel.parsedTree.collectAsState()
-    
+    val flattenedList by treeViewModel.flattenedTreeState.collectAsState()
+
     // View Mode (Local switch for standalone activity)
     var isVisualMode by remember { mutableStateOf(false) }
-    
-    // Text Editor Scroll State (Persisted)
-    val textListState = rememberLazyListState(
-        initialFirstVisibleItemIndex = initialTextScrollIdx,
-        initialFirstVisibleItemScrollOffset = initialTextScrollOff
-    )
-    
-    // Sync text scroll with throttling to avoid per-frame StateFlow writes.
-    LaunchedEffect(textListState) {
-        var lastCommittedIndex = initialTextScrollIdx
-        var lastCommittedOffset = initialTextScrollOff
-        snapshotFlow { Pair(textListState.firstVisibleItemIndex, textListState.firstVisibleItemScrollOffset) }
-            .distinctUntilChanged()
-            .collectLatest { (index, offset) ->
-                val shouldPersist =
-                    index != lastCommittedIndex || abs(offset - lastCommittedOffset) >= 24
-                if (shouldPersist) {
-                    if (textViewModel.textScrollIndex.value != index) {
-                        textViewModel.textScrollIndex.value = index
-                    }
-                    if (textViewModel.textScrollOffset.value != offset) {
-                        textViewModel.textScrollOffset.value = offset
-                    }
-                    lastCommittedIndex = index
-                    lastCommittedOffset = offset
-                }
-            }
+
+    // Sora editor state for text mode search
+    val soraEditorState = rememberSoraEditorState()
+
+    // Tree mode search state
+    val treeSearchQuery by treeViewModel.treeSearchQuery.collectAsState()
+    val searchMatches by treeViewModel.searchMatches.collectAsState()
+    var treeCurrentIndex by remember { mutableIntStateOf(-1) }
+
+    // Reset tree search index when query changes
+    LaunchedEffect(treeSearchQuery) {
+        treeCurrentIndex = if (treeSearchQuery.isNotEmpty()) 0 else -1
     }
-    
-    LaunchedEffect(textListState) {
-        snapshotFlow { textListState.isScrollInProgress }
-            .distinctUntilChanged()
-            .collectLatest { scrolling ->
-                if (!scrolling) {
-                    val index = textListState.firstVisibleItemIndex
-                    val offset = textListState.firstVisibleItemScrollOffset
-                    if (textViewModel.textScrollIndex.value != index) {
-                        textViewModel.textScrollIndex.value = index
-                    }
-                    if (textViewModel.textScrollOffset.value != offset) {
-                        textViewModel.textScrollOffset.value = offset
-                    }
-                }
-            }
-    }
-    
-    // Tree Editor Scroll State (Persisted)
+
+    // Tree Editor Scroll State
+    val initialTreeScrollIdx = remember { treeViewModel.treeScrollIndex.value }
+    val initialTreeScrollOff = remember { treeViewModel.treeScrollOffset.value }
     val treeListState = rememberLazyListState(
         initialFirstVisibleItemIndex = initialTreeScrollIdx,
         initialFirstVisibleItemScrollOffset = initialTreeScrollOff
     )
-    
-    // Sync tree scroll with throttling to avoid per-frame StateFlow writes.
+
+    // Sync tree scroll with throttling
     LaunchedEffect(treeListState) {
-        var lastCommittedIndex = initialTreeScrollIdx
-        var lastCommittedOffset = initialTreeScrollOff
+        var lastIdx = initialTreeScrollIdx
+        var lastOff = initialTreeScrollOff
         snapshotFlow { Pair(treeListState.firstVisibleItemIndex, treeListState.firstVisibleItemScrollOffset) }
             .distinctUntilChanged()
             .collectLatest { (index, offset) ->
-                val shouldPersist =
-                    index != lastCommittedIndex || abs(offset - lastCommittedOffset) >= 24
-                if (shouldPersist) {
-                    if (treeViewModel.treeScrollIndex.value != index) {
-                        treeViewModel.treeScrollIndex.value = index
-                    }
-                    if (treeViewModel.treeScrollOffset.value != offset) {
-                        treeViewModel.treeScrollOffset.value = offset
-                    }
-                    lastCommittedIndex = index
-                    lastCommittedOffset = offset
+                if (index != lastIdx || abs(offset - lastOff) >= 24) {
+                    if (treeViewModel.treeScrollIndex.value != index) treeViewModel.treeScrollIndex.value = index
+                    if (treeViewModel.treeScrollOffset.value != offset) treeViewModel.treeScrollOffset.value = offset
+                    lastIdx = index
+                    lastOff = offset
                 }
             }
     }
-    
+
     LaunchedEffect(treeListState) {
         snapshotFlow { treeListState.isScrollInProgress }
             .distinctUntilChanged()
@@ -115,61 +68,50 @@ fun RawDtsScreen(
                 if (!scrolling) {
                     val index = treeListState.firstVisibleItemIndex
                     val offset = treeListState.firstVisibleItemScrollOffset
-                    if (treeViewModel.treeScrollIndex.value != index) {
-                        treeViewModel.treeScrollIndex.value = index
-                    }
-                    if (treeViewModel.treeScrollOffset.value != offset) {
-                        treeViewModel.treeScrollOffset.value = offset
-                    }
+                    if (treeViewModel.treeScrollIndex.value != index) treeViewModel.treeScrollIndex.value = index
+                    if (treeViewModel.treeScrollOffset.value != offset) treeViewModel.treeScrollOffset.value = offset
                 }
             }
     }
 
-    // Tree-local search navigation for visual mode
-    var treeMatchCount by remember { mutableIntStateOf(0) }
-    var treeCurrentIndex by remember { mutableIntStateOf(-1) }
-    
-    LaunchedEffect(searchState.query) {
-        treeCurrentIndex = if (searchState.query.isNotEmpty()) 0 else -1
-    }
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
 
     Column(modifier = Modifier.fillMaxSize()) {
         // Mode Switcher
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-             TextButton(onClick = { isVisualMode = !isVisualMode }) {
+             TextButton(onClick = {
+                 focusManager.clearFocus()
+                 isVisualMode = !isVisualMode
+             }) {
                  Text(if (isVisualMode) "Switch to Text" else "Switch to Tree")
              }
         }
-        
+
         if (isVisualMode) {
             DtsTreeScreen(
-                rootNode = parsedTree,
+                rootNode = parsedTree, // null check inside DtsTreeScreen
+                flattenedList = flattenedList,
                 listState = treeListState,
-                searchQuery = searchState.query,
+                searchQuery = treeSearchQuery,
+                searchMatches = searchMatches,
                 searchMatchIndex = treeCurrentIndex,
-                onNodeToggle = { path, expanded -> 
-                    treeViewModel.toggleNodeExpansion(path, expanded) 
+                onNodeToggle = { path, expanded ->
+                    treeViewModel.toggleNodeExpansion(path, expanded)
                 },
-                onSearchMatchesChanged = { count ->
-                    treeMatchCount = count
-                    if (treeCurrentIndex >= count) {
-                        treeCurrentIndex = if (count > 0) 0 else -1
-                    }
+                onExpandAncestors = { node ->
+                    treeViewModel.expandAncestors(node)
                 },
+                onSearchMatchesChanged = { /* Now handled by ViewModel */ },
                 onTreeModified = { treeViewModel.syncTreeToText() }
             )
         } else {
             DtsEditor(
-                editorState = editorState,
-                onLinesChanged = { textViewModel.updateFromEditorLines(it, "Raw Edit") },
-                foldSessionKey = foldSessionKey,
-                persistedCollapsedFolds = persistedCollapsedFolds,
-                onFoldStateChanged = { textViewModel.updateCollapsedFolds(foldSessionKey, it) },
-                searchQuery = searchState.query,
-                searchResultIndex = searchState.currentIndex,
-                searchResults = emptyList(),
-                lintErrorsByLine = textViewModel.lintErrorsByLine,
-                listState = textListState
+                content = dtsContent,
+                soraEditorState = soraEditorState,
+                onContentChanged = { newText ->
+                    textViewModel.updateFromText(newText, "Raw Edit")
+                },
+                modifier = Modifier.fillMaxSize()
             )
         }
     }

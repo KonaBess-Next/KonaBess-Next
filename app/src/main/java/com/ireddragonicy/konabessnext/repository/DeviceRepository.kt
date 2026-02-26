@@ -9,10 +9,13 @@ import com.ireddragonicy.konabessnext.core.processor.BootImageProcessor
 import com.ireddragonicy.konabessnext.model.ChipDefinition
 import com.ireddragonicy.konabessnext.model.Dtb
 import com.ireddragonicy.konabessnext.model.DtbType
+import com.ireddragonicy.konabessnext.model.TargetPartition
 import com.ireddragonicy.konabessnext.model.LevelPresets
 import com.ireddragonicy.konabessnext.core.scanner.DtsScanner
 import java.io.InputStream
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileInputStream
@@ -48,52 +51,102 @@ open class DeviceRepository @Inject constructor(
         
         private const val KEY_LAST_DTB_ID = "last_dtb_id"
         private const val KEY_LAST_CHIP_TYPE = "last_chip_type"
+        private const val KEY_LAST_PARTITION = "last_partition"
     }
 
     private val filesDir: String = fileDataSource.getFilesDir().absolutePath
     private val nativeLibDir: String = fileDataSource.getNativeLibDir().absolutePath
     private val savedDtsDir: File = File(filesDir, "saved_dts").also { it.mkdirs() }
+    private val partitionRootDir: File = File(filesDir, "partitions").also { it.mkdirs() }
     
     private var _dtsPath: String? = null
     override val dtsPath: String?
         get() = _dtsPath
+
+    private var _availablePartitions: MutableList<TargetPartition> = mutableListOf(TargetPartition.VENDOR_BOOT)
+    override val availablePartitions: List<TargetPartition>
+        get() = _availablePartitions.toList()
+
+    private val _selectedPartitionFlow = kotlinx.coroutines.flow.MutableStateFlow(TargetPartition.VENDOR_BOOT)
+    override val selectedPartitionFlow: kotlinx.coroutines.flow.StateFlow<TargetPartition> = _selectedPartitionFlow.asStateFlow()
+
+    override val selectedPartition: TargetPartition
+        get() = _selectedPartitionFlow.value
+
+    private val dtbsByPartition: MutableMap<TargetPartition, MutableList<Dtb>> = HashMap()
+    private val activeDtbIdByPartition: MutableMap<TargetPartition, Int> = HashMap()
+    private val importCounterByPartition: MutableMap<TargetPartition, Int> = HashMap()
+    private val dtbNumByPartition: MutableMap<TargetPartition, Int> = HashMap()
+    private val dtbTypeByPartition: MutableMap<TargetPartition, DtbType?> = HashMap()
+    private val importedDtsPathsByPartition: MutableMap<TargetPartition, HashMap<Int, String>> = HashMap()
+
     var bootName: String? = null
         private set
-    var dtbs: MutableList<Dtb> = ArrayList()
-        private set
+    var dtbs: MutableList<Dtb>
+        get() = dtbsByPartition.getOrPut(selectedPartition) { ArrayList() }
+        private set(value) {
+            dtbsByPartition[selectedPartition] = value
+        }
     var prepared: Boolean = false
         private set
     var currentDtb: Dtb? = null
         private set
     
-    var activeDtbId: Int = -1
-        private set
+    var activeDtbId: Int
+        get() = activeDtbIdByPartition[selectedPartition] ?: -1
+        private set(value) {
+            activeDtbIdByPartition[selectedPartition] = value
+        }
 
     /** Whether the app is currently in root mode. */
     val isRootMode: Boolean
         get() = shellRepository.isRootMode
 
-    private var importCounter: Int = 0
+    private fun partitionDir(partition: TargetPartition): File {
+        return File(partitionRootDir, partition.storageKey).also { it.mkdirs() }
+    }
 
-    // Maps imported DTB IDs (negative) to their actual file paths.
-    // chooseTarget uses this to resolve the correct path for re-selected imports.
-    private val importedDtsPaths = HashMap<Int, String>()
+    private fun importedPathMap(partition: TargetPartition = selectedPartition): HashMap<Int, String> {
+        return importedDtsPathsByPartition.getOrPut(partition) { HashMap() }
+    }
 
-    private var dtbNum: Int = 0
-    private var dtbType: DtbType? = null
+    private fun nextImportedVirtualId(partition: TargetPartition = selectedPartition): Int {
+        val next = (importCounterByPartition[partition] ?: 0) + 1
+        importCounterByPartition[partition] = next
+        return -next
+    }
+
+    private fun setSelectedPartitionInternal(partition: TargetPartition) {
+        _selectedPartitionFlow.value = partition
+        bootName = partition.partitionName
+        if (!_availablePartitions.contains(partition)) {
+            _availablePartitions.add(partition)
+        }
+        _availablePartitions = _availablePartitions
+            .distinct()
+            .sortedBy { target -> TargetPartition.entries.indexOf(target) }
+            .toMutableList()
+    }
+
+    override fun setSelectedPartition(partition: TargetPartition) {
+        setSelectedPartitionInternal(partition)
+    }
+
+    override fun getDtbs(partition: TargetPartition): List<Dtb> = dtbsByPartition[partition]?.toList() ?: emptyList()
 
     fun getDtbCount(): Int {
-        val dtsFiles = File(filesDir).listFiles { _, name -> name.endsWith(".dts") }
-        dtbNum = dtsFiles?.size ?: 0
-        return dtbNum
+        val dtsFiles = partitionDir(selectedPartition).listFiles { _, name -> name.endsWith(".dts") }
+        val count = dtsFiles?.size ?: 0
+        dtbNumByPartition[selectedPartition] = count
+        return count
     }
 
     fun setCustomChip(def: ChipDefinition, dtbIndex: Int) {
-        val dtsFile = importedDtsPaths[dtbIndex]?.let { File(it) } ?: File(filesDir, "$dtbIndex.dts")
+        val dtsFile = importedPathMap()[dtbIndex]?.let { File(it) } ?: File(partitionDir(selectedPartition), "$dtbIndex.dts")
         if (dtsFile.exists()) {
             _dtsPath = dtsFile.absolutePath
             chipRepository.setCurrentChip(def)
-            currentDtb = Dtb(dtbIndex, def)
+            currentDtb = Dtb(dtbIndex, def, selectedPartition)
             prepared = true
             saveLastChipset(dtbIndex, def.id)
             saveCustomDefinition(def)
@@ -136,6 +189,7 @@ open class DeviceRepository @Inject constructor(
 
     suspend fun importExternalDts(inputStream: InputStream, filename: String): DomainResult<Dtb> = withContext(Dispatchers.IO) {
         try {
+            setSelectedPartitionInternal(selectedPartition)
             val timestamp = System.currentTimeMillis()
             val sanitizedName = filename.replace(Regex("[^a-zA-Z0-9._-]"), "_")
                 .removeSuffix(".dts").removeSuffix(".dtb").removeSuffix(".txt")
@@ -178,8 +232,7 @@ open class DeviceRepository @Inject constructor(
             }
 
             // Use sequential negative IDs to distinguish from physical DTBs (0..n)
-            importCounter++
-            val virtualId = -importCounter
+            val virtualId = nextImportedVirtualId(selectedPartition)
 
             val content = importedFile.readText()
 
@@ -191,10 +244,10 @@ open class DeviceRepository @Inject constructor(
                 createGenericPlaceholder(virtualId, content, scanResult.detectedModel ?: "Imported (Unknown)")
             }
 
-            val dtb = Dtb(virtualId, def)
+            val dtb = Dtb(virtualId, def, selectedPartition)
             dtbs.add(dtb)
             _dtsPath = importedFile.absolutePath
-            importedDtsPaths[virtualId] = importedFile.absolutePath
+            importedPathMap()[virtualId] = importedFile.absolutePath
             chipRepository.setCurrentChip(def)
             currentDtb = dtb
             prepared = (def.strategyType.isNotEmpty())
@@ -221,8 +274,7 @@ open class DeviceRepository @Inject constructor(
 
         val loaded = mutableListOf<Dtb>()
         for (file in savedFiles) {
-            importCounter++
-            val virtualId = -importCounter
+            val virtualId = nextImportedVirtualId(selectedPartition)
             val content = file.readText()
             val scanResult = DtsScanner.scanContent(content, virtualId)
             val def = if (scanResult.isValid) {
@@ -230,9 +282,9 @@ open class DeviceRepository @Inject constructor(
             } else {
                 createGenericPlaceholder(virtualId, content, scanResult.detectedModel ?: file.nameWithoutExtension)
             }
-            val dtb = Dtb(virtualId, def)
+            val dtb = Dtb(virtualId, def, selectedPartition)
             dtbs.add(dtb)
-            importedDtsPaths[virtualId] = file.absolutePath
+            importedPathMap()[virtualId] = file.absolutePath
             loaded.add(dtb)
         }
         loaded
@@ -242,11 +294,11 @@ open class DeviceRepository @Inject constructor(
      * Delete a saved/imported DTS file by its virtual ID.
      */
     fun deleteSavedDts(virtualId: Int): Boolean {
-        val path = importedDtsPaths[virtualId] ?: return false
+        val path = importedPathMap()[virtualId] ?: return false
         val file = File(path)
         val deleted = if (file.exists()) file.delete() else true
         if (deleted) {
-            importedDtsPaths.remove(virtualId)
+            importedPathMap().remove(virtualId)
             dtbs.removeAll { it.id == virtualId }
             if (currentDtb?.id == virtualId) {
                 currentDtb = null
@@ -275,15 +327,25 @@ open class DeviceRepository @Inject constructor(
     }
 
     fun getDtsFile(index: Int): File {
-        importedDtsPaths[index]?.let { return File(it) }
-        return File(filesDir, "$index.dts")
+        importedPathMap()[index]?.let { return File(it) }
+        return File(partitionDir(selectedPartition), "$index.dts")
     }
 
     suspend fun cleanEnv() = withContext(Dispatchers.IO) {
         resetState()
         if (isRootMode) {
             // Use root shell to delete — handles any file ownership
-            shellRepository.execAndCheck("rm -f $filesDir/*.dtb", "rm -f $filesDir/*.dts", "rm -f $filesDir/boot.img", "rm -f $filesDir/boot_new.img", "rm -f $filesDir/kernel_dtb", "rm -f $filesDir/dtb")
+            shellRepository.execAndCheck(
+                "rm -f $filesDir/*.dtb",
+                "rm -f $filesDir/*.dts",
+                "rm -f $filesDir/boot.img",
+                "rm -f $filesDir/boot_new.img",
+                "rm -f $filesDir/dtbo.img",
+                "rm -f $filesDir/dtbo_new.img",
+                "rm -f $filesDir/kernel_dtb",
+                "rm -f $filesDir/dtb",
+                "rm -rf ${partitionRootDir.absolutePath}/*"
+            )
         } else {
             // Non-root: use cleanWorkingFiles helper (handles root-owned leftover files)
             cleanWorkingFiles()
@@ -299,7 +361,7 @@ open class DeviceRepository @Inject constructor(
     private fun cleanWorkingFiles() {
         val dir = File(filesDir)
         // Explicitly delete known working files
-        listOf("boot.img", "boot_new.img", "kernel_dtb", "dtb").forEach { name ->
+        listOf("boot.img", "boot_new.img", "dtbo.img", "dtbo_new.img", "kernel_dtb", "dtb").forEach { name ->
             val f = File(dir, name)
             if (f.exists()) {
                 val deleted = f.delete()
@@ -315,17 +377,29 @@ open class DeviceRepository @Inject constructor(
                 Log.d(TAG, "cleanWorkingFiles: $name delete=${deleted}")
             }
         }
+
+        partitionRootDir.listFiles()?.forEach { partitionDir ->
+            partitionDir.listFiles()?.forEach { file ->
+                val deleted = file.delete()
+                Log.d(TAG, "cleanWorkingFiles(partition): ${file.name} delete=$deleted")
+            }
+        }
     }
 
     private fun resetState() {
         prepared = false
         _dtsPath = null
-        dtbs.clear()
+        dtbsByPartition.clear()
+        _availablePartitions.clear()
+        _availablePartitions.add(TargetPartition.VENDOR_BOOT)
+        _selectedPartitionFlow.value = TargetPartition.VENDOR_BOOT
         bootName = null
         currentDtb = null
-        activeDtbId = -1
-        importCounter = 0
-        importedDtsPaths.clear()
+        activeDtbIdByPartition.clear()
+        importCounterByPartition.clear()
+        importedDtsPathsByPartition.clear()
+        dtbNumByPartition.clear()
+        dtbTypeByPartition.clear()
     }
 
     /**
@@ -467,10 +541,11 @@ open class DeviceRepository @Inject constructor(
     }
 
     fun chooseTarget(dtb: Dtb) {
+        setSelectedPartitionInternal(dtb.partition)
         // Imported DTBs have negative IDs and their files are NOT at {id}.dts.
         // Look up the actual path from the import registry.
-        val importedPath = importedDtsPaths[dtb.id]
-        _dtsPath = importedPath ?: "$filesDir/${dtb.id}.dts"
+        val importedPath = importedPathMap(dtb.partition)[dtb.id]
+        _dtsPath = importedPath ?: File(partitionDir(dtb.partition), "${dtb.id}.dts").absolutePath
         chipRepository.setCurrentChip(dtb.type)
         currentDtb = dtb
         prepared = (dtb.type.strategyType.isNotEmpty())
@@ -478,7 +553,7 @@ open class DeviceRepository @Inject constructor(
     }
 
     fun chooseFallbackTarget(index: Int) {
-        val file = File(filesDir, "$index.dts")
+        val file = File(partitionDir(selectedPartition), "$index.dts")
         if (file.exists()) {
             _dtsPath = file.absolutePath
         }
@@ -489,23 +564,33 @@ open class DeviceRepository @Inject constructor(
             return@withContext DomainResult.Failure(AppError.RootAccessError())
         }
 
-        val vendorBootResult = getBootImageByType("vendor_boot")
-        if (vendorBootResult is DomainResult.Success) {
-            bootName = "vendor_boot"
-            return@withContext DomainResult.Success(Unit)
+        val candidates = listOf(TargetPartition.VENDOR_BOOT, TargetPartition.BOOT, TargetPartition.DTBO)
+        val detected = mutableListOf<TargetPartition>()
+        val errors = mutableListOf<String>()
+
+        for (partition in candidates) {
+            when (val result = getBootImageByType(partition)) {
+                is DomainResult.Success -> detected.add(partition)
+                is DomainResult.Failure -> errors.add("${partition.partitionName}: ${result.error.message}")
+            }
         }
 
-        val bootResult = getBootImageByType("boot")
-        if (bootResult is DomainResult.Success) {
-            bootName = "boot"
-            return@withContext DomainResult.Success(Unit)
+        if (detected.isEmpty()) {
+            return@withContext DomainResult.Failure(
+                AppError.ShellError("Failed to extract any supported partition image.\n${errors.joinToString("\n")}")
+            )
         }
 
-        val vendorError = (vendorBootResult as? DomainResult.Failure)?.error?.message ?: "Unknown vendor_boot failure"
-        val bootError = (bootResult as? DomainResult.Failure)?.error?.message ?: "Unknown boot failure"
-        DomainResult.Failure(
-            AppError.ShellError("Failed to extract boot images.\nvendor_boot: $vendorError\nboot: $bootError")
-        )
+        _availablePartitions.clear()
+        _availablePartitions.addAll(detected)
+
+        val preferred = when {
+            detected.contains(TargetPartition.VENDOR_BOOT) -> TargetPartition.VENDOR_BOOT
+            detected.contains(TargetPartition.BOOT) -> TargetPartition.BOOT
+            else -> TargetPartition.DTBO
+        }
+        setSelectedPartitionInternal(preferred)
+        DomainResult.Success(Unit)
     }
 
     /**
@@ -513,29 +598,52 @@ open class DeviceRepository @Inject constructor(
      * Copies the stream content to filesDir/boot.img for processing.
      */
     suspend fun importBootImage(inputStream: InputStream, filename: String): DomainResult<Unit> = withContext(Dispatchers.IO) {
+        val partition = when {
+            filename.contains("dtbo", ignoreCase = true) -> TargetPartition.DTBO
+            filename.contains("vendor", ignoreCase = true) -> TargetPartition.VENDOR_BOOT
+            else -> TargetPartition.BOOT
+        }
+        importImageForPartition(partition, inputStream, filename)
+    }
+
+    suspend fun importDtboImage(inputStream: InputStream, filename: String): DomainResult<Unit> = withContext(Dispatchers.IO) {
+        importImageForPartition(TargetPartition.DTBO, inputStream, filename)
+    }
+
+    private suspend fun importImageForPartition(
+        partition: TargetPartition,
+        inputStream: InputStream,
+        filename: String
+    ): DomainResult<Unit> = withContext(Dispatchers.IO) {
         try {
             // Clean up ALL working artifacts first — old files may be root-owned
             // from a previous root-mode session and can't be overwritten directly.
-            cleanWorkingFiles()
+            val partitionWorkspace = partitionDir(partition)
+            partitionWorkspace.listFiles()?.forEach { it.delete() }
 
-            val bootImgFile = File(filesDir, "boot.img")
+            val bootImgFile = File(partitionWorkspace, partition.imageFileName)
             FileOutputStream(bootImgFile).use { output ->
                 val bytesCopied = inputStream.copyTo(output)
-                Log.d(TAG, "importBootImage: copied $bytesCopied bytes from $filename")
+                Log.d(TAG, "importImageForPartition: copied $bytesCopied bytes from $filename (${partition.partitionName})")
             }
             if (!bootImgFile.exists() || bootImgFile.length() == 0L) {
                 return@withContext DomainResult.Failure(
-                    AppError.IoError("Failed to import boot image - 0 bytes received.")
+                    AppError.IoError("Failed to import ${partition.partitionName} image - 0 bytes received.")
                 )
             }
-            // Determine boot name from filename hint
-            bootName = if (filename.contains("vendor", ignoreCase = true)) "vendor_boot" else "boot"
-            Log.d(TAG, "importBootImage: ${bootImgFile.length()} bytes, bootName=$bootName")
+
+            setSelectedPartitionInternal(partition)
+            dtbsByPartition.remove(partition)
+            activeDtbIdByPartition.remove(partition)
+            dtbNumByPartition.remove(partition)
+            dtbTypeByPartition.remove(partition)
+
+            Log.d(TAG, "importImageForPartition: ${bootImgFile.length()} bytes, partition=${partition.partitionName}")
             DomainResult.Success(Unit)
         } catch (e: IOException) {
-            DomainResult.Failure(AppError.IoError(e.message ?: "Failed to import boot image.", e))
+            DomainResult.Failure(AppError.IoError(e.message ?: "Failed to import ${partition.partitionName} image.", e))
         } catch (e: Exception) {
-            DomainResult.Failure(AppError.UnknownError(e.message ?: "Failed to import boot image.", e))
+            DomainResult.Failure(AppError.UnknownError(e.message ?: "Failed to import ${partition.partitionName} image.", e))
         }
     }
 
@@ -543,7 +651,7 @@ open class DeviceRepository @Inject constructor(
      * Export the repacked boot image to an output stream (non-root mode).
      */
     suspend fun exportRepackedImage(outputStream: OutputStream) = withContext(Dispatchers.IO) {
-        val repackedFile = File(filesDir, "boot_new.img")
+        val repackedFile = File(partitionDir(selectedPartition), selectedPartition.outputFileName)
         if (!repackedFile.exists() || repackedFile.length() == 0L) {
             throw IOException("Repacked image not found. Run repack first.")
         }
@@ -552,16 +660,33 @@ open class DeviceRepository @Inject constructor(
         }
     }
 
-    private suspend fun getBootImageByType(type: String): DomainResult<Unit> {
-        val bootImgPath = "$filesDir/boot.img"
-        val partition = "/dev/block/bootdevice/by-name/$type${getCurrent("slot")}"
-        val command = "dd if=$partition of=$bootImgPath && chmod 644 $bootImgPath"
-        if (!shellRepository.execAndCheck(command)) {
-            return DomainResult.Failure(
-                AppError.ShellError("Failed to get $type image from $partition.", command)
-            )
+    private suspend fun getBootImageByType(partitionType: TargetPartition): DomainResult<Unit> {
+        val partitionWorkspace = partitionDir(partitionType)
+        val imagePath = File(partitionWorkspace, partitionType.imageFileName).absolutePath
+        val slotSuffix = if (partitionType.slotAware) getCurrent("slot") else ""
+
+        val candidates = linkedSetOf(
+            "/dev/block/bootdevice/by-name/${partitionType.partitionName}$slotSuffix",
+            "/dev/block/by-name/${partitionType.partitionName}$slotSuffix",
+            "/dev/block/bootdevice/by-name/${partitionType.partitionName}",
+            "/dev/block/by-name/${partitionType.partitionName}"
+        )
+
+        var lastCommand: String? = null
+        for (partition in candidates) {
+            val command = "dd if=$partition of=$imagePath && chmod 644 $imagePath"
+            lastCommand = command
+            if (shellRepository.execAndCheck(command)) {
+                return DomainResult.Success(Unit)
+            }
         }
-        return DomainResult.Success(Unit)
+
+        return DomainResult.Failure(
+            AppError.ShellError(
+                "Failed to get ${partitionType.partitionName} image from known block paths.",
+                lastCommand
+            )
+        )
     }
 
     suspend fun writeBootImage(): DomainResult<Unit> = withContext(Dispatchers.IO) {
@@ -575,8 +700,20 @@ open class DeviceRepository @Inject constructor(
                     AppError.BootImageError("Boot partition type unknown. Please import or detect first.")
                 )
 
-            val newBootPath = "$filesDir/boot_new.img"
-            val partition = "/dev/block/by-name/$resolvedBootName${getCurrent("slot")}"
+            val newBootPath = File(partitionDir(selectedPartition), selectedPartition.outputFileName).absolutePath
+            val slotSuffix = if (selectedPartition.slotAware) getCurrent("slot") else ""
+            val partitionCandidates = linkedSetOf(
+                "/dev/block/by-name/$resolvedBootName$slotSuffix",
+                "/dev/block/bootdevice/by-name/$resolvedBootName$slotSuffix",
+                "/dev/block/by-name/$resolvedBootName",
+                "/dev/block/bootdevice/by-name/$resolvedBootName"
+            )
+
+            val partition = partitionCandidates.firstOrNull { candidate ->
+                shellRepository.execAndCheck("[ -e '$candidate' ]")
+            } ?: return@withContext DomainResult.Failure(
+                AppError.BootImageError("Cannot find writable block device for $resolvedBootName")
+            )
 
             when (val verifyResult = verifyPartitionSize(partition, newBootPath)) {
                 is DomainResult.Failure -> return@withContext verifyResult
@@ -605,7 +742,13 @@ open class DeviceRepository @Inject constructor(
                 return@withContext DomainResult.Failure(AppError.RootAccessError())
             }
 
-            val newImg = File(filesDir, "boot_new.img")
+            if (selectedPartition == TargetPartition.DTBO) {
+                return@withContext DomainResult.Failure(
+                    AppError.BootImageError("Install to inactive slot is only supported for boot/vendor_boot partitions.")
+                )
+            }
+
+            val newImg = File(partitionDir(selectedPartition), selectedPartition.outputFileName)
             if (!newImg.exists() || newImg.length() == 0L) {
                 return@withContext DomainResult.Failure(
                     AppError.IoError("Repacked image not found. Please 'Build > Repack' first.")
@@ -701,10 +844,46 @@ open class DeviceRepository @Inject constructor(
         return DomainResult.Success(Unit)
     }
     
-    fun getBootImageFile(): File = File("$filesDir/boot.img")
+    fun getBootImageFile(): File = File(partitionDir(selectedPartition), selectedPartition.imageFileName)
+
+    suspend fun flashDtboImage(): DomainResult<Unit> = withContext(Dispatchers.IO) {
+        setSelectedPartitionInternal(TargetPartition.DTBO)
+        writeBootImage()
+    }
+
+    suspend fun switchPartitionAndLoad(partition: TargetPartition): DomainResult<List<Dtb>> = withContext(Dispatchers.IO) {
+        setSelectedPartitionInternal(partition)
+
+        if (dtbsByPartition[partition]?.isNotEmpty() == true) {
+            return@withContext DomainResult.Success(ArrayList(dtbsByPartition[partition] ?: emptyList()))
+        }
+
+        val imageFile = File(partitionDir(partition), partition.imageFileName)
+        if (!imageFile.exists()) {
+            if (!isRootMode) {
+                return@withContext DomainResult.Failure(
+                    AppError.BootImageError("${partition.partitionName} image is not loaded. Import ${partition.partitionName}.img first.")
+                )
+            }
+
+            when (val pull = getBootImageByType(partition)) {
+                is DomainResult.Failure -> return@withContext pull
+                is DomainResult.Success -> Unit
+            }
+        }
+
+        when (val split = bootImage2dts()) {
+            is DomainResult.Failure -> return@withContext split
+            is DomainResult.Success -> Unit
+        }
+
+        checkDevice()
+    }
 
     suspend fun checkDevice(): DomainResult<List<Dtb>> = withContext(Dispatchers.IO) {
         try {
+            val workDir = partitionDir(selectedPartition)
+
             if (isRootMode && !shellRepository.isRootAvailable()) {
                 userMessageManager.emitError(
                     "Root Access Required",
@@ -715,7 +894,7 @@ open class DeviceRepository @Inject constructor(
             // setupEnv is already called by the caller (detectChipset/importBootImage)
             dtbs.clear()
             if (isRootMode) {
-                val command = "chmod -R 777 $filesDir"
+                val command = "chmod -R 777 ${workDir.absolutePath}"
                 if (!shellRepository.execAndCheck(command)) {
                     return@withContext DomainResult.Failure(
                         AppError.ShellError("Failed to prepare DTB working directory permissions.", command)
@@ -730,7 +909,7 @@ open class DeviceRepository @Inject constructor(
             val count = getDtbCount()
             var parseFailures = 0
             for (i in 0 until count) {
-                val dtsFile = File(filesDir, "$i.dts")
+                val dtsFile = File(workDir, "$i.dts")
                 if (!dtsFile.exists()) continue
 
                 try {
@@ -779,7 +958,7 @@ open class DeviceRepository @Inject constructor(
                             createGenericPlaceholder(i, content, dtsModel)
                         }
                     }
-                    dtbs.add(Dtb(i, def))
+                    dtbs.add(Dtb(i, def, selectedPartition))
                 } catch (e: Exception) {
                     parseFailures++
                     Log.e(TAG, "Error checking DTB $i: ${e.message}")
@@ -790,6 +969,9 @@ open class DeviceRepository @Inject constructor(
             }
 
             if (dtbs.isEmpty()) {
+                if (selectedPartition == TargetPartition.DTBO) {
+                    return@withContext DomainResult.Success(emptyList())
+                }
                 val errorMessage = if (parseFailures > 0) {
                     "Unable to parse DTB entries. Verify boot image/device tree format."
                 } else {
@@ -868,8 +1050,15 @@ open class DeviceRepository @Inject constructor(
 
     suspend fun bootImage2dts(): DomainResult<Unit> = withContext(Dispatchers.IO) {
         try {
-            dtbType = bootImageProcessor.unpackBootImage(filesDir, getBinaryPath("magiskboot"))
-            dtbNum = bootImageProcessor.splitAndConvertDtbs(filesDir, getBinaryPath("dtc"), dtbType!!)
+            val workDirPath = partitionDir(selectedPartition).absolutePath
+            val unpackedType = bootImageProcessor.unpackBootImage(
+                workDirPath,
+                getBinaryPath("magiskboot"),
+                selectedPartition
+            )
+            dtbTypeByPartition[selectedPartition] = unpackedType
+            val count = bootImageProcessor.splitAndConvertDtbs(workDirPath, getBinaryPath("dtc"), unpackedType)
+            dtbNumByPartition[selectedPartition] = count
             DomainResult.Success(Unit)
         } catch (e: IOException) {
             DomainResult.Failure(AppError.IoError(e.message ?: "Failed to unpack and convert boot image.", e))
@@ -880,8 +1069,21 @@ open class DeviceRepository @Inject constructor(
     
     suspend fun dts2bootImage(): DomainResult<File> = withContext(Dispatchers.IO) {
         try {
-            bootImageProcessor.repackBootImage(filesDir, getBinaryPath("magiskboot"), getBinaryPath("dtc"), dtbNum, dtbType)
-            val output = File(filesDir, "boot_new.img")
+            val workDirPath = partitionDir(selectedPartition).absolutePath
+            val dtbNum = dtbNumByPartition[selectedPartition] ?: getDtbCount()
+            val dtbType = dtbTypeByPartition[selectedPartition]
+                ?: if (selectedPartition == TargetPartition.DTBO) DtbType.DTBO else DtbType.DTB
+
+            bootImageProcessor.repackBootImage(
+                workDirPath,
+                getBinaryPath("magiskboot"),
+                getBinaryPath("dtc"),
+                dtbNum,
+                dtbType,
+                selectedPartition
+            )
+
+            val output = File(partitionDir(selectedPartition), selectedPartition.outputFileName)
             if (!output.exists() || output.length() == 0L) {
                 return@withContext DomainResult.Failure(
                     AppError.IoError("Repacked image was not created. Check disk space and input DTS files.")
@@ -896,19 +1098,33 @@ open class DeviceRepository @Inject constructor(
     }
 
     private fun saveLastChipset(dtbId: Int, chipType: String) {
-        prefs.edit().putInt(KEY_LAST_DTB_ID, dtbId).putString(KEY_LAST_CHIP_TYPE, chipType).apply()
+        prefs.edit()
+            .putInt(KEY_LAST_DTB_ID, dtbId)
+            .putString(KEY_LAST_CHIP_TYPE, chipType)
+            .putString(KEY_LAST_PARTITION, selectedPartition.partitionName)
+            .apply()
     }
     
     override fun tryRestoreLastChipset(): Boolean {
         val dtbId = prefs.getInt(KEY_LAST_DTB_ID, -1)
         val chipId = prefs.getString(KEY_LAST_CHIP_TYPE, null) ?: return false
+        val partitionName = prefs.getString(KEY_LAST_PARTITION, null)
+        val restoredPartition = TargetPartition.fromName(partitionName) ?: selectedPartition
         val def = chipRepository.getChipById(chipId) ?: tryLoadCustomDefinition(chipId) ?: return false
-        if (File(filesDir, "$dtbId.dts").exists()) {
-            chooseTarget(Dtb(dtbId, def))
+        val file = File(partitionDir(restoredPartition), "$dtbId.dts")
+        if (file.exists()) {
+            chooseTarget(Dtb(dtbId, def, restoredPartition))
+            return true
+        }
+        // Backward compatibility for old single-partition workspace layout.
+        val legacyFile = File(filesDir, "$dtbId.dts")
+        if (legacyFile.exists()) {
+            setSelectedPartitionInternal(TargetPartition.VENDOR_BOOT)
+            chooseTarget(Dtb(dtbId, def, TargetPartition.VENDOR_BOOT))
             return true
         }
         return false
     }
 
-    override fun getDtsFile(): File = File(dtsPath ?: "$filesDir/0.dts")
+    override fun getDtsFile(): File = File(dtsPath ?: File(partitionDir(selectedPartition), "0.dts").absolutePath)
 }

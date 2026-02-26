@@ -1,10 +1,16 @@
 package com.ireddragonicy.konabessnext.ui.compose
 
-import androidx.compose.animation.Crossfade
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -22,6 +28,8 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -30,7 +38,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.activity.compose.BackHandler
 import android.net.Uri
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.ireddragonicy.konabessnext.R
+import com.ireddragonicy.konabessnext.model.TargetPartition
 import com.ireddragonicy.konabessnext.utils.BinDiffResult
 import com.ireddragonicy.konabessnext.viewmodel.*
 import kotlinx.coroutines.launch
@@ -39,18 +49,30 @@ import kotlinx.coroutines.launch
 fun HomeScreen(
     deviceViewModel: DeviceViewModel,
     gpuFrequencyViewModel: GpuFrequencyViewModel,
-    sharedViewModel: SharedGpuViewModel,
+    sharedViewModel: SharedDtsViewModel,
+    displayViewModel: DisplayViewModel,
     highlightCache: Map<Int, androidx.compose.ui.text.AnnotatedString> = emptyMap(),
     onStartRepack: () -> Unit,
     onSelectionDragStateChanged: (Boolean) -> Unit = {}
 ) {
     val isFilesExtracted by deviceViewModel.isFilesExtracted.collectAsState()
     val reloadTrigger by deviceViewModel.dataReloadTrigger.collectAsState()
+    val selectedPartition by deviceViewModel.selectedPartition.collectAsState()
+
+    // Obtain the same ViewModel instances used by UnifiedDtsEditorScreen and VisualTreeContent
+    val textEditorViewModel: TextEditorViewModel = hiltViewModel()
+    val visualTreeViewModel: VisualTreeViewModel = hiltViewModel()
+    val dtboNavViewModel: com.ireddragonicy.konabessnext.viewmodel.dtbo.DtboNavViewModel = hiltViewModel()
 
     // Load data when extracted (Preserves state across rotation/theme change)
     LaunchedEffect(isFilesExtracted) {
         if (isFilesExtracted) {
             sharedViewModel.loadData()
+            textEditorViewModel.setActivePartition(selectedPartition)
+            visualTreeViewModel.setActivePartition(selectedPartition)
+            if (selectedPartition == TargetPartition.DTBO) {
+                dtboNavViewModel.loadData()
+            }
         }
     }
     
@@ -58,6 +80,18 @@ fun HomeScreen(
     LaunchedEffect(reloadTrigger) {
         if (reloadTrigger > 0) {
             sharedViewModel.loadData()
+            if (selectedPartition == TargetPartition.DTBO) {
+                dtboNavViewModel.loadData()
+            }
+        }
+    }
+
+    // Switch text/tree editors and load display data when partition changes
+    LaunchedEffect(selectedPartition) {
+        textEditorViewModel.setActivePartition(selectedPartition)
+        visualTreeViewModel.setActivePartition(selectedPartition)
+        if (isFilesExtracted && selectedPartition == TargetPartition.DTBO) {
+            dtboNavViewModel.loadData()
         }
     }
 
@@ -66,6 +100,7 @@ fun HomeScreen(
             deviceViewModel = deviceViewModel,
             gpuFrequencyViewModel = gpuFrequencyViewModel,
             sharedViewModel = sharedViewModel,
+            displayViewModel = displayViewModel,
             onStartRepack = onStartRepack,
             onSelectionDragStateChanged = onSelectionDragStateChanged
         )
@@ -139,14 +174,30 @@ fun InitialSetupScreen(deviceViewModel: DeviceViewModel) {
 fun GpuEditorMainContent(
     deviceViewModel: DeviceViewModel,
     gpuFrequencyViewModel: GpuFrequencyViewModel,
-    sharedViewModel: SharedGpuViewModel,
+    sharedViewModel: SharedDtsViewModel,
+    displayViewModel: DisplayViewModel,
     onStartRepack: () -> Unit,
     onSelectionDragStateChanged: (Boolean) -> Unit = {}
 ) {
-    val isDirty by gpuFrequencyViewModel.isDirty.collectAsState()
-    val canUndo by gpuFrequencyViewModel.canUndo.collectAsState()
-    val canRedo by gpuFrequencyViewModel.canRedo.collectAsState()
-    val history by gpuFrequencyViewModel.history.collectAsState()
+    val selectedPartition by deviceViewModel.selectedPartition.collectAsState()
+    val isDtboPartition = selectedPartition == TargetPartition.DTBO
+
+    // Partition-aware toolbar state: GPU or Display
+    val gpuIsDirty by gpuFrequencyViewModel.isDirty.collectAsState()
+    val gpuCanUndo by gpuFrequencyViewModel.canUndo.collectAsState()
+    val gpuCanRedo by gpuFrequencyViewModel.canRedo.collectAsState()
+    val gpuHistory by gpuFrequencyViewModel.history.collectAsState()
+
+    val dtboNavViewModel: com.ireddragonicy.konabessnext.viewmodel.dtbo.DtboNavViewModel = hiltViewModel()
+    val displayIsDirty by dtboNavViewModel.isDirty.collectAsState()
+    val displayCanUndo by dtboNavViewModel.canUndo.collectAsState()
+    val displayCanRedo by dtboNavViewModel.canRedo.collectAsState()
+    val displayHistory by dtboNavViewModel.history.collectAsState()
+
+    val isDirty = if (isDtboPartition) displayIsDirty else gpuIsDirty
+    val canUndo = if (isDtboPartition) displayCanUndo else gpuCanUndo
+    val canRedo = if (isDtboPartition) displayCanRedo else gpuCanRedo
+    val history = if (isDtboPartition) displayHistory else gpuHistory
     val currentMode by sharedViewModel.viewMode.collectAsState()
 
     val selectedBinIndex by gpuFrequencyViewModel.selectedBinIndex.collectAsState()
@@ -178,10 +229,15 @@ fun GpuEditorMainContent(
     var diffResults by remember { mutableStateOf<List<BinDiffResult>>(emptyList()) }
     val scope = rememberCoroutineScope()
 
+    // Obtain the same ViewModel instances for partition-aware text/tree switching
+    val textEditorViewModel: TextEditorViewModel = hiltViewModel()
+    val visualTreeViewModel: VisualTreeViewModel = hiltViewModel()
+
     // Sheets
     val detectionState by deviceViewModel.detectionState.collectAsState()
     val selectedChipset by deviceViewModel.selectedChipset.collectAsState()
     val activeDtbId by deviceViewModel.activeDtbId.collectAsState()
+    val availablePartitions by deviceViewModel.availablePartitions.collectAsState()
     
     val context = LocalContext.current
     val canFlashOrRepack by deviceViewModel.canFlashOrRepack.collectAsState()
@@ -276,7 +332,8 @@ fun GpuEditorMainContent(
     fun launchExportImage() {
         scope.launch {
             if (!deviceViewModel.tryExportBootImageToDefault(context)) {
-                exportImgLauncher.launch("boot_repack.img")
+                val filename = "${selectedPartition.partitionName}_repack.img"
+                exportImgLauncher.launch(filename)
             }
         }
     }
@@ -300,7 +357,10 @@ fun GpuEditorMainContent(
 
     val confirmDiffAction = {
         when (pendingDiffAction) {
-            DiffCommitAction.SAVE -> gpuFrequencyViewModel.save(true)
+            DiffCommitAction.SAVE -> {
+                if (selectedPartition == TargetPartition.DTBO) dtboNavViewModel.save()
+                else gpuFrequencyViewModel.save(true)
+            }
             DiffCommitAction.EXPORT_IMAGE -> launchExportImage()
             DiffCommitAction.FLASH_DEVICE -> onStartRepack()
             DiffCommitAction.INSTALL_INACTIVE_SLOT -> showInactiveInstallDialog = true
@@ -324,13 +384,23 @@ fun GpuEditorMainContent(
         onDismiss = { activeSheet = WorkbenchSheetType.NONE },
         history = history,
         dtbs = (detectionState as? UiState.Success)?.data ?: emptyList(),
-        selectedDtbId = selectedChipset?.id,
+        availablePartitions = availablePartitions,
+        selectedPartition = selectedPartition,
+        selectedDtbId = selectedChipset?.takeIf { it.partition == selectedPartition }?.id,
         activeDtbId = activeDtbId,
+        onPartitionSelect = { partition ->
+            deviceViewModel.selectPartition(partition)
+        },
         onChipsetSelect = { dtb ->
             deviceViewModel.selectChipset(dtb)
             gpuFrequencyViewModel.selectedBinIndex.value = -1
             gpuFrequencyViewModel.selectedLevelIndex.value = -1
             sharedViewModel.loadData()
+            if (dtb.partition == TargetPartition.DTBO) {
+                textEditorViewModel.setActivePartition(TargetPartition.DTBO)
+                visualTreeViewModel.setActivePartition(TargetPartition.DTBO)
+                dtboNavViewModel.loadData()
+            }
             activeSheet = WorkbenchSheetType.NONE
         },
         onConfigureManual = { id -> manualSetupIndex = id },
@@ -338,19 +408,12 @@ fun GpuEditorMainContent(
         onImportDts = { uri -> deviceViewModel.importExternalDts(context, uri) }
     )
 
-    if (activeCurveEditorBinId != -1) {
-        CurveEditorScreen(
-            binId = activeCurveEditorBinId,
-            sharedViewModel = sharedViewModel,
-            onBack = { activeCurveEditorBinId = -1 },
-            onRepack = onStartRepack,
-            onInstallToInactiveSlot = { showInactiveInstallDialog = true },
-            onExportDts = { launchExportDts() },
-            onExportImg = { launchExportImage() },
-            canFlashOrRepack = canFlashOrRepack,
-            isRootMode = isRootMode
-        )
-    } else {
+    // --- EXPERT OPTIMIZATION: View Stacking instead of Crossfade ---
+    // Keeps Sora Editor and Tree LazyColumn alive in composition to prevent 
+    // scroll reset and syntax re-highlighting when switching view modes.
+    Box(modifier = Modifier.fillMaxSize()) {
+        
+        // Base Content (Toolbar + Editor Modes)
         Column(modifier = Modifier.fillMaxSize()) {
             GpuEditorToolbar(
                 isDirty = isDirty,
@@ -359,10 +422,19 @@ fun GpuEditorMainContent(
                 historyCount = history.size,
                 currentViewMode = currentMode,
                 showChipsetSelector = true,
-                onSave = { gpuFrequencyViewModel.save(true) },
+                onSave = {
+                    if (isDtboPartition) dtboNavViewModel.save()
+                    else gpuFrequencyViewModel.save(true)
+                },
                 onRequireDiffConfirmation = requestDiffPreview,
-                onUndo = { gpuFrequencyViewModel.undo() },
-                onRedo = { gpuFrequencyViewModel.redo() },
+                onUndo = {
+                    if (isDtboPartition) dtboNavViewModel.undo()
+                    else gpuFrequencyViewModel.undo()
+                },
+                onRedo = {
+                    if (isDtboPartition) dtboNavViewModel.redo()
+                    else gpuFrequencyViewModel.redo()
+                },
                 onShowHistory = { activeSheet = WorkbenchSheetType.HISTORY },
                 onViewModeChanged = { mode -> sharedViewModel.switchViewMode(mode) },
                 onChipsetClick = { activeSheet = WorkbenchSheetType.CHIPSET },
@@ -370,26 +442,78 @@ fun GpuEditorMainContent(
                 onInstallToInactiveSlot = { showInactiveInstallDialog = true },
                 onExportDts = { launchExportDts() },
                 onExportImg = { launchExportImage() },
+                onDryRunClick = { deviceViewModel.dryRun() }, // <-- ADD THIS LINE
                 canFlashOrRepack = canFlashOrRepack,
                 isRootMode = isRootMode
             )
-    
-            Crossfade(targetState = currentMode, label = "ViewModeSwitch") { mode ->
-                Box(modifier = Modifier.fillMaxSize()) {
-                    when (mode) {
-                        SharedGpuViewModel.ViewMode.MAIN_EDITOR -> GuiEditorContent(
-                            sharedViewModel, 
-                            deviceViewModel, 
-                            gpuFrequencyViewModel,
-                            onOpenCurveEditor = { binId -> activeCurveEditorBinId = binId }
-                        )
-                        SharedGpuViewModel.ViewMode.TEXT_ADVANCED -> UnifiedDtsEditorScreen(
-                            onSelectionDragStateChanged = onSelectionDragStateChanged
-                        )
-                        SharedGpuViewModel.ViewMode.VISUAL_TREE -> VisualTreeContent()
+
+            // Editor Mode Stack
+            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                
+                // GUI Mode
+                val isGui = currentMode == SharedDtsViewModel.ViewMode.MAIN_EDITOR
+                val guiAlpha by animateFloatAsState(targetValue = if (isGui) 1f else 0f, label = "guiAlpha")
+                Box(
+                    modifier = Modifier.fillMaxSize().graphicsLayer {
+                        alpha = guiAlpha
+                        // Move far offscreen when inactive to prevent touch interception
+                        translationX = if (isGui || guiAlpha > 0f) 0f else 100000f
                     }
+                ) {
+                    GuiEditorContent(
+                        sharedViewModel = sharedViewModel,
+                        deviceViewModel = deviceViewModel,
+                        gpuFrequencyViewModel = gpuFrequencyViewModel,
+                        displayViewModel = displayViewModel,
+                        onOpenCurveEditor = { binId -> activeCurveEditorBinId = binId }
+                    )
+                }
+
+                // Text Mode (Sora Editor)
+                val isText = currentMode == SharedDtsViewModel.ViewMode.TEXT_ADVANCED
+                val textAlpha by animateFloatAsState(targetValue = if (isText) 1f else 0f, label = "textAlpha")
+                Box(
+                    modifier = Modifier.fillMaxSize().graphicsLayer {
+                        alpha = textAlpha
+                        translationX = if (isText || textAlpha > 0f) 0f else 100000f
+                    }
+                ) {
+                    UnifiedDtsEditorScreen(onSelectionDragStateChanged = onSelectionDragStateChanged)
+                }
+
+                // Tree Mode
+                val isTree = currentMode == SharedDtsViewModel.ViewMode.VISUAL_TREE
+                val treeAlpha by animateFloatAsState(targetValue = if (isTree) 1f else 0f, label = "treeAlpha")
+                Box(
+                    modifier = Modifier.fillMaxSize().graphicsLayer {
+                        alpha = treeAlpha
+                        translationX = if (isTree || treeAlpha > 0f) 0f else 100000f
+                    }
+                ) {
+                    VisualTreeContent()
                 }
             }
+        }
+
+        // Curve Editor Overlay
+        // Stacking this ensures opening the curve editor doesn't destroy the underlying editors either!
+        AnimatedVisibility(
+            visible = activeCurveEditorBinId != -1,
+            enter = slideInVertically { it } + fadeIn(),
+            exit = slideOutVertically { it } + fadeOut(),
+            modifier = Modifier.fillMaxSize().zIndex(10f)
+        ) {
+            CurveEditorScreen(
+                binId = activeCurveEditorBinId,
+                sharedViewModel = sharedViewModel,
+                onBack = { activeCurveEditorBinId = -1 },
+                onRepack = onStartRepack,
+                onInstallToInactiveSlot = { showInactiveInstallDialog = true },
+                onExportDts = { launchExportDts() },
+                onExportImg = { launchExportImage() },
+                canFlashOrRepack = canFlashOrRepack,
+                isRootMode = isRootMode
+            )
         }
     }
 }

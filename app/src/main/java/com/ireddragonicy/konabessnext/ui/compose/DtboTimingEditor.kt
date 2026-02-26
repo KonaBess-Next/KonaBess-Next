@@ -1,0 +1,880 @@
+package com.ireddragonicy.konabessnext.ui.compose
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.ArrowDropDown
+import androidx.compose.material.icons.rounded.Brightness6
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
+
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AssistChipDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ElevatedAssistChip
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.InputChip
+import androidx.compose.material3.InputChipDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import com.ireddragonicy.konabessnext.R
+import com.ireddragonicy.konabessnext.model.display.DisplayProperty
+import com.ireddragonicy.konabessnext.viewmodel.DisplayViewModel
+
+@Composable
+fun DtboTimingEditor(
+    displayViewModel: DisplayViewModel
+) {
+    val snapshot by displayViewModel.displaySnapshot.collectAsState()
+    val panelsWithTimings by displayViewModel.panelsWithTimings.collectAsState()
+    val selectedIndex by displayViewModel.selectedPanelIndex.collectAsState()
+    val selectedTimingIndex by displayViewModel.selectedTimingIndex.collectAsState()
+    var customFps by remember(snapshot?.timing?.panelFramerate) {
+        mutableStateOf(snapshot?.timing?.panelFramerate?.toString().orEmpty())
+    }
+
+    var editingProperty by remember { mutableStateOf<DisplayProperty?>(null) }
+    var editingValue by remember { mutableStateOf("") }
+
+    if (editingProperty != null) {
+        AlertDialog(
+            onDismissRequest = { editingProperty = null },
+            title = { Text(stringResource(R.string.dtbo_edit_property, editingProperty?.name ?: "")) },
+            text = {
+                OutlinedTextField(
+                    value = editingValue,
+                    onValueChange = { editingValue = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 4,
+                    maxLines = 10,
+                    singleLine = false,
+                    label = { Text(stringResource(R.string.dtbo_property_value_hint)) }
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val prop = editingProperty
+                        if (prop != null) {
+                            displayViewModel.updateTimingProperty(prop.name, editingValue)
+                        }
+                        editingProperty = null
+                    }
+                ) {
+                    Text(stringResource(R.string.save))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { editingProperty = null }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            }
+        )
+    }
+
+    if (snapshot == null) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text(
+                text = stringResource(R.string.dtbo_no_timing_found),
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        return
+    }
+
+    val fpsPresets = listOf(60, 90, 120, 144)
+
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        contentPadding = PaddingValues(top = 16.dp, bottom = 96.dp)
+    ) {
+        item {
+            Column {
+                Text(
+                    text = stringResource(R.string.dtbo_editor_title),
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = stringResource(R.string.dtbo_editor_subtitle),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
+        // --- Panel Selector ---
+        if (panelsWithTimings.size > 1) {
+            item {
+                PanelSelectorCard(
+                    panels = panelsWithTimings,
+                    selectedIndex = selectedIndex,
+                    onSelectPanel = { displayViewModel.selectPanel(it) }
+                )
+            }
+        }
+
+        // --- Timing Selector ---
+        val currentPanel = panelsWithTimings.getOrNull(
+            selectedIndex.coerceIn(0, (panelsWithTimings.size - 1).coerceAtLeast(0))
+        )
+        if (currentPanel != null && currentPanel.timings.size > 1) {
+            item {
+                TimingSelectorCard(
+                    timings = currentPanel.timings,
+                    selectedTimingIndex = selectedTimingIndex,
+                    onSelectTiming = { displayViewModel.selectTiming(it) }
+                )
+            }
+        }
+
+        item {
+            Card(
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+            ) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        text = stringResource(R.string.dtbo_node_name, snapshot?.timing?.timingNodeName ?: "timing@0"),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                    Text(
+                        text = stringResource(R.string.dtbo_panel_fps, snapshot?.timing?.panelFramerate ?: 0),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                    Text(
+                        text = stringResource(
+                            R.string.dtbo_panel_resolution,
+                            snapshot?.timing?.panelWidth ?: 0,
+                            snapshot?.timing?.panelHeight ?: 0
+                        ),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                    Text(
+                        text = stringResource(R.string.dtbo_panel_clock, snapshot?.timing?.panelClockRate ?: 0L),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
+            }
+        }
+
+        item {
+            Card(shape = RoundedCornerShape(20.dp)) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = stringResource(R.string.dtbo_fps_quick_presets),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        fpsPresets.forEach { fps ->
+                            ElevatedAssistChip(
+                                onClick = { displayViewModel.updatePanelFramerate(fps) },
+                                label = { Text("${fps}Hz") }
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = stringResource(R.string.dtbo_custom_fps),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedTextField(
+                            value = customFps,
+                            onValueChange = { customFps = it.filter(Char::isDigit) },
+                            modifier = Modifier.weight(1f),
+                            singleLine = true,
+                            label = { Text("Hz") }
+                        )
+                        OutlinedButton(
+                            onClick = {
+                                val value = customFps.toIntOrNull() ?: return@OutlinedButton
+                                displayViewModel.updatePanelFramerate(value)
+                            }
+                        ) {
+                            Text(stringResource(R.string.dtbo_apply))
+                        }
+                    }
+
+                    Text(
+                        text = stringResource(R.string.dtbo_overclock_warning),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+        }
+
+        // --- DFPS list section ---
+        item {
+            DfpsListCard(
+                dfpsList = snapshot?.dfpsList ?: emptyList(),
+                onUpdateList = { displayViewModel.updateDfpsList(it) }
+            )
+        }
+
+        item {
+            PanelClockRateCard(
+                currentClock = snapshot?.timing?.panelClockRate ?: 0L,
+                onUpdateClock = { displayViewModel.updatePanelClockRate(it) }
+            )
+        }
+
+        if (currentPanel != null) {
+            item {
+                AdvancedTimingCard(
+                    timing = snapshot?.timing,
+                    onUpdateProperty = { name, value ->
+                        displayViewModel.updateTimingProperty(name, value)
+                    }
+                )
+            }
+        }
+
+        // --- Brightness / Backlight Section ---
+        if (currentPanel != null) {
+            item {
+                BrightnessCard(
+                    properties = currentPanel.properties,
+                    onUpdateProperty = { name, value ->
+                        displayViewModel.updatePanelProperty(name, value)
+                    }
+                )
+            }
+        }
+
+        item {
+            Text(
+                text = stringResource(R.string.dtbo_timing_properties),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+
+        items(snapshot?.timing?.properties ?: emptyList(), key = { it.name }) { prop ->
+            val preview = remember(prop.value) {
+                val normalized = prop.value.replace("\n", " ").trim()
+                if (normalized.length > 140) normalized.take(140) + "…" else normalized
+            }
+
+            Card(
+                onClick = {
+                    editingProperty = prop
+                    editingValue = prop.value
+                },
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = prop.name,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = preview,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun DfpsListCard(
+    dfpsList: List<Int>,
+    onUpdateList: (List<Int>) -> Unit
+) {
+    var addFpsText by remember { mutableStateOf("") }
+
+    Card(shape = RoundedCornerShape(20.dp)) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text(
+                text = stringResource(R.string.dtbo_dfps_title),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = stringResource(R.string.dtbo_dfps_subtitle),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            if (dfpsList.isEmpty()) {
+                Text(
+                    text = stringResource(R.string.dtbo_dfps_empty),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    dfpsList.sortedDescending().forEach { fps ->
+                        InputChip(
+                            selected = false,
+                            onClick = {
+                                // Remove this FPS from the list
+                                onUpdateList(dfpsList.filter { it != fps })
+                            },
+                            label = { Text("${fps}Hz") },
+                            trailingIcon = {
+                                Icon(
+                                    Icons.Rounded.Close,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(InputChipDefaults.IconSize)
+                                )
+                            }
+                        )
+                    }
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedTextField(
+                    value = addFpsText,
+                    onValueChange = { addFpsText = it.filter(Char::isDigit) },
+                    modifier = Modifier.weight(1f),
+                    singleLine = true,
+                    label = { Text(stringResource(R.string.dtbo_dfps_add_hint)) }
+                )
+                FilledTonalButton(
+                    onClick = {
+                        val fps = addFpsText.toIntOrNull() ?: return@FilledTonalButton
+                        if (fps > 0 && fps !in dfpsList) {
+                            onUpdateList((dfpsList + fps).sortedDescending())
+                            addFpsText = ""
+                        }
+                    }
+                ) {
+                    Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(AssistChipDefaults.IconSize))
+                    Spacer(modifier = Modifier.size(4.dp))
+                    Text(stringResource(R.string.dtbo_dfps_add))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PanelSelectorCard(
+    panels: List<com.ireddragonicy.konabessnext.model.display.DisplayPanel>,
+    selectedIndex: Int,
+    onSelectPanel: (Int) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val safeIndex = selectedIndex.coerceIn(0, (panels.size - 1).coerceAtLeast(0))
+    val selected = panels.getOrNull(safeIndex)
+
+    Card(
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(
+                text = stringResource(R.string.dtbo_select_panel),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSecondaryContainer
+            )
+            Text(
+                text = stringResource(R.string.dtbo_panel_count, panels.size),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
+            )
+
+            Box {
+                OutlinedButton(
+                    onClick = { expanded = true },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = selected?.panelName?.ifBlank { selected.nodeName } ?: "—",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1
+                        )
+                        Text(
+                            text = stringResource(R.string.dtbo_fragment_label, selected?.fragmentIndex ?: 0),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        )
+                    }
+                    Icon(Icons.Rounded.ArrowDropDown, contentDescription = null)
+                }
+
+                DropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { expanded = false }
+                ) {
+                    panels.forEachIndexed { index, panel ->
+                        DropdownMenuItem(
+                            text = {
+                                Column {
+                                    Text(
+                                        text = panel.panelName.ifBlank { panel.nodeName },
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = if (index == safeIndex) FontWeight.Bold else FontWeight.Normal
+                                    )
+                                    Text(
+                                        text = stringResource(R.string.dtbo_fragment_label, panel.fragmentIndex) +
+                                                " • ${panel.timings.firstOrNull()?.panelFramerate ?: 0}Hz" +
+                                                " • ${panel.timings.firstOrNull()?.panelWidth ?: 0}×${panel.timings.firstOrNull()?.panelHeight ?: 0}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                    )
+                                }
+                            },
+                            onClick = {
+                                onSelectPanel(index)
+                                expanded = false
+                            }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TimingSelectorCard(
+    timings: List<com.ireddragonicy.konabessnext.model.display.DisplayTiming>,
+    selectedTimingIndex: Int,
+    onSelectTiming: (Int) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val safeIndex = selectedTimingIndex.coerceIn(0, (timings.size - 1).coerceAtLeast(0))
+    val selected = timings.getOrNull(safeIndex)
+
+    Card(
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(
+                text = stringResource(R.string.dtbo_select_timing),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onTertiaryContainer
+            )
+            Text(
+                text = stringResource(R.string.dtbo_timing_count, timings.size),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.7f)
+            )
+
+            Box {
+                OutlinedButton(
+                    onClick = { expanded = true },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = selected?.timingNodeName ?: "—",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Text(
+                            text = "${selected?.panelFramerate ?: 0}Hz • ${selected?.panelWidth ?: 0}×${selected?.panelHeight ?: 0}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        )
+                    }
+                    Icon(Icons.Rounded.ArrowDropDown, contentDescription = null)
+                }
+
+                DropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { expanded = false }
+                ) {
+                    timings.forEachIndexed { index, timing ->
+                        DropdownMenuItem(
+                            text = {
+                                Column {
+                                    Text(
+                                        text = timing.timingNodeName,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = if (index == safeIndex) FontWeight.Bold else FontWeight.Normal
+                                    )
+                                    Text(
+                                        text = "${timing.panelFramerate}Hz • ${timing.panelWidth}×${timing.panelHeight}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                    )
+                                }
+                            },
+                            onClick = {
+                                onSelectTiming(index)
+                                expanded = false
+                            }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PanelClockRateCard(
+    currentClock: Long,
+    onUpdateClock: (Long) -> Unit
+) {
+    var clockText by remember(currentClock) { mutableStateOf(currentClock.toString()) }
+
+    Card(shape = RoundedCornerShape(20.dp)) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(
+                text = stringResource(R.string.dtbo_panel_clockrate_title),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = stringResource(R.string.dtbo_panel_clockrate_subtitle),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedTextField(
+                    value = clockText,
+                    onValueChange = { clockText = it.filter(Char::isDigit) },
+                    modifier = Modifier.weight(1f),
+                    singleLine = true,
+                    label = { Text("Hz") }
+                )
+                OutlinedButton(
+                    onClick = {
+                        val value = clockText.toLongOrNull() ?: return@OutlinedButton
+                        onUpdateClock(value)
+                    }
+                ) {
+                    Text(stringResource(R.string.dtbo_apply))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BrightnessCard(
+    properties: List<DisplayProperty>,
+    onUpdateProperty: (String, String) -> Unit
+) {
+    val brightnessKeys = setOf(
+        "qcom,mdss-dsi-bl-max-level",
+        "qcom,mdss-brightness-max-level",
+        "mi,mdss-fac-brightness-max-level",
+        "mi,mdss-dsi-fac-bl-max-level",
+        "mi,max-brightness-clone"
+    )
+
+    val relevantProps = properties.filter { it.name in brightnessKeys }
+        .sortedBy { it.name }
+
+    if (relevantProps.isEmpty()) return
+
+    Card(shape = RoundedCornerShape(20.dp)) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(
+                text = stringResource(R.string.dtbo_brightness_title),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = stringResource(R.string.dtbo_brightness_subtitle),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            relevantProps.forEach { prop ->
+                BrightnessPropertyRow(
+                    name = prop.name,
+                    rawValue = prop.value,
+                    onValueChange = { newValue ->
+                        onUpdateProperty(prop.name, newValue)
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun BrightnessPropertyRow(
+    name: String,
+    rawValue: String,
+    onValueChange: (String) -> Unit
+) {
+    // Parse raw DTS value (e.g. "<0x3fff>") to decimal string (e.g. "16383") for display
+    // We remember the initial raw value to detect external changes
+    var decimalText by remember(rawValue) {
+        mutableStateOf(parseDtsToDecimalString(rawValue))
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(
+            text = name,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            softWrap = false
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            OutlinedTextField(
+                value = decimalText,
+                onValueChange = { 
+                    // Allow only digits
+                    if (it.all { char -> char.isDigit() }) {
+                        decimalText = it
+                    }
+                },
+                modifier = Modifier.weight(1f),
+                singleLine = true,
+                textStyle = MaterialTheme.typography.bodyMedium,
+                label = { Text("Value") },
+                suffix = { Text("dec") }
+            )
+            OutlinedButton(
+                onClick = { 
+                    // Convert decimal back to DTS format usually <0x...>
+                    val longVal = decimalText.toLongOrNull()
+                    if (longVal != null) {
+                        val newRaw = formatDecimalToDts(longVal)
+                        onValueChange(newRaw)
+                    }
+                },
+                // Enable apply if the parsed decimal of current raw value != current text
+                enabled = parseDtsToDecimalString(rawValue) != decimalText
+            ) {
+                Text(stringResource(R.string.dtbo_apply))
+            }
+        }
+        
+        // Helper text to show the mapped hex value that will be saved
+        val longVal = decimalText.toLongOrNull()
+        if (longVal != null) {
+            Text(
+                text = "Hex: 0x${longVal.toString(16)}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                modifier = Modifier.padding(start = 4.dp)
+            )
+        }
+    }
+}
+
+private fun parseDtsToDecimalString(raw: String): String {
+    val trimmed = raw.trim()
+    val content = if (trimmed.startsWith("<") && trimmed.endsWith(">")) {
+        trimmed.substring(1, trimmed.length - 1).trim()
+    } else {
+        trimmed
+    }
+    
+    return try {
+        if (content.startsWith("0x", ignoreCase = true)) {
+            java.lang.Long.decode(content).toString()
+        } else {
+            content.toLongOrNull()?.toString() ?: ""
+        }
+    } catch (e: Exception) {
+        ""
+    }
+}
+
+private fun formatDecimalToDts(value: Long): String {
+    // Standard format for these properties is often <0xHEX>
+    return "<0x${value.toString(16)}>"
+}
+
+@Composable
+private fun AdvancedTimingCard(
+    timing: com.ireddragonicy.konabessnext.model.display.DisplayTiming?,
+    onUpdateProperty: (String, String) -> Unit
+) {
+    if (timing == null) return
+
+    Card(shape = RoundedCornerShape(20.dp)) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Text(
+                text = stringResource(R.string.dtbo_advanced_timing_title),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold
+            )
+
+            // Horizontal Timing Section
+            TimingGroup(
+                title = "Horizontal Timing",
+                items = listOf(
+                    TimingItem("H Front Porch", "qcom,mdss-dsi-h-front-porch", timing.hFrontPorch),
+                    TimingItem("H Back Porch", "qcom,mdss-dsi-h-back-porch", timing.hBackPorch),
+                    TimingItem("H Pulse Width", "qcom,mdss-dsi-h-pulse-width", timing.hPulseWidth),
+                    TimingItem("H Sync Pulse", "qcom,mdss-dsi-h-sync-pulse", timing.hSyncPulse),
+                    TimingItem("H Left Border", "qcom,mdss-dsi-h-left-border", timing.hLeftBorder),
+                    TimingItem("H Right Border", "qcom,mdss-dsi-h-right-border", timing.hRightBorder)
+                ),
+                onUpdateProperty = onUpdateProperty
+            )
+
+            // Vertical Timing Section
+            TimingGroup(
+                title = "Vertical Timing",
+                items = listOf(
+                    TimingItem("V Front Porch", "qcom,mdss-dsi-v-front-porch", timing.vFrontPorch),
+                    TimingItem("V Back Porch", "qcom,mdss-dsi-v-back-porch", timing.vBackPorch),
+                    TimingItem("V Pulse Width", "qcom,mdss-dsi-v-pulse-width", timing.vPulseWidth),
+                    TimingItem("V Top Border", "qcom,mdss-dsi-v-top-border", timing.vTopBorder),
+                    TimingItem("V Bottom Border", "qcom,mdss-dsi-v-bottom-border", timing.vBottomBorder)
+                ),
+                onUpdateProperty = onUpdateProperty
+            )
+        }
+    }
+}
+
+data class TimingItem(val label: String, val key: String, val value: Int)
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun TimingGroup(
+    title: String,
+    items: List<TimingItem>,
+    onUpdateProperty: (String, String) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.Bold
+        )
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            items.forEach { item ->
+                TimingField(
+                    label = item.label,
+                    value = item.value,
+                    onValueChange = { newValue ->
+                        // Convert decimal string back to typical hex format <0x...>
+                        val longVal = newValue.toLongOrNull()
+                        if (longVal != null) {
+                            onUpdateProperty(item.key, "<0x${longVal.toString(16)}>")
+                        }
+                    },
+                    modifier = Modifier.weight(1f).fillMaxWidth().coerceAtLeast(140.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun TimingField(
+    label: String,
+    value: Int,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var text by remember(value) { mutableStateOf(value.toString()) }
+    // Only enable update if text differs from current value (and is valid)
+    val isChanged = (text.toIntOrNull() != null && text.toIntOrNull() != value)
+
+    OutlinedTextField(
+        value = text,
+        onValueChange = { if (it.all { c -> c.isDigit() }) text = it },
+        label = { Text(label, maxLines = 1, style = MaterialTheme.typography.bodySmall) },
+        textStyle = MaterialTheme.typography.bodyMedium,
+        singleLine = true,
+        modifier = modifier,
+        trailingIcon = {
+            if (isChanged) {
+                 androidx.compose.material3.IconButton(
+                     onClick = { onValueChange(text) },
+                     modifier = Modifier.size(24.dp)
+                 ) {
+                     Icon(Icons.Rounded.Brightness6, "Apply", tint = MaterialTheme.colorScheme.primary)
+                 }
+            }
+        }
+    )
+}
+
+private fun Modifier.coerceAtLeast(minWidth: androidx.compose.ui.unit.Dp): Modifier {
+    return this.widthIn(min = minWidth)
+}

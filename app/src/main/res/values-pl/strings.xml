@@ -600,4 +600,7 @@
     <string name="voltage_opp_table">Tabela OPP napięć</string>
     <string name="voltage_table_pattern_optional">Wzorzec tabeli napięć (opcjonalnie)</string>
     <string name="zip_archive">Archiwum ZIP</string>
+    <string name="dtbo_display_changes">Zmiany Taktowania Wyświetlacza</string>
+    <string name="dtbo_touch_changes">Zmiany Ekranu Dotykowego</string>
+    <string name="dtbo_speaker_changes">Zmiany Wzmacniacza Głośnikowego</string>
 </resources>

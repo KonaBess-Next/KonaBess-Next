@@ -1,116 +1,64 @@
 package com.ireddragonicy.konabessnext.ui.compose
 
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
-import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import com.ireddragonicy.konabessnext.viewmodel.TextEditorViewModel
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.distinctUntilChanged
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
-import kotlin.math.abs
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import com.ireddragonicy.konabessnext.viewmodel.TextEditorViewModel
 
 @Composable
 fun UnifiedDtsEditorScreen(
     textViewModel: TextEditorViewModel = hiltViewModel(),
     onSelectionDragStateChanged: (Boolean) -> Unit = {}
 ) {
-    val searchState by textViewModel.searchState.collectAsState()
+    val dtsContent by textViewModel.dtsContent.collectAsState()
     val lintErrorCount by textViewModel.lintErrorCount.collectAsState()
     val lintErrors by textViewModel.lintErrors.collectAsState()
-    val foldSessionKey by textViewModel.dtsEditorSessionKey.collectAsState()
-    val editorState = textViewModel.dtsEditorState
-    var navigationRequest by remember { mutableStateOf<EditorNavigationRequest?>(null) }
-    val persistedCollapsedFolds = remember(foldSessionKey) {
-        textViewModel.getCollapsedFolds(foldSessionKey)
-    }
     @Suppress("DEPRECATION")
     val clipboardManager = LocalClipboardManager.current
-    
-    // Read initial persisted scroll once; then sync back with throttling.
-    val initialTextScrollIdx = remember { textViewModel.textScrollIndex.value }
-    val initialTextScrollOff = remember { textViewModel.textScrollOffset.value }
-    
-    // Text Editor Scroll State (Persisted)
-    val listState = rememberLazyListState(
-        initialFirstVisibleItemIndex = initialTextScrollIdx,
-        initialFirstVisibleItemScrollOffset = initialTextScrollOff
-    )
-    
-    // Sync text scroll with throttling to avoid per-frame StateFlow writes.
-    LaunchedEffect(listState) {
-        var lastCommittedIndex = initialTextScrollIdx
-        var lastCommittedOffset = initialTextScrollOff
-        snapshotFlow { Pair(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset) }
-            .distinctUntilChanged()
-            .collectLatest { (index, offset) ->
-                val shouldPersist =
-                    index != lastCommittedIndex || abs(offset - lastCommittedOffset) >= 24
-                if (shouldPersist) {
-                    if (textViewModel.textScrollIndex.value != index) {
-                        textViewModel.textScrollIndex.value = index
-                    }
-                    if (textViewModel.textScrollOffset.value != offset) {
-                        textViewModel.textScrollOffset.value = offset
-                    }
-                    lastCommittedIndex = index
-                    lastCommittedOffset = offset
-                }
-            }
-    }
-    
-    // Ensure final exact position is persisted when scrolling stops.
-    LaunchedEffect(listState) {
-        snapshotFlow { listState.isScrollInProgress }
-            .distinctUntilChanged()
-            .collectLatest { scrolling ->
-                if (!scrolling) {
-                    val index = listState.firstVisibleItemIndex
-                    val offset = listState.firstVisibleItemScrollOffset
-                    if (textViewModel.textScrollIndex.value != index) {
-                        textViewModel.textScrollIndex.value = index
-                    }
-                    if (textViewModel.textScrollOffset.value != offset) {
-                        textViewModel.textScrollOffset.value = offset
-                    }
-                }
-            }
-    }
-    
+
+    val soraEditorState = rememberSoraEditorState()
+
     Column {
         SearchAndToolsBar(
-            query = searchState.query,
-            matchCount = searchState.results.size,
-            currentMatchIndex = searchState.currentIndex,
-            onQueryChange = { textViewModel.search(it) },
-            onNext = { textViewModel.nextSearchResult() },
-            onPrev = { textViewModel.previousSearchResult() },
-            onCopyAll = { clipboardManager.setText(AnnotatedString(editorState.getText())) },
+            query = soraEditorState.searchQuery,
+            matchCount = soraEditorState.matchCount,
+            currentMatchIndex = soraEditorState.currentMatchIndex,
+            onQueryChange = { soraEditorState.search(it) },
+            onNext = { soraEditorState.gotoNext() },
+            onPrev = { soraEditorState.gotoPrevious() },
+            onCopyAll = {
+                clipboardManager.setText(AnnotatedString(soraEditorState.copyAllText()))
+            },
             onReformat = { textViewModel.reformatCode() },
+            isWordWrapEnabled = soraEditorState.isWordWrapEnabled,
+            onToggleWordWrap = { soraEditorState.toggleWordWrap() },
             lintErrorCount = lintErrorCount,
             lintErrors = lintErrors,
             onLintErrorClick = { error ->
-                navigationRequest = EditorNavigationRequest(
-                    line = error.line,
-                    column = error.column
-                )
+                // Navigate to error line in Sora editor
+                soraEditorState.editor?.let { editor ->
+                    val line = (error.line - 1).coerceAtLeast(0)
+                    val col = (error.column - 1).coerceAtLeast(0)
+                    val maxLine = editor.text.lineCount - 1
+                    val safeL = line.coerceAtMost(maxLine)
+                    val maxCol = editor.text.getColumnCount(safeL)
+                    val safeC = col.coerceAtMost(maxCol)
+                    editor.setSelection(safeL, safeC)
+                }
             }
         )
 
         DtsEditor(
-            editorState = editorState,
-            onLinesChanged = { textViewModel.updateFromEditorLines(it, "Raw Edit") },
-            foldSessionKey = foldSessionKey,
-            persistedCollapsedFolds = persistedCollapsedFolds,
-            onFoldStateChanged = { textViewModel.updateCollapsedFolds(foldSessionKey, it) },
-            searchQuery = searchState.query,
-            searchResultIndex = searchState.currentIndex,
-            searchResults = searchState.results.map { LineSearchResult(it.lineIndex) },
-            navigationRequest = navigationRequest,
-            lintErrorsByLine = textViewModel.lintErrorsByLine,
-            listState = listState,
-            onSelectionDragStateChanged = onSelectionDragStateChanged
+            content = dtsContent,
+            soraEditorState = soraEditorState,
+            onContentChanged = { newText ->
+                textViewModel.updateFromText(newText, "Raw Edit")
+            },
+            modifier = Modifier.fillMaxSize()
         )
     }
 }

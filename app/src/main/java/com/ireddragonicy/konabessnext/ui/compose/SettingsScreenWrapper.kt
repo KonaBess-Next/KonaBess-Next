@@ -46,6 +46,13 @@ fun SettingsScreenWrapper(
     var showLanguageDialog by remember { mutableStateOf(false) }
     var showPaletteDialog by remember { mutableStateOf(false) }
     var showHelpDialog by remember { mutableStateOf(false) }
+    var showLicensesDialog by remember { mutableStateOf(false) }
+
+    if (showLicensesDialog) {
+        OpenSourceLicensesDialog(
+            onDismiss = { showLicensesDialog = false }
+        )
+    }
 
     if (showHelpDialog) {
         Dialog(onDismissRequest = { showHelpDialog = false }) {
@@ -191,6 +198,7 @@ fun SettingsScreenWrapper(
         
         // Export Location
         exportPath = uiState.exportPath,
-        onSetExportLocation = { exportLocationLauncher.launch(null) }
+        onSetExportLocation = { exportLocationLauncher.launch(null) },
+        onOpenSourceLicensesClick = { showLicensesDialog = true }
     )
 }

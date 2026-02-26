@@ -9,13 +9,13 @@ import androidx.core.view.WindowCompat
 import com.ireddragonicy.konabessnext.ui.compose.RawDtsScreen
 import com.ireddragonicy.konabessnext.ui.theme.KonaBessTheme
 import com.ireddragonicy.konabessnext.utils.LocaleUtil
-import com.ireddragonicy.konabessnext.viewmodel.SharedGpuViewModel
+import com.ireddragonicy.konabessnext.viewmodel.SharedDtsViewModel
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
 class RawDtsEditorActivity : AppCompatActivity() {
 
-    private val sharedViewModel: SharedGpuViewModel by viewModels()
+    private val sharedViewModel: SharedDtsViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

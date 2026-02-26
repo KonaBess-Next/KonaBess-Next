@@ -37,7 +37,8 @@ class MainActivity : ComponentActivity() {
 
     private val deviceViewModel: DeviceViewModel by viewModels()
     private val gpuFrequencyViewModel: GpuFrequencyViewModel by viewModels()
-    private val sharedViewModel: SharedGpuViewModel by viewModels()
+    private val sharedViewModel: SharedDtsViewModel by viewModels()
+    private val displayViewModel: DisplayViewModel by viewModels()
     private val settingsViewModel: SettingsViewModel by viewModels()
     private val importExportViewModel: ImportExportViewModel by viewModels()
 
@@ -90,6 +91,7 @@ class MainActivity : ComponentActivity() {
                     deviceViewModel = deviceViewModel,
                     gpuFrequencyViewModel = gpuFrequencyViewModel,
                     sharedViewModel = sharedViewModel,
+                    displayViewModel = displayViewModel,
                     settingsViewModel = settingsViewModel,
                     importExportViewModel = importExportViewModel,
                     snackbarHostState = snackbarHostState,
@@ -125,16 +127,20 @@ class MainActivity : ComponentActivity() {
                 }
             }
             is UiState.Success -> {
+                val successMessage = (repackState as UiState.Success).data.asString()
+                val isDryRun = successMessage == stringResource(R.string.dry_run_success)
                 AlertDialog(
                     onDismissRequest = { deviceViewModel.clearRepackState() },
                     title = { Text(stringResource(R.string.success)) },
-                    text = { Text((repackState as UiState.Success).data.asString()) },
+                    text = { Text(successMessage) },
                     confirmButton = {
-                        TextButton(onClick = {
-                            deviceViewModel.reboot()
-                            deviceViewModel.clearRepackState()
-                        }) {
-                            Text(stringResource(R.string.reboot))
+                        if (!isDryRun) {
+                            TextButton(onClick = {
+                                deviceViewModel.reboot()
+                                deviceViewModel.clearRepackState()
+                            }) {
+                                Text(stringResource(R.string.reboot))
+                            }
                         }
                     },
                     dismissButton = {

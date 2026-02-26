@@ -26,7 +26,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import com.ireddragonicy.konabessnext.R
 import com.ireddragonicy.konabessnext.model.dts.DtsError
 import com.ireddragonicy.konabessnext.model.dts.Severity
-import com.ireddragonicy.konabessnext.viewmodel.SharedGpuViewModel
+import com.ireddragonicy.konabessnext.viewmodel.SharedDtsViewModel
 
 /**
  * Jetpack Compose Toolbar for GPU Frequency Editor.
@@ -39,20 +39,21 @@ fun GpuEditorToolbar(
     canUndo: Boolean,
     canRedo: Boolean,
     historyCount: Int,
-    currentViewMode: SharedGpuViewModel.ViewMode,
+    currentViewMode: SharedDtsViewModel.ViewMode,
     showChipsetSelector: Boolean = false,
     onSave: () -> Unit,
     onRequireDiffConfirmation: ((DiffCommitAction) -> Unit)? = null,
     onUndo: () -> Unit,
     onRedo: () -> Unit,
     onShowHistory: () -> Unit,
-    onViewModeChanged: (SharedGpuViewModel.ViewMode) -> Unit,
+    onViewModeChanged: (SharedDtsViewModel.ViewMode) -> Unit,
     onChipsetClick: () -> Unit = {},
 
     onFlashClick: () -> Unit,
     onInstallToInactiveSlot: () -> Unit,
     onExportDts: () -> Unit,
     onExportImg: () -> Unit,
+    onDryRunClick: () -> Unit = {},
     canFlashOrRepack: Boolean,
     isRootMode: Boolean = true,
     applyStatusBarPadding: Boolean = true,
@@ -183,15 +184,17 @@ fun GpuEditorToolbar(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // Segmented Button
+                val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
                 SingleChoiceSegmentedButtonRow(modifier = Modifier.weight(1f)) {
-                    SharedGpuViewModel.ViewMode.values().forEachIndexed { index, mode ->
+                    SharedDtsViewModel.ViewMode.values().forEachIndexed { index, mode ->
                         SegmentedButton(
                             selected = currentViewMode == mode,
                             onClick = { 
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                focusManager.clearFocus()
                                 onViewModeChanged(mode) 
                             },
-                            shape = SegmentedButtonDefaults.itemShape(index, SharedGpuViewModel.ViewMode.values().size),
+                            shape = SegmentedButtonDefaults.itemShape(index, SharedDtsViewModel.ViewMode.values().size),
                             colors = SegmentedButtonDefaults.colors(
                                 activeContainerColor = MaterialTheme.colorScheme.secondaryContainer,
                                 activeContentColor = MaterialTheme.colorScheme.onSecondaryContainer
@@ -199,9 +202,9 @@ fun GpuEditorToolbar(
                         ) {
                             Text(
                                 text = when (mode) {
-                                    SharedGpuViewModel.ViewMode.MAIN_EDITOR -> androidx.compose.ui.res.stringResource(R.string.view_mode_gui)
-                                    SharedGpuViewModel.ViewMode.TEXT_ADVANCED -> androidx.compose.ui.res.stringResource(R.string.view_mode_text)
-                                    SharedGpuViewModel.ViewMode.VISUAL_TREE -> androidx.compose.ui.res.stringResource(R.string.view_mode_tree)
+                                    SharedDtsViewModel.ViewMode.MAIN_EDITOR -> androidx.compose.ui.res.stringResource(R.string.view_mode_gui)
+                                    SharedDtsViewModel.ViewMode.TEXT_ADVANCED -> androidx.compose.ui.res.stringResource(R.string.view_mode_text)
+                                    SharedDtsViewModel.ViewMode.VISUAL_TREE -> androidx.compose.ui.res.stringResource(R.string.view_mode_tree)
                                 },
                                 style = MaterialTheme.typography.labelMedium
                             )
@@ -253,6 +256,15 @@ fun GpuEditorToolbar(
                                 showBuildMenu = false 
                             },
                             leadingIcon = { Icon(Icons.Rounded.Code, null) }
+                        )
+
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.dry_run)) },
+                            onClick = {
+                                onDryRunClick()
+                                showBuildMenu = false
+                            },
+                            leadingIcon = { Icon(Icons.Rounded.CheckCircle, null) }
                         )
 
                         if (isRootMode || showImageActions) {
@@ -331,6 +343,8 @@ fun SearchAndToolsBar(
     onPrev: () -> Unit,
     onCopyAll: () -> Unit,
     onReformat: (() -> Unit)? = null,
+    isWordWrapEnabled: Boolean = false,
+    onToggleWordWrap: (() -> Unit)? = null,
     lintErrorCount: Int = 0,
     lintErrors: List<DtsError> = emptyList(),
     onLintErrorClick: (DtsError) -> Unit = {},
@@ -424,6 +438,17 @@ fun SearchAndToolsBar(
             // Copy All
             IconButton(onClick = onCopyAll) {
                 Icon(painter = painterResource(R.drawable.ic_content_copy), contentDescription = stringResource(R.string.copy_all))
+            }
+
+            // Word Wrap Toggle
+            if (onToggleWordWrap != null) {
+                IconButton(onClick = onToggleWordWrap) {
+                    Icon(
+                        imageVector = if (isWordWrapEnabled) Icons.Default.WrapText else Icons.Default.FormatAlignLeft,
+                        contentDescription = if (isWordWrapEnabled) "Disable word wrap" else "Enable word wrap",
+                        tint = if (isWordWrapEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
 
             // Reformat Code

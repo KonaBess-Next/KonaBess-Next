@@ -551,4 +551,7 @@
     <string name="settings_root_mode">Root Mode</string>
     <string name="settings_root_mode_desc_on">Using root (su) for boot image extraction &amp; flashing</string>
     <string name="settings_root_mode_desc_off">Non-root: import/export files manually via SAF</string>
+    <string name="dtbo_display_changes">Anzeige-Timing Änderungen</string>
+    <string name="dtbo_touch_changes">Touchscreen Änderungen</string>
+    <string name="dtbo_speaker_changes">Lautsprecherverstärker Änderungen</string>
 </resources>

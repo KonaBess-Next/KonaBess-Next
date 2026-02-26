@@ -24,6 +24,7 @@ import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.Save
 import androidx.compose.material.icons.rounded.Contrast
 import androidx.compose.material.icons.rounded.Security
+import androidx.compose.material.icons.rounded.Code
 import com.ireddragonicy.konabessnext.viewmodel.UpdateStatus
 import android.content.Intent
 import android.net.Uri
@@ -87,6 +88,7 @@ fun SettingsScreen(
     // Export Location
     exportPath: String,
     onSetExportLocation: () -> Unit,
+    onOpenSourceLicensesClick: () -> Unit,
 
     modifier: Modifier = Modifier
 ) {
@@ -143,6 +145,9 @@ fun SettingsScreen(
     val exportLocationTitle = stringResource(R.string.settings_export_location)
     val exportLocationDesc = if (exportPath.isNotEmpty()) exportPath else stringResource(R.string.settings_export_location_not_set)
 
+    val openSourceLicensesTitle = stringResource(R.string.settings_open_source_licenses)
+    val openSourceLicensesDesc = stringResource(R.string.settings_open_source_licenses_desc)
+
     val settingsItems = remember(currentThemeDisplay, currentColorPalette, currentLanguageDisplay, currentFreqUnit, isAutoSave, isAmoledMode, themeTitle, updateChannel, isAutoCheckUpdate, updateStatus, isRootMode, rootModeDesc, amoledDesc, exportLocationDesc) {
         buildList {
             // Appearance section
@@ -173,6 +178,7 @@ fun SettingsScreen(
             add(SettingsListItem.Setting(SettingItem.Toggle(Icons.Rounded.SystemUpdate, autoCheckUpdateTitle, autoCheckUpdateDesc, isAutoCheckUpdate)))
             add(SettingsListItem.Setting(SettingItem.Clickable(Icons.Rounded.SystemUpdate, checkUpdatesTitle, checkUpdatesDesc, "")))
             add(SettingsListItem.Setting(SettingItem.Clickable(Icons.Rounded.Info, helpTitle, versionTitle, "")))
+            add(SettingsListItem.Setting(SettingItem.Clickable(Icons.Rounded.Code, openSourceLicensesTitle, openSourceLicensesDesc, "")))
         }
     }
 
@@ -211,6 +217,7 @@ fun SettingsScreen(
                                             channelTitle -> onUpdateChannelChange(if (updateChannel == "stable") "prerelease" else "stable")
                                             checkUpdatesTitle -> onCheckForUpdates()
                                             exportLocationTitle -> onSetExportLocation()
+                                            openSourceLicensesTitle -> onOpenSourceLicensesClick()
                                         }
                                     }
                                 )
