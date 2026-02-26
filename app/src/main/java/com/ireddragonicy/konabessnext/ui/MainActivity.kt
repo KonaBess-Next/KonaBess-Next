@@ -37,7 +37,7 @@ class MainActivity : ComponentActivity() {
 
     private val deviceViewModel: DeviceViewModel by viewModels()
     private val gpuFrequencyViewModel: GpuFrequencyViewModel by viewModels()
-    private val sharedViewModel: SharedGpuViewModel by viewModels()
+    private val sharedViewModel: SharedDtsViewModel by viewModels()
     private val displayViewModel: DisplayViewModel by viewModels()
     private val settingsViewModel: SettingsViewModel by viewModels()
     private val importExportViewModel: ImportExportViewModel by viewModels()

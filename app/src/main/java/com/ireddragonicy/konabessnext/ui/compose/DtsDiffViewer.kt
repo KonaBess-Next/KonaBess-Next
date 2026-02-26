@@ -54,6 +54,7 @@ import com.ireddragonicy.konabessnext.R
 import com.ireddragonicy.konabessnext.utils.BinDiffResult
 import com.ireddragonicy.konabessnext.utils.DiffNode
 import com.ireddragonicy.konabessnext.utils.DiffType
+import com.ireddragonicy.konabessnext.utils.DtboDiffUtil
 
 enum class DiffCommitAction {
     SAVE,
@@ -320,17 +321,21 @@ private fun androidx.compose.foundation.layout.RowScope.DiffCountChip(
 
 @Composable
 private fun BinDiffSection(result: BinDiffResult, viewMode: DiffViewMode) {
-    val isGeneralSection = result.binId < 0
+    val isGeneralSection = result.binId == -1
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
+        val titleText = when (result.binId) {
+            -1 -> if (viewMode == DiffViewMode.GUI) stringResource(R.string.general_gui_changes) else stringResource(R.string.dts_format_changes)
+            DtboDiffUtil.ID_DISPLAY -> stringResource(R.string.dtbo_display_changes)
+            DtboDiffUtil.ID_TOUCH -> stringResource(R.string.dtbo_touch_changes)
+            DtboDiffUtil.ID_SPEAKER -> stringResource(R.string.dtbo_speaker_changes)
+            else -> stringResource(R.string.bin_id_format, result.binId)
+        }
+
         Text(
-            text = if (isGeneralSection) {
-                if (viewMode == DiffViewMode.GUI) stringResource(R.string.general_gui_changes) else stringResource(R.string.dts_format_changes)
-            } else {
-                stringResource(R.string.bin_id_format, result.binId)
-            },
+            text = titleText,
             style = MaterialTheme.typography.titleSmall,
             color = MaterialTheme.colorScheme.onSurface
         )
@@ -498,15 +503,11 @@ private fun splitDiffResults(results: List<BinDiffResult>): DiffSplit {
     val dts = ArrayList<BinDiffResult>()
 
     results.forEach { result ->
-        if (result.binId < 0) {
+        if (result.binId == -1) {
             val guiChanges = result.changes.filter { it.levelIndex <= 0 }
             val dtsChanges = result.changes.filter { it.levelIndex > 0 }
-            if (guiChanges.isNotEmpty()) {
-                gui.add(result.copy(changes = guiChanges))
-            }
-            if (dtsChanges.isNotEmpty()) {
-                dts.add(result.copy(changes = dtsChanges))
-            }
+            if (guiChanges.isNotEmpty()) gui.add(result.copy(changes = guiChanges))
+            if (dtsChanges.isNotEmpty()) dts.add(result.copy(changes = dtsChanges))
         } else {
             gui.add(result)
         }

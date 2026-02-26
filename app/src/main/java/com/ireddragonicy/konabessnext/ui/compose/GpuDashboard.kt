@@ -19,18 +19,18 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.ireddragonicy.konabessnext.R
-import com.ireddragonicy.konabessnext.viewmodel.SharedGpuViewModel
+import com.ireddragonicy.konabessnext.viewmodel.SharedDtsViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GpuDashboard(
-    sharedViewModel: SharedGpuViewModel,
+    sharedViewModel: SharedDtsViewModel,
     onNavigateToFrequencyTable: () -> Unit
 ) {
     val gpuModelName by sharedViewModel.gpuModelName.collectAsState()
     val currentChip by sharedViewModel.currentChip.collectAsState()
     val workbenchState by sharedViewModel.workbenchState.collectAsState()
-    val isGpuModelLoading = workbenchState is SharedGpuViewModel.WorkbenchState.Loading && gpuModelName.isBlank()
+    val isGpuModelLoading = workbenchState is SharedDtsViewModel.WorkbenchState.Loading && gpuModelName.isBlank()
     
     var showRenameDialog by remember { mutableStateOf(false) }
 

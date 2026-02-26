@@ -66,7 +66,7 @@ open class GpuRepository @Inject constructor(
 
     override val canUndo: StateFlow<Boolean> = historyManager.canUndo
     override val canRedo: StateFlow<Boolean> = historyManager.canRedo
-    val history = historyManager.history
+    override val history: StateFlow<List<String>> = historyManager.history
 
     private val _isDirty = MutableStateFlow(false)
     override val isDirty: StateFlow<Boolean> = _isDirty.asStateFlow()

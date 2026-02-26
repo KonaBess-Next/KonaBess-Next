@@ -10,7 +10,7 @@ import android.util.Log
  *
  * Categories:
  *   [EDITOR]    — DtsEditor composable (stableLines, save, recomposition)
- *   [VIEWMODEL] — SharedGpuViewModel (updateFromText, lint, reformat)
+ *   [VIEWMODEL] — SharedDtsViewModel (updateFromText, lint, reformat)
  *   [REPO]      — GpuRepository (updateContent, flows, tree parse)
  *   [SESSION]   — EditorSession (highlight cache)
  *   [MEMORY]    — Heap usage snapshots

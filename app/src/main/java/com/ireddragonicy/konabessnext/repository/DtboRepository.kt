@@ -5,8 +5,11 @@ import com.ireddragonicy.konabessnext.core.model.DomainResult
 import com.ireddragonicy.konabessnext.model.display.DisplayPanel
 import com.ireddragonicy.konabessnext.model.display.DisplayTiming
 import com.ireddragonicy.konabessnext.model.dts.DtsNode
-import com.ireddragonicy.konabessnext.utils.DtsEditorDebug
+import com.ireddragonicy.konabessnext.utils.DtsLexer
+import com.ireddragonicy.konabessnext.utils.DtsParser
+import com.ireddragonicy.konabessnext.utils.DtsTextPatcher
 import com.ireddragonicy.konabessnext.utils.DtsTreeHelper
+import com.ireddragonicy.konabessnext.utils.DtsEditorDebug
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import javax.inject.Inject
@@ -71,7 +74,7 @@ class DtboRepository @Inject constructor(
 
     override val canUndo: StateFlow<Boolean> = historyManager.canUndo
     override val canRedo: StateFlow<Boolean> = historyManager.canRedo
-    val history = historyManager.history
+    override val history: StateFlow<List<String>> = historyManager.history
 
     private val _isDirty = MutableStateFlow(false)
     override val isDirty: StateFlow<Boolean> = _isDirty.asStateFlow()
@@ -171,7 +174,8 @@ class DtboRepository @Inject constructor(
                 ?: return@launch
             
             if (displayDomainManager.updateTimingProperty(timingNode, propertyName, newValue)) {
-                commitTreeChanges(historyDesc ?: "Updated $propertyName to $newValue", root)
+                val rawNewValue = timingNode.getProperty(propertyName)?.originalValue ?: newValue
+                patchAndCommit(timingNode, propertyName, rawNewValue, historyDesc ?: "Updated $propertyName", root)
             }
         }
         return true
@@ -189,7 +193,8 @@ class DtboRepository @Inject constructor(
             val panelNode = displayDomainManager.findPanelNodeInTree(root, panelNodeName, fragmentIndex) ?: return@launch
             
             if (displayDomainManager.updatePanelProperty(panelNode, propertyName, newValue)) {
-                commitTreeChanges(historyDesc ?: "Updated panel $propertyName", root)
+                val rawNewValue = panelNode.getProperty(propertyName)?.originalValue ?: newValue
+                patchAndCommit(panelNode, propertyName, rawNewValue, historyDesc ?: "Updated panel $propertyName", root)
             }
         }
         return true
@@ -204,8 +209,10 @@ class DtboRepository @Inject constructor(
             val timingNode = displayDomainManager.findTimingNode(root, panel.nodeName, timingIdx, panel.fragmentIndex)
                 ?: return@launch
 
-            displayDomainManager.updateTimingProperty(timingNode, "qcom,mdss-dsi-panel-framerate", newFps.toString())
-            commitTreeChanges("Set framerate to ${newFps}Hz", root)
+            val prop = "qcom,mdss-dsi-panel-framerate"
+            displayDomainManager.updateTimingProperty(timingNode, prop, newFps.toString())
+            val rawNewValue = timingNode.getProperty(prop)?.originalValue ?: newFps.toString()
+            patchAndCommit(timingNode, prop, rawNewValue, "Set framerate to ${newFps}Hz", root)
         }
         return true
     }
@@ -218,8 +225,10 @@ class DtboRepository @Inject constructor(
             val timingIdx = _selectedTimingIndex.value.coerceIn(0, (panel.timings.size - 1).coerceAtLeast(0))
             val timingNode = displayDomainManager.findTimingNode(root, panel.nodeName, timingIdx, panel.fragmentIndex) ?: return@launch
 
-            displayDomainManager.updateTimingProperty(timingNode, "qcom,mdss-dsi-panel-clockrate", newClock.toString())
-            commitTreeChanges("Set display clockrate to $newClock", root)
+            val prop = "qcom,mdss-dsi-panel-clockrate"
+            displayDomainManager.updateTimingProperty(timingNode, prop, newClock.toString())
+            val rawValue = timingNode.getProperty(prop)?.originalValue ?: newClock.toString()
+            patchAndCommit(timingNode, prop, rawValue, "Set display clockrate to $newClock", root)
         }
         return true
     }
@@ -230,8 +239,10 @@ class DtboRepository @Inject constructor(
             val panel = getSelectedPanel(root) ?: return@launch
             val panelNode = displayDomainManager.findPanelNodeInTree(root, panel.nodeName, panel.fragmentIndex) ?: return@launch
 
+            val prop = "qcom,mdss-dsi-panel-dfps-list"
             displayDomainManager.updateDfpsList(panelNode, fpsList)
-            commitTreeChanges("Updated DFPS list", root)
+            val rawValue = panelNode.getProperty(prop)?.originalValue ?: ""
+            patchAndCommit(panelNode, prop, rawValue, "Updated DFPS list", root)
         }
         return true
     }
@@ -246,8 +257,10 @@ class DtboRepository @Inject constructor(
             val root = getTreeCopy() ?: return@launch
             val touchNode = touchManager.findTouchNodeInTree(root, nodeName, fragmentIndex) ?: return@launch
 
+            val prop = "spi-max-frequency"
             if (touchManager.updateTouchSpiFrequency(touchNode, newFrequency.toString())) {
-                commitTreeChanges(historyDesc ?: "Updated touch panel SPI frequency", root)
+                val rawValue = touchNode.getProperty(prop)?.originalValue ?: newFrequency.toString()
+                patchAndCommit(touchNode, prop, rawValue, historyDesc ?: "Updated touch SPI frequency", root)
             }
         }
         return true
@@ -265,7 +278,20 @@ class DtboRepository @Inject constructor(
             val speakerNode = speakerManager.findSpeakerNodeInTree(root, nodeName, fragmentIndex) ?: return@launch
 
             if (speakerManager.updateSpeakerReBounds(speakerNode, newReMin.toString(), newReMax.toString())) {
-                commitTreeChanges(historyDesc ?: "Updated speaker bounds", root)
+                val minProp = "aw-re-min"
+                val maxProp = "aw-re-max"
+                val minVal = speakerNode.getProperty(minProp)?.originalValue ?: newReMin.toString()
+                val maxVal = speakerNode.getProperty(maxProp)?.originalValue ?: newReMax.toString()
+                
+                val currentLines = _dtsLines.value
+                var p1 = DtsTextPatcher.patchProperty(currentLines, speakerNode, minProp, minVal)
+                var p2 = DtsTextPatcher.patchProperty(p1, speakerNode, maxProp, maxVal)
+                
+                if (p2 != currentLines) {
+                    updateContent(p2, historyDesc ?: "Updated speaker bounds", addToHistory = true, reparseTree = false)
+                    _parsedTree.value = root
+                    _structuralChange.tryEmit(Unit)
+                }
             }
         }
         return true
@@ -355,8 +381,25 @@ class DtboRepository @Inject constructor(
         return parsedRoot
     }
 
+    private fun patchAndCommit(
+        targetNode: DtsNode,
+        propertyName: String,
+        newValue: String,
+        description: String,
+        mutatedRoot: DtsNode
+    ) {
+        val currentLines = _dtsLines.value
+        val newLines = DtsTextPatcher.patchProperty(currentLines, targetNode, propertyName, newValue)
+        if (newLines != currentLines) {
+            updateContent(newLines, description, addToHistory = true, reparseTree = false)
+            _parsedTree.value = mutatedRoot
+            _structuralChange.tryEmit(Unit)
+        }
+    }
+
     private fun commitTreeChanges(description: String, mutatedRoot: DtsNode) {
         repoScope.launch(Dispatchers.Default) {
+             // Fallback to regeneration if structure changed drastically or for Tree Editor
             val newText = DtsTreeHelper.generate(mutatedRoot)
             val newLines = newText.split("\n")
             

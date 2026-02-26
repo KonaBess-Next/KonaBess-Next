@@ -8,6 +8,7 @@ import com.ireddragonicy.konabessnext.model.TargetPartition
 interface DeviceRepositoryInterface {
     val dtsPath: String?
     val selectedPartition: TargetPartition
+    val selectedPartitionFlow: kotlinx.coroutines.flow.StateFlow<TargetPartition>
     val availablePartitions: List<TargetPartition>
     
     fun tryRestoreLastChipset(): Boolean

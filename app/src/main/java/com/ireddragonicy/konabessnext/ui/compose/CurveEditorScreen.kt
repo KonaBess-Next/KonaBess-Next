@@ -32,7 +32,7 @@ import com.github.mikephil.charting.data.LineDataSet
 import com.github.mikephil.charting.formatter.ValueFormatter
 import com.github.mikephil.charting.highlight.Highlight
 import com.ireddragonicy.konabessnext.utils.BinDiffResult
-import com.ireddragonicy.konabessnext.viewmodel.SharedGpuViewModel
+import com.ireddragonicy.konabessnext.viewmodel.SharedDtsViewModel
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -44,7 +44,7 @@ enum class AxisLockMode {
 @Composable
 fun CurveEditorScreen(
     binId: Int,
-    sharedViewModel: SharedGpuViewModel,
+    sharedViewModel: SharedDtsViewModel,
     onBack: () -> Unit,
     onRepack: () -> Unit,
     onInstallToInactiveSlot: () -> Unit,
@@ -238,7 +238,7 @@ fun CurveEditorScreen(
                 canUndo = canUndo,
                 canRedo = canRedo,
                 historyCount = history.size,
-                currentViewMode = SharedGpuViewModel.ViewMode.MAIN_EDITOR,
+                currentViewMode = SharedDtsViewModel.ViewMode.MAIN_EDITOR,
                 showChipsetSelector = false,
                 onSave = { 
                     // Apply pending offset then save

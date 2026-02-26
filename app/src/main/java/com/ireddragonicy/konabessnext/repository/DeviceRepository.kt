@@ -14,6 +14,8 @@ import com.ireddragonicy.konabessnext.model.LevelPresets
 import com.ireddragonicy.konabessnext.core.scanner.DtsScanner
 import java.io.InputStream
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileInputStream
@@ -65,9 +67,11 @@ open class DeviceRepository @Inject constructor(
     override val availablePartitions: List<TargetPartition>
         get() = _availablePartitions.toList()
 
-    private var _selectedPartition: TargetPartition = TargetPartition.VENDOR_BOOT
+    private val _selectedPartitionFlow = kotlinx.coroutines.flow.MutableStateFlow(TargetPartition.VENDOR_BOOT)
+    override val selectedPartitionFlow: kotlinx.coroutines.flow.StateFlow<TargetPartition> = _selectedPartitionFlow.asStateFlow()
+
     override val selectedPartition: TargetPartition
-        get() = _selectedPartition
+        get() = _selectedPartitionFlow.value
 
     private val dtbsByPartition: MutableMap<TargetPartition, MutableList<Dtb>> = HashMap()
     private val activeDtbIdByPartition: MutableMap<TargetPartition, Int> = HashMap()
@@ -113,7 +117,7 @@ open class DeviceRepository @Inject constructor(
     }
 
     private fun setSelectedPartitionInternal(partition: TargetPartition) {
-        _selectedPartition = partition
+        _selectedPartitionFlow.value = partition
         bootName = partition.partitionName
         if (!_availablePartitions.contains(partition)) {
             _availablePartitions.add(partition)
@@ -388,7 +392,7 @@ open class DeviceRepository @Inject constructor(
         dtbsByPartition.clear()
         _availablePartitions.clear()
         _availablePartitions.add(TargetPartition.VENDOR_BOOT)
-        _selectedPartition = TargetPartition.VENDOR_BOOT
+        _selectedPartitionFlow.value = TargetPartition.VENDOR_BOOT
         bootName = null
         currentDtb = null
         activeDtbIdByPartition.clear()

@@ -573,4 +573,7 @@
     <string name="voltage_table_pattern_optional">Voltage table pattern (optional)</string>
     <string name="zip_archive">ZIP archive</string>
     <string name="polish">Polski</string>
+    <string name="dtbo_display_changes">Perubahan Timing Layar</string>
+    <string name="dtbo_touch_changes">Perubahan Touchscreen</string>
+    <string name="dtbo_speaker_changes">Perubahan Amplifier Speaker</string>
 </resources>

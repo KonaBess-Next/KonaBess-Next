@@ -12,7 +12,7 @@ import javax.inject.Inject
 /**
  * ViewModel for display overclock via DTBO.
  *
- * This is the display counterpart of [SharedGpuViewModel].
+ * This is the display counterpart of [SharedDtsViewModel].
  * It exposes display panels, timing snapshots, and mutation methods to the UI layer,
  * delegating all data/logic to [DtboRepository].
  */

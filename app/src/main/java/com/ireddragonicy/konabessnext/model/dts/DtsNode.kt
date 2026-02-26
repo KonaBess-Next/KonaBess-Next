@@ -45,7 +45,7 @@ class DtsNode(name: String?) {
     }
 
     fun getProperty(name: String): DtsProperty? {
-        return properties.find { it.name == name }
+        return properties.findLast { it.name == name }
     }
 
     fun getChild(name: String): DtsNode? {

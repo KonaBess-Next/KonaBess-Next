@@ -26,7 +26,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import com.ireddragonicy.konabessnext.R
 import com.ireddragonicy.konabessnext.model.dts.DtsError
 import com.ireddragonicy.konabessnext.model.dts.Severity
-import com.ireddragonicy.konabessnext.viewmodel.SharedGpuViewModel
+import com.ireddragonicy.konabessnext.viewmodel.SharedDtsViewModel
 
 /**
  * Jetpack Compose Toolbar for GPU Frequency Editor.
@@ -39,14 +39,14 @@ fun GpuEditorToolbar(
     canUndo: Boolean,
     canRedo: Boolean,
     historyCount: Int,
-    currentViewMode: SharedGpuViewModel.ViewMode,
+    currentViewMode: SharedDtsViewModel.ViewMode,
     showChipsetSelector: Boolean = false,
     onSave: () -> Unit,
     onRequireDiffConfirmation: ((DiffCommitAction) -> Unit)? = null,
     onUndo: () -> Unit,
     onRedo: () -> Unit,
     onShowHistory: () -> Unit,
-    onViewModeChanged: (SharedGpuViewModel.ViewMode) -> Unit,
+    onViewModeChanged: (SharedDtsViewModel.ViewMode) -> Unit,
     onChipsetClick: () -> Unit = {},
 
     onFlashClick: () -> Unit,
@@ -186,7 +186,7 @@ fun GpuEditorToolbar(
                 // Segmented Button
                 val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
                 SingleChoiceSegmentedButtonRow(modifier = Modifier.weight(1f)) {
-                    SharedGpuViewModel.ViewMode.values().forEachIndexed { index, mode ->
+                    SharedDtsViewModel.ViewMode.values().forEachIndexed { index, mode ->
                         SegmentedButton(
                             selected = currentViewMode == mode,
                             onClick = { 
@@ -194,7 +194,7 @@ fun GpuEditorToolbar(
                                 focusManager.clearFocus()
                                 onViewModeChanged(mode) 
                             },
-                            shape = SegmentedButtonDefaults.itemShape(index, SharedGpuViewModel.ViewMode.values().size),
+                            shape = SegmentedButtonDefaults.itemShape(index, SharedDtsViewModel.ViewMode.values().size),
                             colors = SegmentedButtonDefaults.colors(
                                 activeContainerColor = MaterialTheme.colorScheme.secondaryContainer,
                                 activeContentColor = MaterialTheme.colorScheme.onSecondaryContainer
@@ -202,9 +202,9 @@ fun GpuEditorToolbar(
                         ) {
                             Text(
                                 text = when (mode) {
-                                    SharedGpuViewModel.ViewMode.MAIN_EDITOR -> androidx.compose.ui.res.stringResource(R.string.view_mode_gui)
-                                    SharedGpuViewModel.ViewMode.TEXT_ADVANCED -> androidx.compose.ui.res.stringResource(R.string.view_mode_text)
-                                    SharedGpuViewModel.ViewMode.VISUAL_TREE -> androidx.compose.ui.res.stringResource(R.string.view_mode_tree)
+                                    SharedDtsViewModel.ViewMode.MAIN_EDITOR -> androidx.compose.ui.res.stringResource(R.string.view_mode_gui)
+                                    SharedDtsViewModel.ViewMode.TEXT_ADVANCED -> androidx.compose.ui.res.stringResource(R.string.view_mode_text)
+                                    SharedDtsViewModel.ViewMode.VISUAL_TREE -> androidx.compose.ui.res.stringResource(R.string.view_mode_tree)
                                 },
                                 style = MaterialTheme.typography.labelMedium
                             )

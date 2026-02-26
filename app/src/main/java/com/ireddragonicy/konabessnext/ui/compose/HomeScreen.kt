@@ -49,7 +49,7 @@ import kotlinx.coroutines.launch
 fun HomeScreen(
     deviceViewModel: DeviceViewModel,
     gpuFrequencyViewModel: GpuFrequencyViewModel,
-    sharedViewModel: SharedGpuViewModel,
+    sharedViewModel: SharedDtsViewModel,
     displayViewModel: DisplayViewModel,
     highlightCache: Map<Int, androidx.compose.ui.text.AnnotatedString> = emptyMap(),
     onStartRepack: () -> Unit,
@@ -174,7 +174,7 @@ fun InitialSetupScreen(deviceViewModel: DeviceViewModel) {
 fun GpuEditorMainContent(
     deviceViewModel: DeviceViewModel,
     gpuFrequencyViewModel: GpuFrequencyViewModel,
-    sharedViewModel: SharedGpuViewModel,
+    sharedViewModel: SharedDtsViewModel,
     displayViewModel: DisplayViewModel,
     onStartRepack: () -> Unit,
     onSelectionDragStateChanged: (Boolean) -> Unit = {}
@@ -451,7 +451,7 @@ fun GpuEditorMainContent(
             Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                 
                 // GUI Mode
-                val isGui = currentMode == SharedGpuViewModel.ViewMode.MAIN_EDITOR
+                val isGui = currentMode == SharedDtsViewModel.ViewMode.MAIN_EDITOR
                 val guiAlpha by animateFloatAsState(targetValue = if (isGui) 1f else 0f, label = "guiAlpha")
                 Box(
                     modifier = Modifier.fillMaxSize().graphicsLayer {
@@ -470,7 +470,7 @@ fun GpuEditorMainContent(
                 }
 
                 // Text Mode (Sora Editor)
-                val isText = currentMode == SharedGpuViewModel.ViewMode.TEXT_ADVANCED
+                val isText = currentMode == SharedDtsViewModel.ViewMode.TEXT_ADVANCED
                 val textAlpha by animateFloatAsState(targetValue = if (isText) 1f else 0f, label = "textAlpha")
                 Box(
                     modifier = Modifier.fillMaxSize().graphicsLayer {
@@ -482,7 +482,7 @@ fun GpuEditorMainContent(
                 }
 
                 // Tree Mode
-                val isTree = currentMode == SharedGpuViewModel.ViewMode.VISUAL_TREE
+                val isTree = currentMode == SharedDtsViewModel.ViewMode.VISUAL_TREE
                 val treeAlpha by animateFloatAsState(targetValue = if (isTree) 1f else 0f, label = "treeAlpha")
                 Box(
                     modifier = Modifier.fillMaxSize().graphicsLayer {

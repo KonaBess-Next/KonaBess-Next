@@ -34,7 +34,7 @@ fun AppNavGraph(
     navController: NavHostController,
     deviceViewModel: DeviceViewModel,
     gpuFrequencyViewModel: GpuFrequencyViewModel,
-    sharedViewModel: SharedGpuViewModel,
+    sharedViewModel: SharedDtsViewModel,
     displayViewModel: DisplayViewModel,
     settingsViewModel: SettingsViewModel,
     importExportViewModel: ImportExportViewModel,

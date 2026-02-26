@@ -636,4 +636,7 @@
     <!-- Dry Run Feature -->
     <string name="dry_run">Dry Run (Verify Build)</string>
     <string name="dry_run_success">Dry Run Successful!\n\nYour DTS compiled perfectly and the image was repacked without errors. It is safe to Flash or Export.</string>
+    <string name="dtbo_display_changes">Display Timing Changes</string>
+    <string name="dtbo_touch_changes">Touchscreen Changes</string>
+    <string name="dtbo_speaker_changes">Speaker Amplifier Changes</string>
 </resources>

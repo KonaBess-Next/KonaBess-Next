@@ -20,6 +20,7 @@ interface DtsDataProvider {
     val isDirty: StateFlow<Boolean>
     val canUndo: StateFlow<Boolean>
     val canRedo: StateFlow<Boolean>
+    val history: StateFlow<List<String>>
 
     fun currentDtsPath(): String?
 

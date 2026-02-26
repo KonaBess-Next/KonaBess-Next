@@ -15,7 +15,7 @@ import com.ireddragonicy.konabessnext.viewmodel.*
 
 @Composable
 fun GuiEditorContent(
-    sharedViewModel: SharedGpuViewModel,
+    sharedViewModel: SharedDtsViewModel,
     deviceViewModel: DeviceViewModel,
     gpuFrequencyViewModel: GpuFrequencyViewModel,
     displayViewModel: DisplayViewModel,
