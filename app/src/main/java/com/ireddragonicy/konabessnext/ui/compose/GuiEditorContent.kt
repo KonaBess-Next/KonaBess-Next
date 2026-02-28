@@ -149,7 +149,8 @@ fun GuiEditorContent(
                     GpuDashboard(
                         sharedViewModel = sharedViewModel,
                         onNavigateToFrequencyTable = { gpuFrequencyViewModel.navigationStep.value = 1 },
-                        onNavigateToMemoryTable = { gpuFrequencyViewModel.navigationStep.value = 2 }
+                        onNavigateToMemoryTable = { gpuFrequencyViewModel.navigationStep.value = 2 },
+                        onNavigateToUfsTable = { gpuFrequencyViewModel.navigationStep.value = 3 }
                     )
                 }
                 1 -> {
@@ -227,6 +228,16 @@ fun GuiEditorContent(
                         onEditFrequency = ddrViewModel::editFrequency,
                         onAddFrequency = ddrViewModel::addFrequency,
                         onDeleteFrequency = ddrViewModel::deleteFrequency
+                    )
+                }
+                3 -> {
+                    // UFS Editor
+                    val ufsViewModel: com.ireddragonicy.konabessnext.viewmodel.UfsViewModel = androidx.hilt.navigation.compose.hiltViewModel()
+                    val ufsTables by ufsViewModel.ufsTables.collectAsState()
+                    UfsEditorScreen(
+                        ufsTables = ufsTables,
+                        onBack = { gpuFrequencyViewModel.navigationStep.value = 0 },
+                        onEditClockFrequencies = ufsViewModel::editClockFrequencies
                     )
                 }
             }

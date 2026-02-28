@@ -5,9 +5,11 @@ import com.ireddragonicy.konabessnext.model.Opp
 import com.ireddragonicy.konabessnext.core.model.AppError
 import com.ireddragonicy.konabessnext.core.model.DomainResult
 import com.ireddragonicy.konabessnext.domain.DdrDomainManager
+import com.ireddragonicy.konabessnext.domain.UfsDomainManager
 import com.ireddragonicy.konabessnext.model.dts.DtsNode
 import com.ireddragonicy.konabessnext.model.dts.DtsProperty
 import com.ireddragonicy.konabessnext.model.memory.MemoryFreqTable
+import com.ireddragonicy.konabessnext.model.ufs.UfsFreqTable
 import com.ireddragonicy.konabessnext.utils.DtsTreeHelper
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
@@ -21,6 +23,7 @@ open class GpuRepository @Inject constructor(
     private val dtsFileRepository: DtsFileRepository,
     private val gpuDomainManager: GpuDomainManager,
     private val ddrDomainManager: DdrDomainManager,
+    private val ufsDomainManager: UfsDomainManager,
     private val historyManager: HistoryManager,
     private val chipRepository: ChipRepositoryInterface,
     private val userMessageManager: com.ireddragonicy.konabessnext.utils.UserMessageManager
@@ -79,6 +82,22 @@ open class GpuRepository @Inject constructor(
                 DtsTreeHelper.parse(lines.joinToString("\n"))
             } catch (_: Exception) { null }
             if (root != null) ddrDomainManager.findMemoryTables(root) else emptyList()
+        }
+        .flowOn(Dispatchers.Default)
+        .stateIn(repoScope, SharingStarted.Lazily, emptyList())
+
+    @OptIn(FlowPreview::class)
+    val ufsTables: StateFlow<List<UfsFreqTable>> = merge(
+        _dtsLines.debounce(1000),
+        _structuralChange.map { _dtsLines.value }
+    )
+        .distinctUntilChanged()
+        .map { lines ->
+            DtsEditorDebug.logFlowTriggered("ufsTables", lines.size)
+            val root = try {
+                DtsTreeHelper.parse(lines.joinToString("\n"))
+            } catch (_: Exception) { null }
+            if (root != null) ufsDomainManager.findUfsTables(root) else emptyList()
         }
         .flowOn(Dispatchers.Default)
         .stateIn(repoScope, SharingStarted.Lazily, emptyList())
@@ -398,6 +417,27 @@ open class GpuRepository @Inject constructor(
         }
     }
     
+    // ===== UFS Operations =====
+
+    /**
+     * Updates a clock min/max frequency pair in a UFS table.
+     */
+    fun updateUfsClockFrequencies(nodeName: String, minIndex: Int, newMinHz: Long, maxIndex: Int, newMaxHz: Long, historyDesc: String) {
+        repoScope.launch {
+            val root = getTreeCopy() ?: return@launch
+            val tableNode = ufsDomainManager.findUfsTableNode(root, nodeName) ?: return@launch
+            val currentTable = ufsDomainManager.findUfsTables(root)
+                .firstOrNull { it.nodeName == nodeName } ?: return@launch
+
+            val newFrequencies = currentTable.frequenciesHz.toMutableList()
+            if (minIndex in newFrequencies.indices) newFrequencies[minIndex] = newMinHz
+            if (maxIndex in newFrequencies.indices) newFrequencies[maxIndex] = newMaxHz
+
+            if (!ufsDomainManager.updateUfsTable(tableNode, newFrequencies)) return@launch
+            commitTreeChanges(historyDesc, root)
+        }
+    }
+
     fun updateOppVoltage(frequency: Long, newVolt: Long, historyDesc: String? = null) {
         repoScope.launch {
             val root = getTreeCopy() ?: return@launch
