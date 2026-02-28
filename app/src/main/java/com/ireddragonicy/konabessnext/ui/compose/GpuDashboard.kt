@@ -11,6 +11,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.List
 import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.Memory
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -25,12 +26,14 @@ import com.ireddragonicy.konabessnext.viewmodel.SharedDtsViewModel
 @Composable
 fun GpuDashboard(
     sharedViewModel: SharedDtsViewModel,
-    onNavigateToFrequencyTable: () -> Unit
+    onNavigateToFrequencyTable: () -> Unit,
+    onNavigateToMemoryTable: () -> Unit = {}
 ) {
     val gpuModelName by sharedViewModel.gpuModelName.collectAsState()
     val currentChip by sharedViewModel.currentChip.collectAsState()
     val workbenchState by sharedViewModel.workbenchState.collectAsState()
     val isGpuModelLoading = workbenchState is SharedDtsViewModel.WorkbenchState.Loading && gpuModelName.isBlank()
+    val memoryTables by sharedViewModel.memoryTables.collectAsState()
     
     var showRenameDialog by remember { mutableStateOf(false) }
 
@@ -169,6 +172,45 @@ fun GpuDashboard(
                         contentDescription = null,
                         modifier = Modifier.size(32.dp)
                     )
+                }
+            }
+        }
+
+        if (memoryTables.isNotEmpty()) {
+            item {
+                Card(
+                    onClick = onNavigateToMemoryTable,
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                    ),
+                    shape = RoundedCornerShape(24.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .padding(24.dp)
+                            .fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column {
+                            Text(
+                                text = stringResource(R.string.memory_cache_frequencies),
+                                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+                            )
+                            Text(
+                                text = stringResource(R.string.memory_cache_frequencies_desc),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
+                            )
+                        }
+                        Icon(
+                            imageVector = Icons.Rounded.Memory,
+                            contentDescription = null,
+                            modifier = Modifier.size(32.dp)
+                        )
+                    }
                 }
             }
         }

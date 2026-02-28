@@ -639,4 +639,17 @@
     <string name="dtbo_display_changes">Display Timing Changes</string>
     <string name="dtbo_touch_changes">Touchscreen Changes</string>
     <string name="dtbo_speaker_changes">Speaker Amplifier Changes</string>
+
+    <!-- DDR / LLCC Memory Overclocking -->
+    <string name="memory_cache_frequencies">Memory &amp; Cache Frequencies</string>
+    <string name="memory_cache_frequencies_desc">Edit DDR, LLCC, and DDR-QoS frequency tables</string>
+    <string name="no_memory_tables_found">No Memory Tables Found</string>
+    <string name="no_memory_tables_found_desc">This DTB does not contain DDR or LLCC frequency tables.</string>
+    <string name="memory_table_title">Memory Frequency Editor</string>
+    <string name="edit_frequency">Edit Frequency</string>
+    <string name="frequency_mhz_hint">Frequency (MHz)</string>
+    <string name="frequency_khz_hint">Frequency (kHz)</string>
+    <string name="add_new_frequency">Add New Frequency</string>
+    <string name="delete_frequency_confirm">Delete this frequency?</string>
+    <string name="freq_count_format">%1$d frequencies</string>
 </resources>

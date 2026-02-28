@@ -148,7 +148,8 @@ fun GuiEditorContent(
                 0 -> {
                     GpuDashboard(
                         sharedViewModel = sharedViewModel,
-                        onNavigateToFrequencyTable = { gpuFrequencyViewModel.navigationStep.value = 1 }
+                        onNavigateToFrequencyTable = { gpuFrequencyViewModel.navigationStep.value = 1 },
+                        onNavigateToMemoryTable = { gpuFrequencyViewModel.navigationStep.value = 2 }
                     )
                 }
                 1 -> {
@@ -215,6 +216,18 @@ fun GuiEditorContent(
                             )
                         }
                     }
+                }
+                2 -> {
+                    // DDR / LLCC Memory Editor
+                    val ddrViewModel: com.ireddragonicy.konabessnext.viewmodel.DdrViewModel = androidx.hilt.navigation.compose.hiltViewModel()
+                    val ddrMemoryTables by ddrViewModel.memoryTables.collectAsState()
+                    DdrEditorScreen(
+                        memoryTables = ddrMemoryTables,
+                        onBack = { gpuFrequencyViewModel.navigationStep.value = 0 },
+                        onEditFrequency = ddrViewModel::editFrequency,
+                        onAddFrequency = ddrViewModel::addFrequency,
+                        onDeleteFrequency = ddrViewModel::deleteFrequency
+                    )
                 }
             }
         }

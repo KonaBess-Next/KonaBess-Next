@@ -253,7 +253,7 @@ class SettingsViewModel @Inject constructor(
                          return@launch
                      }
                      
-                     val responseBody = response.body?.string() ?: ""
+                     val responseBody = response.body.string()
                      val releaseJson = if (isPrerelease) {
                         val jsonArray = JSONArray(responseBody)
                         if (jsonArray.length() > 0) jsonArray.getJSONObject(0) else null

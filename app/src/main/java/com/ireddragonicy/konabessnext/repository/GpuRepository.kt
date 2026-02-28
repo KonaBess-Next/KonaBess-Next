@@ -4,8 +4,10 @@ import com.ireddragonicy.konabessnext.model.Bin
 import com.ireddragonicy.konabessnext.model.Opp
 import com.ireddragonicy.konabessnext.core.model.AppError
 import com.ireddragonicy.konabessnext.core.model.DomainResult
+import com.ireddragonicy.konabessnext.domain.DdrDomainManager
 import com.ireddragonicy.konabessnext.model.dts.DtsNode
 import com.ireddragonicy.konabessnext.model.dts.DtsProperty
+import com.ireddragonicy.konabessnext.model.memory.MemoryFreqTable
 import com.ireddragonicy.konabessnext.utils.DtsTreeHelper
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
@@ -18,6 +20,7 @@ import com.ireddragonicy.konabessnext.utils.DtsEditorDebug
 open class GpuRepository @Inject constructor(
     private val dtsFileRepository: DtsFileRepository,
     private val gpuDomainManager: GpuDomainManager,
+    private val ddrDomainManager: DdrDomainManager,
     private val historyManager: HistoryManager,
     private val chipRepository: ChipRepositoryInterface,
     private val userMessageManager: com.ireddragonicy.konabessnext.utils.UserMessageManager
@@ -60,6 +63,22 @@ open class GpuRepository @Inject constructor(
         .map { lines ->
             DtsEditorDebug.logFlowTriggered("opps", lines.size)
             gpuDomainManager.parseOpps(lines)
+        }
+        .flowOn(Dispatchers.Default)
+        .stateIn(repoScope, SharingStarted.Lazily, emptyList())
+
+    @OptIn(FlowPreview::class)
+    val memoryTables: StateFlow<List<MemoryFreqTable>> = merge(
+        _dtsLines.debounce(1000),
+        _structuralChange.map { _dtsLines.value }
+    )
+        .distinctUntilChanged()
+        .map { lines ->
+            DtsEditorDebug.logFlowTriggered("memoryTables", lines.size)
+            val root = try {
+                DtsTreeHelper.parse(lines.joinToString("\n"))
+            } catch (_: Exception) { null }
+            if (root != null) ddrDomainManager.findMemoryTables(root) else emptyList()
         }
         .flowOn(Dispatchers.Default)
         .stateIn(repoScope, SharingStarted.Lazily, emptyList())
@@ -326,6 +345,57 @@ open class GpuRepository @Inject constructor(
 
     private companion object {
         const val LEVEL_NODE_PREFIX = "qcom,gpu-pwrlevel@"
+    }
+
+    // ===== DDR / LLCC Memory Table Operations =====
+
+    /**
+     * Updates the frequency list for a specific memory table node.
+     */
+    fun updateMemoryTable(nodeName: String, newFrequencies: List<Long>, historyDesc: String) {
+        repoScope.launch {
+            val root = getTreeCopy() ?: return@launch
+            val tableNode = ddrDomainManager.findMemoryTableNode(root, nodeName) ?: return@launch
+            if (!ddrDomainManager.updateMemoryTable(tableNode, newFrequencies)) return@launch
+            commitTreeChanges(historyDesc, root)
+        }
+    }
+
+    /**
+     * Adds a new frequency with the user-specified value to a memory table.
+     */
+    fun addMemoryFrequency(nodeName: String, newFrequencyKHz: Long, historyDesc: String) {
+        repoScope.launch {
+            val root = getTreeCopy() ?: return@launch
+            val tableNode = ddrDomainManager.findMemoryTableNode(root, nodeName) ?: return@launch
+            val currentTable = ddrDomainManager.findMemoryTables(root)
+                .firstOrNull { it.nodeName == nodeName } ?: return@launch
+
+            val newFrequencies = currentTable.frequenciesKHz.toMutableList()
+            newFrequencies.add(newFrequencyKHz)
+            newFrequencies.sort()
+            if (!ddrDomainManager.updateMemoryTable(tableNode, newFrequencies)) return@launch
+            commitTreeChanges(historyDesc, root)
+        }
+    }
+
+    /**
+     * Deletes a frequency at the given index from a memory table.
+     */
+    fun deleteMemoryFrequency(nodeName: String, index: Int, historyDesc: String) {
+        repoScope.launch {
+            val root = getTreeCopy() ?: return@launch
+            val tableNode = ddrDomainManager.findMemoryTableNode(root, nodeName) ?: return@launch
+            val currentTable = ddrDomainManager.findMemoryTables(root)
+                .firstOrNull { it.nodeName == nodeName } ?: return@launch
+            if (index < 0 || index >= currentTable.frequenciesKHz.size) return@launch
+
+            val newFrequencies = currentTable.frequenciesKHz.toMutableList()
+            newFrequencies.removeAt(index)
+            if (newFrequencies.isEmpty()) return@launch  // Don't allow empty table
+            if (!ddrDomainManager.updateMemoryTable(tableNode, newFrequencies)) return@launch
+            commitTreeChanges(historyDesc, root)
+        }
     }
     
     fun updateOppVoltage(frequency: Long, newVolt: Long, historyDesc: String? = null) {

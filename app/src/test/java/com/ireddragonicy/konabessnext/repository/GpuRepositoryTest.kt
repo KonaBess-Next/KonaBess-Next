@@ -1,6 +1,7 @@
 package com.ireddragonicy.konabessnext.repository
 
 import com.ireddragonicy.konabessnext.core.interfaces.FileDataSource
+import com.ireddragonicy.konabessnext.domain.DdrDomainManager
 import com.ireddragonicy.konabessnext.model.ChipDefinition
 import com.ireddragonicy.konabessnext.model.dts.DtsNode
 import com.ireddragonicy.konabessnext.utils.DtsTreeHelper
@@ -27,6 +28,7 @@ class GpuRepositoryTest {
     
     private lateinit var dtsFileRepository: DtsFileRepository
     private lateinit var gpuDomainManager: GpuDomainManager
+    private lateinit var ddrDomainManager: DdrDomainManager
     private lateinit var historyManager: HistoryManager
     private lateinit var userMessageManager: com.ireddragonicy.konabessnext.utils.UserMessageManager
     
@@ -41,10 +43,11 @@ class GpuRepositoryTest {
         
         dtsFileRepository = DtsFileRepository(fakeFileDataSource, fakeDeviceRepository)
         gpuDomainManager = GpuDomainManager(fakeChipRepository)
+        ddrDomainManager = DdrDomainManager()
         historyManager = HistoryManager()
         userMessageManager = com.ireddragonicy.konabessnext.utils.UserMessageManager() // Real instance logic is simple enough
         
-        repository = GpuRepository(dtsFileRepository, gpuDomainManager, historyManager, fakeChipRepository, userMessageManager)
+        repository = GpuRepository(dtsFileRepository, gpuDomainManager, ddrDomainManager, historyManager, fakeChipRepository, userMessageManager)
     }
 
     @After

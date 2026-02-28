@@ -90,6 +90,7 @@ class SharedDtsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.Lazily, "")
     val bins: StateFlow<List<Bin>> = repository.bins
     val opps: StateFlow<List<Opp>> = repository.opps
+    val memoryTables = repository.memoryTables
     private val _detectedActiveBinIndex = MutableStateFlow(-1)
     val detectedActiveBinIndex: StateFlow<Int> = _detectedActiveBinIndex.asStateFlow()
     private val _runtimeGpuFrequencies = MutableStateFlow<List<Long>>(emptyList())
