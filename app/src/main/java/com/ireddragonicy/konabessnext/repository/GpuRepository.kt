@@ -24,6 +24,7 @@ open class GpuRepository @Inject constructor(
     private val gpuDomainManager: GpuDomainManager,
     private val ddrDomainManager: DdrDomainManager,
     private val ufsDomainManager: UfsDomainManager,
+    private val gmuDomainManager: com.ireddragonicy.konabessnext.domain.GmuDomainManager,
     private val historyManager: HistoryManager,
     private val chipRepository: ChipRepositoryInterface,
     private val userMessageManager: com.ireddragonicy.konabessnext.utils.UserMessageManager
@@ -98,6 +99,22 @@ open class GpuRepository @Inject constructor(
                 DtsTreeHelper.parse(lines.joinToString("\n"))
             } catch (_: Exception) { null }
             if (root != null) ufsDomainManager.findUfsTables(root) else emptyList()
+        }
+        .flowOn(Dispatchers.Default)
+        .stateIn(repoScope, SharingStarted.Lazily, emptyList())
+
+    @OptIn(FlowPreview::class)
+    val gmuTables: StateFlow<List<com.ireddragonicy.konabessnext.model.gmu.GmuFreqTable>> = merge(
+        _dtsLines.debounce(1000),
+        _structuralChange.map { _dtsLines.value }
+    )
+        .distinctUntilChanged()
+        .map { lines ->
+            DtsEditorDebug.logFlowTriggered("gmuTables", lines.size)
+            val root = try {
+                DtsTreeHelper.parse(lines.joinToString("\n"))
+            } catch (_: Exception) { null }
+            if (root != null) gmuDomainManager.findGmuTables(root) else emptyList()
         }
         .flowOn(Dispatchers.Default)
         .stateIn(repoScope, SharingStarted.Lazily, emptyList())
@@ -434,6 +451,15 @@ open class GpuRepository @Inject constructor(
             if (maxIndex in newFrequencies.indices) newFrequencies[maxIndex] = newMaxHz
 
             if (!ufsDomainManager.updateUfsTable(tableNode, newFrequencies)) return@launch
+            commitTreeChanges(historyDesc, root)
+        }
+    }
+
+    fun updateGmuTable(nodeName: String, newPairs: List<com.ireddragonicy.konabessnext.model.gmu.GmuFreqPair>, historyDesc: String) {
+        repoScope.launch {
+            val root = getTreeCopy() ?: return@launch
+            val tableNode = gmuDomainManager.findGmuTableNode(root, nodeName) ?: return@launch
+            if (!gmuDomainManager.updateGmuTable(tableNode, newPairs)) return@launch
             commitTreeChanges(historyDesc, root)
         }
     }

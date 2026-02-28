@@ -150,7 +150,8 @@ fun GuiEditorContent(
                         sharedViewModel = sharedViewModel,
                         onNavigateToFrequencyTable = { gpuFrequencyViewModel.navigationStep.value = 1 },
                         onNavigateToMemoryTable = { gpuFrequencyViewModel.navigationStep.value = 2 },
-                        onNavigateToUfsTable = { gpuFrequencyViewModel.navigationStep.value = 3 }
+                        onNavigateToUfsTable = { gpuFrequencyViewModel.navigationStep.value = 3 },
+                        onNavigateToGmuTable = { gpuFrequencyViewModel.navigationStep.value = 4 }
                     )
                 }
                 1 -> {
@@ -238,6 +239,17 @@ fun GuiEditorContent(
                         ufsTables = ufsTables,
                         onBack = { gpuFrequencyViewModel.navigationStep.value = 0 },
                         onEditClockFrequencies = ufsViewModel::editClockFrequencies
+                    )
+                }
+                4 -> {
+                    val gmuViewModel: com.ireddragonicy.konabessnext.viewmodel.GmuViewModel = androidx.hilt.navigation.compose.hiltViewModel()
+                    val gmuTables by gmuViewModel.gmuTables.collectAsState()
+                    GmuEditorScreen(
+                        gmuTables = gmuTables,
+                        onBack = { gpuFrequencyViewModel.navigationStep.value = 0 },
+                        onEditPair = gmuViewModel::editPair,
+                        onAddPair = gmuViewModel::addPair,
+                        onDeletePair = gmuViewModel::deletePair
                     )
                 }
             }

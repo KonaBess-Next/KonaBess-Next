@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.List
+import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Memory
 import androidx.compose.material.icons.rounded.Storage
@@ -29,7 +30,8 @@ fun GpuDashboard(
     sharedViewModel: SharedDtsViewModel,
     onNavigateToFrequencyTable: () -> Unit,
     onNavigateToMemoryTable: () -> Unit = {},
-    onNavigateToUfsTable: () -> Unit = {}
+    onNavigateToUfsTable: () -> Unit = {},
+    onNavigateToGmuTable: () -> Unit = {}
 ) {
     val gpuModelName by sharedViewModel.gpuModelName.collectAsState()
     val currentChip by sharedViewModel.currentChip.collectAsState()
@@ -38,6 +40,8 @@ fun GpuDashboard(
     val memoryTables by sharedViewModel.memoryTables.collectAsState()
     
     var showRenameDialog by remember { mutableStateOf(false) }
+
+    val gmuTables by sharedViewModel.gmuTables.collectAsState()
 
     if (showRenameDialog) {
         var newName by remember { mutableStateOf(gpuModelName) }
@@ -250,6 +254,45 @@ fun GpuDashboard(
                         contentDescription = null,
                         modifier = Modifier.size(32.dp)
                     )
+                }
+            }
+        }
+
+        if (gmuTables.isNotEmpty()) {
+            item {
+                Card(
+                    onClick = onNavigateToGmuTable,
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                    ),
+                    shape = RoundedCornerShape(24.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .padding(24.dp)
+                            .fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column {
+                            Text(
+                                text = "GMU Overclock",
+                                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+                            )
+                            Text(
+                                text = "Edit Graphics Management Unit frequencies",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
+                            )
+                        }
+                        Icon(
+                            imageVector = Icons.Rounded.Bolt,
+                            contentDescription = null,
+                            modifier = Modifier.size(32.dp)
+                        )
+                    }
                 }
             }
         }
