@@ -6,8 +6,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import com.ireddragonicy.konabessnext.viewmodel.TextEditorViewModel
-import com.ireddragonicy.konabessnext.viewmodel.VisualTreeViewModel
+import com.ireddragonicy.konabessnext.viewmodel.editor.TextEditorViewModel
+import com.ireddragonicy.konabessnext.viewmodel.editor.VisualTreeViewModel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlin.math.abs

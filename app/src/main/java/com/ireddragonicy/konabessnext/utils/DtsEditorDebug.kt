@@ -1,4 +1,6 @@
-package com.ireddragonicy.konabessnext.utils
+package com.ireddragonicy.konabessnext.utils
+
+import com.ireddragonicy.konabessnext.viewmodel.common.Event
 
 import android.util.Log
 

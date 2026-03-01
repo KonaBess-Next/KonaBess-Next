@@ -18,6 +18,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.ireddragonicy.konabessnext.ui.navigation.AppDestinations
 import com.ireddragonicy.konabessnext.viewmodel.*
+import com.ireddragonicy.konabessnext.viewmodel.common.*
+import com.ireddragonicy.konabessnext.viewmodel.gpu.*
+import com.ireddragonicy.konabessnext.viewmodel.memory.*
+import com.ireddragonicy.konabessnext.viewmodel.display.*
+import com.ireddragonicy.konabessnext.viewmodel.isp.*
+import com.ireddragonicy.konabessnext.viewmodel.editor.*
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalFoundationApi::class)

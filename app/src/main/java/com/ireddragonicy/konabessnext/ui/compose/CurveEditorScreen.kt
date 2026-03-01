@@ -1,4 +1,6 @@
-package com.ireddragonicy.konabessnext.ui.compose
+package com.ireddragonicy.konabessnext.ui.compose
+
+import com.ireddragonicy.konabessnext.viewmodel.common.Event
 
 import android.graphics.Color as AndroidColor
 import android.view.MotionEvent

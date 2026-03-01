@@ -1,4 +1,6 @@
-package com.ireddragonicy.konabessnext.ui.view
+package com.ireddragonicy.konabessnext.ui.view
+
+import com.ireddragonicy.konabessnext.viewmodel.common.Event
 
 import android.annotation.SuppressLint
 import android.content.Context

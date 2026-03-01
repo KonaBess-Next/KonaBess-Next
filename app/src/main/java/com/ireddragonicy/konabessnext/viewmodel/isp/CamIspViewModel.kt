@@ -1,4 +1,4 @@
-package com.ireddragonicy.konabessnext.viewmodel
+package com.ireddragonicy.konabessnext.viewmodel.isp
 
 import androidx.lifecycle.ViewModel
 import com.ireddragonicy.konabessnext.model.isp.CamIspFreqTable

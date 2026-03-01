@@ -23,7 +23,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.window.Dialog
-import com.ireddragonicy.konabessnext.viewmodel.UiState
+import com.ireddragonicy.konabessnext.viewmodel.common.UiState
 
 @Composable
 fun GpuBinList(

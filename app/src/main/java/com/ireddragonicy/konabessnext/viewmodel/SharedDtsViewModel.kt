@@ -1,4 +1,6 @@
-package com.ireddragonicy.konabessnext.viewmodel
+package com.ireddragonicy.konabessnext.viewmodel
+
+import com.ireddragonicy.konabessnext.viewmodel.common.UiState
 
 import android.app.Application
 import android.content.Context

@@ -7,7 +7,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import com.ireddragonicy.konabessnext.viewmodel.TextEditorViewModel
+import com.ireddragonicy.konabessnext.viewmodel.editor.TextEditorViewModel
 
 @Composable
 fun UnifiedDtsEditorScreen(

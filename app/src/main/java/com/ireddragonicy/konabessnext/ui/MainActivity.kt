@@ -1,4 +1,6 @@
-package com.ireddragonicy.konabessnext.ui
+package com.ireddragonicy.konabessnext.ui
+
+import com.ireddragonicy.konabessnext.viewmodel.common.UiState
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -30,6 +32,12 @@ import com.ireddragonicy.konabessnext.ui.navigation.AppNavGraph
 import com.ireddragonicy.konabessnext.ui.theme.KonaBessTheme
 import com.ireddragonicy.konabessnext.utils.LocaleUtil
 import com.ireddragonicy.konabessnext.viewmodel.*
+import com.ireddragonicy.konabessnext.viewmodel.common.*
+import com.ireddragonicy.konabessnext.viewmodel.gpu.*
+import com.ireddragonicy.konabessnext.viewmodel.memory.*
+import com.ireddragonicy.konabessnext.viewmodel.display.*
+import com.ireddragonicy.konabessnext.viewmodel.isp.*
+import com.ireddragonicy.konabessnext.viewmodel.editor.*
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint

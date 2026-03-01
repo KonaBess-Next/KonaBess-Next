@@ -53,7 +53,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.ireddragonicy.konabessnext.R
 import com.ireddragonicy.konabessnext.model.display.DisplayProperty
-import com.ireddragonicy.konabessnext.viewmodel.DisplayViewModel
+import com.ireddragonicy.konabessnext.viewmodel.display.DisplayViewModel
 
 @Composable
 fun DtboTimingEditor(

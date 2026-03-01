@@ -1,4 +1,6 @@
-package com.ireddragonicy.konabessnext.ui.compose
+package com.ireddragonicy.konabessnext.ui.compose
+
+import com.ireddragonicy.konabessnext.viewmodel.common.UiState
 
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable

@@ -11,7 +11,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.ireddragonicy.konabessnext.model.dts.DtsNode
-import com.ireddragonicy.konabessnext.viewmodel.VisualTreeViewModel
+import com.ireddragonicy.konabessnext.viewmodel.editor.VisualTreeViewModel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.compose.ui.platform.LocalClipboardManager

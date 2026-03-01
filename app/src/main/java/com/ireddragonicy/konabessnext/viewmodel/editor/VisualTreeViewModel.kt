@@ -1,4 +1,4 @@
-package com.ireddragonicy.konabessnext.viewmodel
+package com.ireddragonicy.konabessnext.viewmodel.editor
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope

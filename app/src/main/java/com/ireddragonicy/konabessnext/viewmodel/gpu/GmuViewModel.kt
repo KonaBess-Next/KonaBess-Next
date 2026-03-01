@@ -1,4 +1,4 @@
-package com.ireddragonicy.konabessnext.viewmodel
+package com.ireddragonicy.konabessnext.viewmodel.gpu
 
 import androidx.lifecycle.ViewModel
 import com.ireddragonicy.konabessnext.model.gmu.GmuFreqPair

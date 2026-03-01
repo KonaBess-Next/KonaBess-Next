@@ -19,6 +19,12 @@ import com.ireddragonicy.konabessnext.ui.compose.SettingsScreen
 import com.ireddragonicy.konabessnext.ui.compose.LanguageSelectionDialog
 import com.ireddragonicy.konabessnext.ui.compose.PaletteSelectionDialog
 import com.ireddragonicy.konabessnext.viewmodel.*
+import com.ireddragonicy.konabessnext.viewmodel.common.*
+import com.ireddragonicy.konabessnext.viewmodel.gpu.*
+import com.ireddragonicy.konabessnext.viewmodel.memory.*
+import com.ireddragonicy.konabessnext.viewmodel.display.*
+import com.ireddragonicy.konabessnext.viewmodel.isp.*
+import com.ireddragonicy.konabessnext.viewmodel.editor.*
 import kotlinx.coroutines.launch
 
 object AppDestinations {

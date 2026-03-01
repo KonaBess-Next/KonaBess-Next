@@ -1,4 +1,6 @@
-package com.ireddragonicy.konabessnext.ui.compose
+package com.ireddragonicy.konabessnext.ui.compose
+
+import com.ireddragonicy.konabessnext.viewmodel.common.UiState
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -12,6 +14,12 @@ import androidx.compose.ui.zIndex
 import com.ireddragonicy.konabessnext.R
 import com.ireddragonicy.konabessnext.model.TargetPartition
 import com.ireddragonicy.konabessnext.viewmodel.*
+import com.ireddragonicy.konabessnext.viewmodel.common.*
+import com.ireddragonicy.konabessnext.viewmodel.gpu.*
+import com.ireddragonicy.konabessnext.viewmodel.memory.*
+import com.ireddragonicy.konabessnext.viewmodel.display.*
+import com.ireddragonicy.konabessnext.viewmodel.isp.*
+import com.ireddragonicy.konabessnext.viewmodel.editor.*
 
 @Composable
 fun GuiEditorContent(
@@ -223,7 +231,7 @@ fun GuiEditorContent(
                 }
                 2 -> {
                     // DDR / LLCC Memory Editor
-                    val ddrViewModel: com.ireddragonicy.konabessnext.viewmodel.DdrViewModel = androidx.hilt.navigation.compose.hiltViewModel()
+                    val ddrViewModel: com.ireddragonicy.konabessnext.viewmodel.memory.DdrViewModel = androidx.hilt.navigation.compose.hiltViewModel()
                     val ddrMemoryTables by ddrViewModel.memoryTables.collectAsState()
                     DdrEditorScreen(
                         memoryTables = ddrMemoryTables,
@@ -235,7 +243,7 @@ fun GuiEditorContent(
                 }
                 3 -> {
                     // UFS Editor
-                    val ufsViewModel: com.ireddragonicy.konabessnext.viewmodel.UfsViewModel = androidx.hilt.navigation.compose.hiltViewModel()
+                    val ufsViewModel: com.ireddragonicy.konabessnext.viewmodel.memory.UfsViewModel = androidx.hilt.navigation.compose.hiltViewModel()
                     val ufsTables by ufsViewModel.ufsTables.collectAsState()
                     UfsEditorScreen(
                         ufsTables = ufsTables,
@@ -244,7 +252,7 @@ fun GuiEditorContent(
                     )
                 }
                 4 -> {
-                    val gmuViewModel: com.ireddragonicy.konabessnext.viewmodel.GmuViewModel = androidx.hilt.navigation.compose.hiltViewModel()
+                    val gmuViewModel: com.ireddragonicy.konabessnext.viewmodel.gpu.GmuViewModel = androidx.hilt.navigation.compose.hiltViewModel()
                     val gmuTables by gmuViewModel.gmuTables.collectAsState()
                     GmuEditorScreen(
                         gmuTables = gmuTables,
@@ -255,7 +263,7 @@ fun GuiEditorContent(
                     )
                 }
                 5 -> {
-                    val ispViewModel: com.ireddragonicy.konabessnext.viewmodel.CamIspViewModel = androidx.hilt.navigation.compose.hiltViewModel()
+                    val ispViewModel: com.ireddragonicy.konabessnext.viewmodel.isp.CamIspViewModel = androidx.hilt.navigation.compose.hiltViewModel()
                     val ispTables by ispViewModel.ispTables.collectAsState()
                     com.ireddragonicy.konabessnext.ui.compose.CamIspEditorScreen(
                         ispTables = ispTables,
@@ -264,7 +272,7 @@ fun GuiEditorContent(
                     )
                 }
                 6 -> {
-                    val gpuBandwidthViewModel: com.ireddragonicy.konabessnext.viewmodel.GpuBandwidthViewModel = androidx.hilt.navigation.compose.hiltViewModel()
+                    val gpuBandwidthViewModel: com.ireddragonicy.konabessnext.viewmodel.gpu.GpuBandwidthViewModel = androidx.hilt.navigation.compose.hiltViewModel()
                     val bandwidthTables by gpuBandwidthViewModel.bandwidthTables.collectAsState()
                     com.ireddragonicy.konabessnext.ui.compose.GpuBandwidthScreen(
                         bandwidthTables = bandwidthTables,
