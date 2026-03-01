@@ -151,7 +151,8 @@ fun GuiEditorContent(
                         onNavigateToFrequencyTable = { gpuFrequencyViewModel.navigationStep.value = 1 },
                         onNavigateToMemoryTable = { gpuFrequencyViewModel.navigationStep.value = 2 },
                         onNavigateToUfsTable = { gpuFrequencyViewModel.navigationStep.value = 3 },
-                        onNavigateToGmuTable = { gpuFrequencyViewModel.navigationStep.value = 4 }
+                        onNavigateToGmuTable = { gpuFrequencyViewModel.navigationStep.value = 4 },
+                        onNavigateToIspTable = { gpuFrequencyViewModel.navigationStep.value = 5 }
                     )
                 }
                 1 -> {
@@ -250,6 +251,15 @@ fun GuiEditorContent(
                         onEditPair = gmuViewModel::editPair,
                         onAddPair = gmuViewModel::addPair,
                         onDeletePair = gmuViewModel::deletePair
+                    )
+                }
+                5 -> {
+                    val ispViewModel: com.ireddragonicy.konabessnext.viewmodel.CamIspViewModel = androidx.hilt.navigation.compose.hiltViewModel()
+                    val ispTables by ispViewModel.ispTables.collectAsState()
+                    com.ireddragonicy.konabessnext.ui.compose.CamIspEditorScreen(
+                        ispTables = ispTables,
+                        onBack = { gpuFrequencyViewModel.navigationStep.value = 0 },
+                        onEditFrequency = ispViewModel::editFrequency
                     )
                 }
             }

@@ -652,4 +652,10 @@
     <string name="add_new_frequency">Add New Frequency</string>
     <string name="delete_frequency_confirm">Delete this frequency?</string>
     <string name="freq_count_format">%1$d frequencies</string>
+    
+    <!-- Camera ISP / Spectra Overclocking -->
+    <string name="camera_isp_overclock">Camera ISP / Spectra Overclocking</string>
+    <string name="camera_isp_desc">Edit Image Signal Processor (Spectra) frequencies for camera mods</string>
+    <string name="isp_node">ISP Node</string>
+    <string name="power_level">Power Level</string>
 </resources>

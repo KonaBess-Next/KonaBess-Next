@@ -576,4 +576,10 @@
     <string name="dtbo_display_changes">Perubahan Timing Layar</string>
     <string name="dtbo_touch_changes">Perubahan Touchscreen</string>
     <string name="dtbo_speaker_changes">Perubahan Amplifier Speaker</string>
+    
+    <!-- Camera ISP / Spectra Overclocking -->
+    <string name="camera_isp_overclock">Overclocking Kamera ISP / Spectra</string>
+    <string name="camera_isp_desc">Edit frekuensi Image Signal Processor (Spectra) untuk mod kamera</string>
+    <string name="isp_node">Node ISP</string>
+    <string name="power_level">Level Daya</string>
 </resources>

@@ -25,6 +25,7 @@ open class GpuRepository @Inject constructor(
     private val ddrDomainManager: DdrDomainManager,
     private val ufsDomainManager: UfsDomainManager,
     private val gmuDomainManager: com.ireddragonicy.konabessnext.domain.GmuDomainManager,
+    private val camIspDomainManager: com.ireddragonicy.konabessnext.domain.CamIspDomainManager,
     private val historyManager: HistoryManager,
     private val chipRepository: ChipRepositoryInterface,
     private val userMessageManager: com.ireddragonicy.konabessnext.utils.UserMessageManager
@@ -115,6 +116,22 @@ open class GpuRepository @Inject constructor(
                 DtsTreeHelper.parse(lines.joinToString("\n"))
             } catch (_: Exception) { null }
             if (root != null) gmuDomainManager.findGmuTables(root) else emptyList()
+        }
+        .flowOn(Dispatchers.Default)
+        .stateIn(repoScope, SharingStarted.Lazily, emptyList())
+
+    @OptIn(FlowPreview::class)
+    val ispTables: StateFlow<List<com.ireddragonicy.konabessnext.model.isp.CamIspFreqTable>> = merge(
+        _dtsLines.debounce(1000),
+        _structuralChange.map { _dtsLines.value }
+    )
+        .distinctUntilChanged()
+        .map { lines ->
+            DtsEditorDebug.logFlowTriggered("ispTables", lines.size)
+            val root = try {
+                DtsTreeHelper.parse(lines.joinToString("\n"))
+            } catch (_: Exception) { null }
+            if (root != null) camIspDomainManager.findIspTables(root) else emptyList()
         }
         .flowOn(Dispatchers.Default)
         .stateIn(repoScope, SharingStarted.Lazily, emptyList())
@@ -460,6 +477,15 @@ open class GpuRepository @Inject constructor(
             val root = getTreeCopy() ?: return@launch
             val tableNode = gmuDomainManager.findGmuTableNode(root, nodeName) ?: return@launch
             if (!gmuDomainManager.updateGmuTable(tableNode, newPairs)) return@launch
+            commitTreeChanges(historyDesc, root)
+        }
+    }
+
+    fun updateIspTable(nodeName: String, newFrequencies: List<Long>, historyDesc: String) {
+        repoScope.launch {
+            val root = getTreeCopy() ?: return@launch
+            val tableNode = camIspDomainManager.findIspTableNode(root, nodeName) ?: return@launch
+            if (!camIspDomainManager.updateIspClockRates(tableNode, newFrequencies)) return@launch
             commitTreeChanges(historyDesc, root)
         }
     }

@@ -14,6 +14,7 @@ import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Memory
 import androidx.compose.material.icons.rounded.Storage
+import androidx.compose.material.icons.rounded.CameraAlt
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -31,7 +32,8 @@ fun GpuDashboard(
     onNavigateToFrequencyTable: () -> Unit,
     onNavigateToMemoryTable: () -> Unit = {},
     onNavigateToUfsTable: () -> Unit = {},
-    onNavigateToGmuTable: () -> Unit = {}
+    onNavigateToGmuTable: () -> Unit = {},
+    onNavigateToIspTable: () -> Unit = {}
 ) {
     val gpuModelName by sharedViewModel.gpuModelName.collectAsState()
     val currentChip by sharedViewModel.currentChip.collectAsState()
@@ -42,6 +44,7 @@ fun GpuDashboard(
     var showRenameDialog by remember { mutableStateOf(false) }
 
     val gmuTables by sharedViewModel.gmuTables.collectAsState()
+    val ispTables by sharedViewModel.ispTables.collectAsState()
 
     if (showRenameDialog) {
         var newName by remember { mutableStateOf(gpuModelName) }
@@ -289,6 +292,45 @@ fun GpuDashboard(
                         }
                         Icon(
                             imageVector = Icons.Rounded.Bolt,
+                            contentDescription = null,
+                            modifier = Modifier.size(32.dp)
+                        )
+                    }
+                }
+            }
+        }
+
+        if (ispTables.isNotEmpty()) {
+            item {
+                Card(
+                    onClick = onNavigateToIspTable,
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                    ),
+                    shape = RoundedCornerShape(24.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .padding(24.dp)
+                            .fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column {
+                            Text(
+                                text = stringResource(R.string.camera_isp_overclock),
+                                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+                            )
+                            Text(
+                                text = stringResource(R.string.camera_isp_desc),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
+                            )
+                        }
+                        Icon(
+                            imageVector = Icons.Rounded.CameraAlt,
                             contentDescription = null,
                             modifier = Modifier.size(32.dp)
                         )
