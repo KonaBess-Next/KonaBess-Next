@@ -67,6 +67,24 @@ Aplikasi ini bekerja dengan membongkar image Boot atau Vendor Boot, mendekompila
 | **Snapdragon 7** | 7+ Gen 3, 7+ Gen 2, 7 Gen 1, 780G, 778G, 765, 750 |
 | **Snapdragon 6** | 690 |
 
+## FAQ & Pemecahan Masalah
+
+**T: KonaBess lama berfungsi di HP saya, tapi versi Next gagal mendeteksi chip. Kenapa?**  
+**J:** KonaBess Next ditulis ulang dari awal dengan parser DTS baru yang dirancang khusus untuk chip modern (8 Gen 2/3, Elite). Dalam masa transisi ini, dukungan untuk chip lama atau varian pabrikan tertentu mungkin sementara terganggu.
+
+**T: Apakah perangkat saya didukung?**  
+**J:** Jika berfungsi di aplikasi lama, *pada akhirnya* aplikasi ini juga akan mendukungnya. Untuk saat ini, mungkin masih ada ketidakstabilan di chipset lama selagi kami menyempurnakan parser baru ini.
+
+**T: Aplikasinya tidak berfungsi di HP saya. Apa yang harus saya lakukan?**  
+**J:** Silakan buka masalah (issue) di [GitHub](https://github.com/KonaBess-Next/KonaBess-Next/issues) dengan menyertakan:
+- Model perangkat & ROM
+- Chipset (misalnya, SD865)
+- File `boot.img`, `dtbo.img`, atau `.dtb` Anda
+- Tangkapan layar error atau log logcat
+
+**T: Haruskah saya tetap menggunakan versi lama?**  
+**J:** Jika Anda butuh kestabilan penuh di perangkat lama saat ini juga, silakan gunakan aplikasi versi lama (legacy). Tapi jika Anda ingin mencoba UI Material, mode tanpa root, dan editor kurva lebih awal—bantu kami mengujinya dan laporkan bug!
+
 ## Prasyarat
 
 *   **OS Android**: Android 9.0 atau lebih tinggi.

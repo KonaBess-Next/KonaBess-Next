@@ -67,6 +67,26 @@ The application operates by unpacking the Boot or Vendor Boot image, decompiling
 | **Snapdragon 7** | 7+ Gen 3, 7+ Gen 2, 7 Gen 1, 780G, 778G, 765, 750 |
 | **Snapdragon 6** | 690 |
 
+
+## FAQ & Troubleshooting
+
+**Q: Legacy KonaBess works, but Next doesn't detect my chip. Why?**  
+**A:** KonaBess Next is a complete rewrite with a new DTS parser designed for modern chips (8 Gen 2/3, Elite). During this transition, support for older chips or specific OEM variants might be temporarily broken.
+
+**Q: Is my device supported?**  
+**A:** If it worked on the original app, it will work here *eventually*. Right now, expect some instability on older chipsets as we stabilize the new parser.
+
+**Q: It's not working for me. What should I do?**  
+**A:** Open an issue on [GitHub](https://github.com/KonaBess-Next/KonaBess-Next/issues) with:
+- Device model & ROM
+- Chipset (e.g., SD865)
+- Your `boot.img`, `dtbo.img`, or `.dtb` file
+- Error screenshots or logs
+
+**Q: Should I just stick to the old version?**  
+**A:** If you need rock-solid stability on an older device today, use the legacy app. If you want early access to Next's Material UI, rootless mode, and curve editor—help us test it and report bugs!
+
+
 ## Prerequisites
 
 *   **Android OS**: Android 9.0 or higher.
