@@ -239,7 +239,7 @@ class DtboRepository @Inject constructor(
             val panel = getSelectedPanel(root) ?: return@launch
             val panelNode = displayDomainManager.findPanelNodeInTree(root, panel.nodeName, panel.fragmentIndex) ?: return@launch
 
-            val prop = "qcom,mdss-dsi-panel-dfps-list"
+            val prop = "qcom,dsi-supported-dfps-list"
             displayDomainManager.updateDfpsList(panelNode, fpsList)
             val rawValue = panelNode.getProperty(prop)?.originalValue ?: ""
             patchAndCommit(panelNode, prop, rawValue, "Updated DFPS list", root)
