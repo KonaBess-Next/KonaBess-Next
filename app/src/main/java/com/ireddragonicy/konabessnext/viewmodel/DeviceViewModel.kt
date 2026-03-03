@@ -1,4 +1,5 @@
-package com.ireddragonicy.konabessnext.viewmodel
+package com.ireddragonicy.konabessnext.viewmodel
+
 
 import com.ireddragonicy.konabessnext.viewmodel.common.UiState
 
@@ -42,6 +43,9 @@ class DeviceViewModel @Inject constructor(
 
     private val _detectionState = MutableStateFlow<UiState<List<Dtb>>?>(null)
     val detectionState: StateFlow<UiState<List<Dtb>>?> = _detectionState.asStateFlow()
+
+    private val _previewDetectionState = MutableStateFlow<UiState<List<Dtb>>?>(null)
+    val previewDetectionState: StateFlow<UiState<List<Dtb>>?> = _previewDetectionState.asStateFlow()
 
     private val _isFilesExtracted = MutableStateFlow(false)
     val isFilesExtracted: StateFlow<Boolean> = _isFilesExtracted.asStateFlow()
@@ -570,6 +574,24 @@ class DeviceViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    fun loadPreviewDtbs(partition: TargetPartition) {
+        viewModelScope.launch {
+            _previewDetectionState.value = UiState.Loading
+            when (val result = repository.loadPartitionDtbs(partition)) {
+                is DomainResult.Failure -> {
+                    _previewDetectionState.value = UiState.Error(mapAppErrorToUiText(result.error), result.error.cause)
+                }
+                is DomainResult.Success -> {
+                    _previewDetectionState.value = UiState.Success(result.data)
+                }
+            }
+        }
+    }
+
+    fun getActiveDtbIdForPartition(partition: TargetPartition): Int {
+        return repository.getActiveDtbId(partition)
     }
 
     fun selectChipset(dtb: Dtb) {

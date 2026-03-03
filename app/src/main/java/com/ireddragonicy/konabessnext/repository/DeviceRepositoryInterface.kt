@@ -15,5 +15,7 @@ interface DeviceRepositoryInterface {
     fun getDtsFile(): File
     fun setSelectedPartition(partition: TargetPartition)
     fun getDtbs(partition: TargetPartition): List<Dtb>
+    suspend fun loadPartitionDtbs(partition: TargetPartition): DomainResult<List<Dtb>>
+    fun getActiveDtbId(partition: TargetPartition): Int
     suspend fun getRunTimeGpuFrequencies(): DomainResult<List<Long>>
 }

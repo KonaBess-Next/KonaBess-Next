@@ -98,6 +98,8 @@ open class DeviceRepository @Inject constructor(
             activeDtbIdByPartition[selectedPartition] = value
         }
 
+    override fun getActiveDtbId(partition: TargetPartition): Int = activeDtbIdByPartition[partition] ?: -1
+
     /** Whether the app is currently in root mode. */
     val isRootMode: Boolean
         get() = shellRepository.isRootMode
@@ -134,10 +136,10 @@ open class DeviceRepository @Inject constructor(
 
     override fun getDtbs(partition: TargetPartition): List<Dtb> = dtbsByPartition[partition]?.toList() ?: emptyList()
 
-    fun getDtbCount(): Int {
-        val dtsFiles = partitionDir(selectedPartition).listFiles { _, name -> name.endsWith(".dts") }
+    fun getDtbCount(partition: TargetPartition = selectedPartition): Int {
+        val dtsFiles = partitionDir(partition).listFiles { _, name -> name.endsWith(".dts") }
         val count = dtsFiles?.size ?: 0
-        dtbNumByPartition[selectedPartition] = count
+        dtbNumByPartition[partition] = count
         return count
     }
 
@@ -851,9 +853,7 @@ open class DeviceRepository @Inject constructor(
         writeBootImage()
     }
 
-    suspend fun switchPartitionAndLoad(partition: TargetPartition): DomainResult<List<Dtb>> = withContext(Dispatchers.IO) {
-        setSelectedPartitionInternal(partition)
-
+    override suspend fun loadPartitionDtbs(partition: TargetPartition): DomainResult<List<Dtb>> = withContext(Dispatchers.IO) {
         if (dtbsByPartition[partition]?.isNotEmpty() == true) {
             return@withContext DomainResult.Success(ArrayList(dtbsByPartition[partition] ?: emptyList()))
         }
@@ -872,17 +872,22 @@ open class DeviceRepository @Inject constructor(
             }
         }
 
-        when (val split = bootImage2dts()) {
+        when (val split = bootImage2dts(partition)) {
             is DomainResult.Failure -> return@withContext split
             is DomainResult.Success -> Unit
         }
 
-        checkDevice()
+        checkDevice(partition)
     }
 
-    suspend fun checkDevice(): DomainResult<List<Dtb>> = withContext(Dispatchers.IO) {
+    suspend fun switchPartitionAndLoad(partition: TargetPartition): DomainResult<List<Dtb>> = withContext(Dispatchers.IO) {
+        setSelectedPartitionInternal(partition)
+        return@withContext loadPartitionDtbs(partition)
+    }
+
+    suspend fun checkDevice(partition: TargetPartition = selectedPartition): DomainResult<List<Dtb>> = withContext(Dispatchers.IO) {
         try {
-            val workDir = partitionDir(selectedPartition)
+            val workDir = partitionDir(partition)
 
             if (isRootMode && !shellRepository.isRootAvailable()) {
                 userMessageManager.emitError(
@@ -892,7 +897,8 @@ open class DeviceRepository @Inject constructor(
                 return@withContext DomainResult.Failure(AppError.RootAccessError())
             }
             // setupEnv is already called by the caller (detectChipset/importBootImage)
-            dtbs.clear()
+            val partitionDtbs = dtbsByPartition.getOrPut(partition) { ArrayList() }
+            partitionDtbs.clear()
             if (isRootMode) {
                 val command = "chmod -R 777 ${workDir.absolutePath}"
                 if (!shellRepository.execAndCheck(command)) {
@@ -904,9 +910,9 @@ open class DeviceRepository @Inject constructor(
 
             val runningModel = if (isRootMode) getRunningDeviceTreeModel() else ""
             val runningCompatibles = if (isRootMode) getRunningCompatibleStrings() else emptyList()
-            activeDtbId = -1
+            activeDtbIdByPartition[partition] = -1
 
-            val count = getDtbCount()
+            val count = getDtbCount(partition)
             var parseFailures = 0
             for (i in 0 until count) {
                 val dtsFile = File(workDir, "$i.dts")
@@ -923,13 +929,13 @@ open class DeviceRepository @Inject constructor(
                         dtsCompatibles.add(compMatcher.group(1) ?: "")
                     }
 
-                    if (activeDtbId == -1) {
+                    if (activeDtbIdByPartition[partition] == -1) {
                         if (runningCompatibles.intersect(dtsCompatibles.toSet()).isNotEmpty()) {
-                            activeDtbId = i
+                            activeDtbIdByPartition[partition] = i
                         } else if (runningModel.isNotEmpty() && dtsModel.isNotEmpty() &&
                             (dtsModel.contains(runningModel, true) || runningModel.contains(dtsModel, true))
                         ) {
-                            activeDtbId = i
+                            activeDtbIdByPartition[partition] = i
                         }
                     }
 
@@ -958,18 +964,18 @@ open class DeviceRepository @Inject constructor(
                             createGenericPlaceholder(i, content, dtsModel)
                         }
                     }
-                    dtbs.add(Dtb(i, def, selectedPartition))
+                    partitionDtbs.add(Dtb(i, def, partition))
                 } catch (e: Exception) {
                     parseFailures++
                     Log.e(TAG, "Error checking DTB $i: ${e.message}")
                 }
             }
-            if (activeDtbId == -1 && count == 1) {
-                activeDtbId = 0
+            if (activeDtbIdByPartition[partition] == -1 && count == 1) {
+                activeDtbIdByPartition[partition] = 0
             }
 
-            if (dtbs.isEmpty()) {
-                if (selectedPartition == TargetPartition.DTBO) {
+            if (partitionDtbs.isEmpty()) {
+                if (partition == TargetPartition.DTBO) {
                     return@withContext DomainResult.Success(emptyList())
                 }
                 val errorMessage = if (parseFailures > 0) {
@@ -980,7 +986,7 @@ open class DeviceRepository @Inject constructor(
                 return@withContext DomainResult.Failure(AppError.ParsingError(errorMessage))
             }
 
-            DomainResult.Success(ArrayList(dtbs))
+            DomainResult.Success(ArrayList(partitionDtbs))
         } catch (e: IOException) {
             DomainResult.Failure(AppError.IoError(e.message ?: "Device check failed due to I/O.", e))
         } catch (e: Exception) {
@@ -1048,17 +1054,17 @@ open class DeviceRepository @Inject constructor(
 
     private fun readFileToString(file: File): String = BufferedReader(FileReader(file)).use { it.readText() }
 
-    suspend fun bootImage2dts(): DomainResult<Unit> = withContext(Dispatchers.IO) {
+    suspend fun bootImage2dts(partition: TargetPartition = selectedPartition): DomainResult<Unit> = withContext(Dispatchers.IO) {
         try {
-            val workDirPath = partitionDir(selectedPartition).absolutePath
+            val workDirPath = partitionDir(partition).absolutePath
             val unpackedType = bootImageProcessor.unpackBootImage(
                 workDirPath,
                 getBinaryPath("magiskboot"),
-                selectedPartition
+                partition
             )
-            dtbTypeByPartition[selectedPartition] = unpackedType
+            dtbTypeByPartition[partition] = unpackedType
             val count = bootImageProcessor.splitAndConvertDtbs(workDirPath, getBinaryPath("dtc"), unpackedType)
-            dtbNumByPartition[selectedPartition] = count
+            dtbNumByPartition[partition] = count
             DomainResult.Success(Unit)
         } catch (e: IOException) {
             DomainResult.Failure(AppError.IoError(e.message ?: "Failed to unpack and convert boot image.", e))

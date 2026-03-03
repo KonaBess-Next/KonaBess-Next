@@ -1,4 +1,5 @@
-package com.ireddragonicy.konabessnext.ui.compose
+package com.ireddragonicy.konabessnext.ui.compose
+
 
 import com.ireddragonicy.konabessnext.viewmodel.common.UiState
 
@@ -243,10 +244,13 @@ fun GpuEditorMainContent(
 
     // Sheets
     val detectionState by deviceViewModel.detectionState.collectAsState()
+    val previewDetectionState by deviceViewModel.previewDetectionState.collectAsState()
     val selectedChipset by deviceViewModel.selectedChipset.collectAsState()
     val activeDtbId by deviceViewModel.activeDtbId.collectAsState()
     val availablePartitions by deviceViewModel.availablePartitions.collectAsState()
-    
+
+    var sheetPartition by remember(selectedPartition) { mutableStateOf(selectedPartition) }
+
     val context = LocalContext.current
     val canFlashOrRepack by deviceViewModel.canFlashOrRepack.collectAsState()
     val isRootMode = deviceViewModel.isRootMode
@@ -387,19 +391,36 @@ fun GpuEditorMainContent(
         )
     }
 
+    val sheetDtbs = if (sheetPartition == selectedPartition) {
+        (detectionState as? UiState.Success)?.data ?: emptyList()
+    } else {
+        (previewDetectionState as? UiState.Success)?.data ?: emptyList()
+    }
+    
+    val sheetActiveDtbId = if (sheetPartition == selectedPartition) {
+        activeDtbId
+    } else {
+        deviceViewModel.getActiveDtbIdForPartition(sheetPartition)
+    }
+
     GpuWorkbenchSheets(
         sheetType = activeSheet,
-        onDismiss = { activeSheet = WorkbenchSheetType.NONE },
+        onDismiss = { 
+            activeSheet = WorkbenchSheetType.NONE
+            sheetPartition = selectedPartition
+        },
         history = history,
-        dtbs = (detectionState as? UiState.Success)?.data ?: emptyList(),
+        dtbs = sheetDtbs,
         availablePartitions = availablePartitions,
-        selectedPartition = selectedPartition,
-        selectedDtbId = selectedChipset?.takeIf { it.partition == selectedPartition }?.id,
-        activeDtbId = activeDtbId,
+        selectedPartition = sheetPartition,
+        selectedDtbId = selectedChipset?.takeIf { it.partition == sheetPartition }?.id,
+        activeDtbId = sheetActiveDtbId,
         onPartitionSelect = { partition ->
-            deviceViewModel.selectPartition(partition)
+            sheetPartition = partition
+            deviceViewModel.loadPreviewDtbs(partition)
         },
         onChipsetSelect = { dtb ->
+            deviceViewModel.selectPartition(dtb.partition)
             deviceViewModel.selectChipset(dtb)
             gpuFrequencyViewModel.selectedBinIndex.value = -1
             gpuFrequencyViewModel.selectedLevelIndex.value = -1
@@ -410,6 +431,7 @@ fun GpuEditorMainContent(
                 dtboNavViewModel.loadData()
             }
             activeSheet = WorkbenchSheetType.NONE
+            sheetPartition = dtb.partition
         },
         onConfigureManual = { id -> manualSetupIndex = id },
         onDeleteDts = { id -> deviceViewModel.deleteDts(id) },

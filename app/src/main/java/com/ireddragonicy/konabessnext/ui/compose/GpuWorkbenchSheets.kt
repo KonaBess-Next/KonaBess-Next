@@ -143,13 +143,16 @@ private fun ChipsetSelectorContent(
                 Tab(
                     selected = index == selectedIndex,
                     onClick = { onPartitionSelect(partition) },
+                    selectedContentColor = MaterialTheme.colorScheme.primary,
+                    unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                     text = {
                         Text(
                             text = when (partition) {
                                 TargetPartition.VENDOR_BOOT -> stringResource(R.string.partition_vendor_boot)
                                 TargetPartition.BOOT -> stringResource(R.string.partition_boot)
                                 TargetPartition.DTBO -> stringResource(R.string.partition_dtbo)
-                            }
+                            },
+                            fontWeight = if (index == selectedIndex) FontWeight.Bold else FontWeight.Normal
                         )
                     }
                 )
