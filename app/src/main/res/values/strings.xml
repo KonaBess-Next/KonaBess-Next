@@ -755,4 +755,23 @@
     <string name="current_value_hex_dec">Current: %1$d (0x%2$s)</string>
     <string name="new_value">New Value (Decimal or Hex 0x...)</string>
 
+    <!-- RPMh (PMIC) Regulators Editor -->
+    <string name="rpmh_btn">PMIC Regulators (RPMh)</string>
+    <string name="rpmh_btn_desc">Hardcore voltage bounds (VDD_CX, VDD_MX, etc.)</string>
+    <string name="rpmh_title">RPMh Regulators</string>
+    <string name="rpmh_help_desc">Edit absolute min/max microvolt bounds for PMIC regulators. Raising max-microvolt removes hardware caps that block extreme overclocking frequencies.</string>
+    <string name="rpmh_warning_title">⚠ DANGER ZONE</string>
+    <string name="rpmh_warning_desc">Modifying PMIC bounds bypasses hardware safety limits. Extreme overvolting can permanently damage your SoC, PMIC, or battery circuitry. Proceed only if you know what you are doing.</string>
+    <string name="rpmh_not_found">No RPMh Regulators Found</string>
+    <string name="rpmh_not_found_desc">This DTB does not contain rpmh-regulator nodes.</string>
+    <string name="rpmh_search_hint">Search regulators…</string>
+    <string name="rpmh_edit_title">Edit: %1$s</string>
+    <string name="rpmh_current_min">Current Min: %1$d (0x%2$s)</string>
+    <string name="rpmh_current_max">Current Max: %1$d (0x%2$s)</string>
+    <string name="rpmh_min_microvolt_label">regulator-min-microvolt</string>
+    <string name="rpmh_max_microvolt_label">regulator-max-microvolt</string>
+    <string name="rpmh_input_hint">Accepts decimal (e.g. 952000) or hex (e.g. 0xe8820)</string>
+    <string name="rpmh_min_format">Min: %1$d (0x%2$s)</string>
+    <string name="rpmh_max_format">Max: %1$d (0x%2$s)</string>
+
 </resources>

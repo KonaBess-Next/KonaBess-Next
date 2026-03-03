@@ -36,7 +36,8 @@ fun GpuDashboard(
     onNavigateToGmuTable: () -> Unit = {},
     onNavigateToIspTable: () -> Unit = {},
     onNavigateToGpuBandwidthTable: () -> Unit = {},
-    onNavigateToSdeLimits: () -> Unit = {}
+    onNavigateToSdeLimits: () -> Unit = {},
+    onNavigateToRpmhRegulators: () -> Unit = {}
 ) {
     val gpuModelName by sharedViewModel.gpuModelName.collectAsState()
     val currentChip by sharedViewModel.currentChip.collectAsState()
@@ -49,6 +50,7 @@ fun GpuDashboard(
     val gmuTables by sharedViewModel.gmuTables.collectAsState()
     val ispTables by sharedViewModel.ispTables.collectAsState()
     val sdeLimits by sharedViewModel.sdeLimits.collectAsState()
+    val rpmhRegulators by sharedViewModel.rpmhRegulators.collectAsState()
 
     if (showRenameDialog) {
         var newName by remember { mutableStateOf(gpuModelName) }
@@ -411,6 +413,45 @@ fun GpuDashboard(
                         }
                         Icon(
                             imageVector = Icons.Rounded.Monitor,
+                            contentDescription = null,
+                            modifier = Modifier.size(32.dp)
+                        )
+                    }
+                }
+            }
+        }
+
+        if (rpmhRegulators.isNotEmpty()) {
+            item {
+                Card(
+                    onClick = onNavigateToRpmhRegulators,
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                    ),
+                    shape = RoundedCornerShape(24.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .padding(24.dp)
+                            .fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column {
+                            Text(
+                                text = stringResource(R.string.rpmh_btn),
+                                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+                            )
+                            Text(
+                                text = stringResource(R.string.rpmh_btn_desc),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
+                            )
+                        }
+                        Icon(
+                            imageVector = Icons.Rounded.Bolt,
                             contentDescription = null,
                             modifier = Modifier.size(32.dp)
                         )

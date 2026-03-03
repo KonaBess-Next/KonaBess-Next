@@ -21,6 +21,7 @@ import com.ireddragonicy.konabessnext.viewmodel.memory.*
 import com.ireddragonicy.konabessnext.viewmodel.display.*
 import com.ireddragonicy.konabessnext.viewmodel.isp.*
 import com.ireddragonicy.konabessnext.viewmodel.editor.*
+import com.ireddragonicy.konabessnext.viewmodel.power.*
 
 @Composable
 fun GuiEditorContent(
@@ -163,7 +164,8 @@ fun GuiEditorContent(
                         onNavigateToGmuTable = { gpuFrequencyViewModel.navigationStep.value = 4 },
                         onNavigateToIspTable = { gpuFrequencyViewModel.navigationStep.value = 5 },
                         onNavigateToGpuBandwidthTable = { gpuFrequencyViewModel.navigationStep.value = 6 },
-                        onNavigateToSdeLimits = { gpuFrequencyViewModel.navigationStep.value = 7 }
+                        onNavigateToSdeLimits = { gpuFrequencyViewModel.navigationStep.value = 7 },
+                        onNavigateToRpmhRegulators = { gpuFrequencyViewModel.navigationStep.value = 8 }
                     )
                 }
                 1 -> {
@@ -291,6 +293,15 @@ fun GuiEditorContent(
                         onEditMaxBandwidth = sdeViewModel::updateMaxBandwidth,
                         onEditPerPipeBandwidth = sdeViewModel::updatePerPipeBandwidth,
                         onEditClockMaxRate = sdeViewModel::updateClockMaxRate
+                    )
+                }
+                8 -> {
+                    val rpmhViewModel: RpmhRegulatorViewModel = androidx.hilt.navigation.compose.hiltViewModel()
+                    val rpmhRegulators by rpmhViewModel.rpmhRegulators.collectAsState()
+                    com.ireddragonicy.konabessnext.ui.compose.power.RpmhRegulatorScreen(
+                        regulators = rpmhRegulators,
+                        onBack = { gpuFrequencyViewModel.navigationStep.value = 0 },
+                        onEditBounds = rpmhViewModel::updateBounds
                     )
                 }
             }

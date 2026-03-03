@@ -9,6 +9,7 @@ import com.ireddragonicy.konabessnext.domain.UfsDomainManager
 import com.ireddragonicy.konabessnext.model.dts.DtsNode
 import com.ireddragonicy.konabessnext.model.dts.DtsProperty
 import com.ireddragonicy.konabessnext.model.memory.MemoryFreqTable
+import com.ireddragonicy.konabessnext.model.power.RpmhRegulator
 import com.ireddragonicy.konabessnext.model.ufs.UfsFreqTable
 import com.ireddragonicy.konabessnext.utils.DtsTreeHelper
 import kotlinx.coroutines.*
@@ -27,6 +28,7 @@ open class GpuRepository @Inject constructor(
     private val gmuDomainManager: com.ireddragonicy.konabessnext.domain.GmuDomainManager,
     private val camIspDomainManager: com.ireddragonicy.konabessnext.domain.CamIspDomainManager,
     private val sdeDomainManager: com.ireddragonicy.konabessnext.domain.SdeDomainManager,
+    private val rpmhDomainManager: com.ireddragonicy.konabessnext.domain.RpmhDomainManager,
     private val historyManager: HistoryManager,
     private val chipRepository: ChipRepositoryInterface,
     private val userMessageManager: com.ireddragonicy.konabessnext.utils.UserMessageManager
@@ -172,6 +174,22 @@ open class GpuRepository @Inject constructor(
         }
         .flowOn(Dispatchers.Default)
         .stateIn(repoScope, SharingStarted.Lazily, null)
+
+    @OptIn(FlowPreview::class)
+    val rpmhRegulators: StateFlow<List<RpmhRegulator>> = merge(
+        _dtsLines.debounce(1000),
+        _structuralChange.map { _dtsLines.value }
+    )
+        .distinctUntilChanged()
+        .map { lines ->
+            DtsEditorDebug.logFlowTriggered("rpmhRegulators", lines.size)
+            val root = try {
+                DtsTreeHelper.parse(lines.joinToString("\n"))
+            } catch (_: Exception) { null }
+            if (root != null) rpmhDomainManager.findRegulators(root) else emptyList()
+        }
+        .flowOn(Dispatchers.Default)
+        .stateIn(repoScope, SharingStarted.Lazily, emptyList())
 
     override val canUndo: StateFlow<Boolean> = historyManager.canUndo
     override val canRedo: StateFlow<Boolean> = historyManager.canRedo
@@ -540,6 +558,14 @@ open class GpuRepository @Inject constructor(
             val root = getTreeCopy() ?: return@launch
             val sdeNode = sdeDomainManager.findSdeNode(root) ?: return@launch
             if (!sdeDomainManager.updateSdeLimits(sdeNode, maxBw, perPipeBw, clockMaxRates)) return@launch
+            commitTreeChanges(historyDesc, root)
+        }
+    }
+
+    fun updateRpmhRegulator(parentNodeName: String, subNodeName: String, newMin: Long, newMax: Long, historyDesc: String) {
+        repoScope.launch {
+            val root = getTreeCopy() ?: return@launch
+            if (!rpmhDomainManager.updateRegulatorBounds(root, parentNodeName, subNodeName, newMin, newMax)) return@launch
             commitTreeChanges(historyDesc, root)
         }
     }

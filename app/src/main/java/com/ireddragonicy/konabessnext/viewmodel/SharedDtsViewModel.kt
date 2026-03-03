@@ -97,6 +97,7 @@ class SharedDtsViewModel @Inject constructor(
     val gmuTables = repository.gmuTables
     val ispTables = repository.ispTables
     val sdeLimits = repository.sdeLimits
+    val rpmhRegulators = repository.rpmhRegulators
     private val _detectedActiveBinIndex = MutableStateFlow(-1)
     val detectedActiveBinIndex: StateFlow<Int> = _detectedActiveBinIndex.asStateFlow()
     private val _runtimeGpuFrequencies = MutableStateFlow<List<Long>>(emptyList())
