@@ -425,9 +425,9 @@ private fun parseMhzToKHz(input: String): Long? {
  */
 private fun formatTableDisplayName(nodeName: String): String {
     return when (nodeName) {
-        "ddr-freq-table" -> "DDR Frequency Table"
-        "llcc-freq-table" -> "LLCC Cache Frequency Table"
-        "ddrqos-freq-table" -> "DDR QoS Frequency Table"
+        "ddr-freq-table" -> "DDR 频率表"
+        "llcc-freq-table" -> "LLCC 缓存频率表"
+        "ddrqos-freq-table" -> "DDR QoS 频率表"
         else -> nodeName.replace("-", " ")
             .replaceFirstChar { it.uppercase() }
     }

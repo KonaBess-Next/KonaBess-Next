@@ -328,7 +328,7 @@ private fun formatHzToMhzRaw(hz: Long): String {
  */
 private fun formatTableDisplayName(nodeName: String): String {
     if (nodeName.startsWith("ufshc")) {
-        return "UFS Host Controller"
+        return "UFS 主控/控制器"
     }
     return nodeName.replace("-", " ").replaceFirstChar { it.uppercase() }
 }
