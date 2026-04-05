@@ -455,9 +455,9 @@
     <string name="boot_image_imported_successfully">Boot 镜像导入成功</string>
     <string name="boot_images_require_root_mode">操作 Boot 镜像需要开启 Root 模式</string>
     <string name="build">编译版本</string>
-    <string name="bus_freq">总线频率 (Bus Freq)</string>
-    <string name="bus_max">总线最大值</string>
-    <string name="bus_min">总线最小值</string>
+    <string name="bus_freq">总线频率</string>
+    <string name="bus_max">总线最大</string>
+    <string name="bus_min">总线最小</string>
     <string name="calculating_differences">正在计算差异...</string>
     <string name="cannot_open_file_permission_denied">无法打开文件：权限被拒绝</string>
     <string name="child_count_format">%1$s 个子节点</string>

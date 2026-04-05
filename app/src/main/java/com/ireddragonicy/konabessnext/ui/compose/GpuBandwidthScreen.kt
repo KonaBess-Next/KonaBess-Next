@@ -276,8 +276,8 @@ private fun parseBandwidthInput(input: String): Long? {
 
 private fun formatBandwidthTableDisplayName(propertyName: String): String {
     return when (propertyName) {
-        "qcom,bus-table-ddr" -> "DDR Bus Table"
-        "qcom,bus-table-cnoc" -> "CNOC Bus Table"
+        "qcom,bus-table-ddr" -> "DDDR 总线表"
+        "qcom,bus-table-cnoc" -> "CNOC 总线表"
         else -> propertyName
     }
 }

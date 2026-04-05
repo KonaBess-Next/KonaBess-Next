@@ -23,8 +23,8 @@ fun MainNavigationBar(
         modifier = modifier
     ) {
         NavigationBarItem(
-            icon = { Icon(Icons.Filled.Edit, contentDescription = "Dashboard") },
-            label = { Text("Dashboard") },
+            icon = { Icon(Icons.Filled.Edit, contentDescription = "仪表盘") },
+            label = { Text("仪表盘") },
             selected = selectedItem == 0,
             onClick = { onItemSelected(0) }
         )
