@@ -183,8 +183,8 @@ dependencies {
     implementation 'androidx.lifecycle:lifecycle-viewmodel:2.10.0'
     implementation 'androidx.lifecycle:lifecycle-livedata:2.10.0'
     implementation 'androidx.lifecycle:lifecycle-common-java8:2.10.0'
-    implementation 'androidx.activity:activity:1.12.4'
-    implementation 'androidx.activity:activity-ktx:1.12.4'
+    implementation 'androidx.activity:activity:1.13.0'
+    implementation 'androidx.activity:activity-ktx:1.13.0'
     implementation 'androidx.fragment:fragment:1.8.9'
     implementation 'androidx.fragment:fragment-ktx:1.8.9'
 
@@ -194,7 +194,7 @@ dependencies {
     implementation "androidx.hilt:hilt-navigation-compose:1.3.0"
 
     // Jetpack Compose
-    def composeBom = platform('androidx.compose:compose-bom:2026.02.01')
+    def composeBom = platform('androidx.compose:compose-bom:2026.03.01')
     implementation composeBom
     implementation 'androidx.compose.ui:ui'
     implementation 'androidx.compose.ui:ui-graphics'
@@ -205,7 +205,7 @@ dependencies {
     debugImplementation 'androidx.compose.ui:ui-tooling'
 
     // JSON Serialization
-    implementation 'org.jetbrains.kotlinx:kotlinx-serialization-json:1.10.0'
+    implementation 'org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0'
 
     // ViewModel KTX for viewModelScope
     implementation "androidx.lifecycle:lifecycle-viewmodel-ktx:2.10.0"
@@ -213,13 +213,13 @@ dependencies {
     implementation "androidx.compose.runtime:runtime-livedata"
     
     // Compose Integration
-    implementation 'androidx.activity:activity-compose:1.12.4'
+    implementation 'androidx.activity:activity-compose:1.13.0'
     implementation 'androidx.navigation:navigation-compose:2.9.7'
     // Extended Icons
     implementation "androidx.compose.material:material-icons-extended"
 
     // Sora Editor - High-performance native code editor
-    implementation("io.github.rosemoe:editor:0.24.4")
+    implementation("io.github.rosemoe:editor:0.24.5")
 
     // Unit Testing
     testImplementation 'junit:junit:4.13.2'
