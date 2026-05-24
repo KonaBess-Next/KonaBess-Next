@@ -79,7 +79,8 @@ object DtsTextPatcher {
             if (closes > 0) {
                 depth -= closes
                 while (matchedDepths.isNotEmpty() && depth < matchedDepths.last()) {
-                    matchedDepths.removeLast()
+                    matchedDepths.removeAt(matchedDepths.lastIndex)
+            
                     pathIdx--
                     if (pathIdx == path.size - 1 && targetStart != -1) {
                         results.add(targetStart to (i + 1))
