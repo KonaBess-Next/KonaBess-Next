@@ -4,6 +4,8 @@ import com.ireddragonicy.konabessnext.repository.ChipRepository
 import com.ireddragonicy.konabessnext.repository.ChipRepositoryInterface
 import com.ireddragonicy.konabessnext.repository.DeviceRepository
 import com.ireddragonicy.konabessnext.repository.DeviceRepositoryInterface
+import com.ireddragonicy.konabessnext.repository.ShellExecutor
+import com.ireddragonicy.konabessnext.repository.ShellRepository
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -25,4 +27,10 @@ abstract class RepositoryModule {
     abstract fun bindDeviceRepository(
         deviceRepository: DeviceRepository
     ): DeviceRepositoryInterface
+
+    @Binds
+    @Singleton
+    abstract fun bindShellExecutor(
+        shellRepository: ShellRepository
+    ): ShellExecutor
 }

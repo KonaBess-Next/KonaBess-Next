@@ -23,6 +23,7 @@ import androidx.compose.material.icons.rounded.Translate
 import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.Save
 import androidx.compose.material.icons.rounded.Contrast
+import androidx.compose.material.icons.rounded.Brightness6
 import androidx.compose.material.icons.rounded.Security
 import androidx.compose.material.icons.rounded.Code
 import com.ireddragonicy.konabessnext.viewmodel.UpdateStatus
@@ -73,6 +74,9 @@ fun SettingsScreen(
 
     isAmoledMode: Boolean,
     onAmoledModeToggle: () -> Unit,
+    // Dim screen brightness during stress tests
+    isDimBrightnessDuringStress: Boolean,
+    onDimBrightnessDuringStressToggle: () -> Unit,
     // Root Mode
     isRootMode: Boolean,
     onRootModeToggle: () -> Unit,
@@ -106,6 +110,9 @@ fun SettingsScreen(
     val versionTitle = androidx.compose.ui.res.stringResource(R.string.settings_version_format, BuildConfig.VERSION_NAME)
     val amoledTitle = androidx.compose.ui.res.stringResource(R.string.palette_amoled)
     val amoledDesc = stringResource(R.string.settings_amoled_desc)
+
+    val dimBrightnessTitle = stringResource(R.string.settings_dim_brightness_during_stress)
+    val dimBrightnessDesc = stringResource(R.string.settings_dim_brightness_during_stress_desc)
 
     val currentThemeDisplay = when (currentTheme.uppercase()) {
         "LIGHT" -> stringResource(R.string.theme_light)
@@ -148,14 +155,14 @@ fun SettingsScreen(
     val openSourceLicensesTitle = stringResource(R.string.settings_open_source_licenses)
     val openSourceLicensesDesc = stringResource(R.string.settings_open_source_licenses_desc)
 
-    val settingsItems = remember(currentThemeDisplay, currentColorPalette, currentLanguageDisplay, currentFreqUnit, isAutoSave, isAmoledMode, themeTitle, updateChannel, isAutoCheckUpdate, updateStatus, isRootMode, rootModeDesc, amoledDesc, exportLocationDesc) {
+    val settingsItems = remember(currentThemeDisplay, currentColorPalette, currentLanguageDisplay, currentFreqUnit, isAutoSave, isAmoledMode, isDimBrightnessDuringStress, themeTitle, updateChannel, isAutoCheckUpdate, updateStatus, isRootMode, rootModeDesc, amoledDesc, dimBrightnessTitle, exportLocationDesc) {
         buildList {
             // Appearance section
             add(SettingsListItem.Header(headerAppearance))
             add(SettingsListItem.Setting(SettingItem.Clickable(Icons.Rounded.DarkMode, themeTitle, themeDesc, currentThemeDisplay)))
             add(SettingsListItem.Setting(SettingItem.Toggle(
                 Icons.Rounded.Contrast, // Pure Amoled - Contrast icon fits well
-                amoledTitle, 
+                amoledTitle,
                 amoledDesc,
                 isAmoledMode
             )))
@@ -169,6 +176,12 @@ fun SettingsScreen(
             // Behavior section
             add(SettingsListItem.Header(headerBehavior))
             add(SettingsListItem.Setting(SettingItem.Toggle(Icons.Rounded.Save, autoSaveTitle, autoSaveDesc, isAutoSave)))
+            add(SettingsListItem.Setting(SettingItem.Toggle(
+                Icons.Rounded.Brightness6,
+                dimBrightnessTitle,
+                dimBrightnessDesc,
+                isDimBrightnessDuringStress
+            )))
             add(SettingsListItem.Setting(SettingItem.Clickable(Icons.Rounded.Save, exportLocationTitle, exportLocationDesc, "")))
             add(SettingsListItem.Setting(SettingItem.Toggle(Icons.Rounded.Security, rootModeTitle, rootModeDesc, isRootMode)))
 
@@ -234,6 +247,7 @@ fun SettingsScreen(
                                             amoledTitle -> onAmoledModeToggle()
                                             autoSaveTitle -> onAutoSaveToggle()
                                             autoCheckUpdateTitle -> onAutoCheckUpdateToggle()
+                                            dimBrightnessTitle -> onDimBrightnessDuringStressToggle()
                                             rootModeTitle -> onRootModeToggle()
                                         }
                                     }

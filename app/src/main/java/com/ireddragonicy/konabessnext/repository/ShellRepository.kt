@@ -22,7 +22,7 @@ data class ShellResult(
 @Singleton
 class ShellRepository @Inject constructor(
     private val settingsRepository: SettingsRepository
-) {
+) : ShellExecutor {
 
     companion object {
         private const val TAG = "ShellRepository"
@@ -31,7 +31,7 @@ class ShellRepository @Inject constructor(
     private val kernelSuDir = File("/data/adb/ksu")
 
     /** Whether the app is currently configured for root mode. */
-    val isRootMode: Boolean
+    override val isRootMode: Boolean
         get() = settingsRepository.isRootMode()
 
     // ── Root-mode wrappers (existing behaviour) ──────────────────────
@@ -60,7 +60,7 @@ class ShellRepository @Inject constructor(
         }
     }
 
-    suspend fun execAndCheck(vararg commands: String): Boolean = withContext(Dispatchers.IO) {
+    override suspend fun execAndCheck(vararg commands: String): Boolean = withContext(Dispatchers.IO) {
         if (isRootMode) {
             Shell.cmd(*commands).exec().isSuccess
         } else {
@@ -68,7 +68,7 @@ class ShellRepository @Inject constructor(
         }
     }
 
-    suspend fun execForOutput(vararg commands: String): List<String> = withContext(Dispatchers.IO) {
+    override suspend fun execForOutput(vararg commands: String): List<String> = withContext(Dispatchers.IO) {
         if (isRootMode) {
             Shell.cmd(*commands).exec().out
         } else {

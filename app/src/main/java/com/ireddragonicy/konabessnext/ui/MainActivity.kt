@@ -1,4 +1,5 @@
-package com.ireddragonicy.konabessnext.ui
+package com.ireddragonicy.konabessnext.ui
+
 
 import com.ireddragonicy.konabessnext.viewmodel.common.UiState
 
@@ -26,6 +27,7 @@ import androidx.core.view.WindowCompat
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.ireddragonicy.konabessnext.R
+import com.ireddragonicy.konabessnext.core.system.WindowBrightnessController
 import com.ireddragonicy.konabessnext.ui.compose.MainNavigationBar
 import com.ireddragonicy.konabessnext.ui.navigation.AppDestinations
 import com.ireddragonicy.konabessnext.ui.navigation.AppNavGraph
@@ -39,6 +41,7 @@ import com.ireddragonicy.konabessnext.viewmodel.display.*
 import com.ireddragonicy.konabessnext.viewmodel.isp.*
 import com.ireddragonicy.konabessnext.viewmodel.editor.*
 import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -50,12 +53,20 @@ class MainActivity : ComponentActivity() {
     private val settingsViewModel: SettingsViewModel by viewModels()
     private val importExportViewModel: ImportExportViewModel by viewModels()
 
+    /**
+     * Hand the activity's [android.view.Window] to the brightness controller so
+     * that the GPU stability test can dim the screen via
+     * `WindowManager.LayoutParams.screenBrightness` while it runs.
+     */
+    @Inject lateinit var windowBrightnessController: WindowBrightnessController
+
     override fun attachBaseContext(newBase: android.content.Context) {
         super.attachBaseContext(LocaleUtil.wrap(newBase))
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        windowBrightnessController.attachActivity(this)
         WindowCompat.setDecorFitsSystemWindows(window, false)
 
         if (!deviceViewModel.isFilesExtracted.value) {

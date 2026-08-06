@@ -1,4 +1,5 @@
-package com.ireddragonicy.konabessnext.viewmodel
+package com.ireddragonicy.konabessnext.viewmodel
+
 
 import com.ireddragonicy.konabessnext.viewmodel.common.UiState
 
@@ -28,6 +29,7 @@ data class SettingsUiState(
     val isAmoledMode: Boolean = false,
     val updateChannel: String = "stable",
     val isAutoCheckUpdate: Boolean = true,
+    val isDimBrightnessDuringStress: Boolean = true,
     val updateStatus: UpdateStatus = UpdateStatus.Idle,
     val isRootMode: Boolean = true,
     val exportPath: String = ""
@@ -55,6 +57,7 @@ class SettingsViewModel @Inject constructor(
         const val KEY_AUTO_SAVE_GPU_TABLE = "auto_save_gpu_table"
         const val KEY_DYNAMIC_COLOR = "dynamic_color"
         const val KEY_AMOLED_MODE = "amoled_mode"
+        const val KEY_DIM_BRIGHTNESS_DURING_STRESS = "dim_brightness_during_stress"
         const val KEY_EXPORT_URI = "export_uri"
         const val KEY_EXPORT_PATH_DISPLAY = "export_path_display"
 
@@ -123,6 +126,10 @@ class SettingsViewModel @Inject constructor(
         // Root Mode
         val isRootMode = repository.isRootMode()
 
+        // Dim brightness during stress tests (on by default — same default we
+        // use at the UiState level so the first launch already has it on).
+        val dimBrightness = repository.isDimBrightnessDuringStress()
+
         _uiState.update {
             it.copy(
                 themeMode = themeMode,
@@ -135,6 +142,7 @@ class SettingsViewModel @Inject constructor(
                 updateChannel = updateChannel,
                 isAutoCheckUpdate = autoCheckUpdate,
                 isRootMode = isRootMode,
+                isDimBrightnessDuringStress = dimBrightness,
                 exportPath = repository.getExportPathDisplay()
             )
         }
@@ -201,6 +209,12 @@ class SettingsViewModel @Inject constructor(
         val newState = !_uiState.value.isRootMode
         repository.setRootMode(newState)
         _uiState.update { it.copy(isRootMode = newState) }
+    }
+
+    fun toggleDimBrightnessDuringStress() {
+        val newState = !_uiState.value.isDimBrightnessDuringStress
+        repository.setDimBrightnessDuringStress(newState)
+        _uiState.update { it.copy(isDimBrightnessDuringStress = newState) }
     }
 
     fun setColorPalette(paletteInt: Int) {

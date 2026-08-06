@@ -1,4 +1,5 @@
-package com.ireddragonicy.konabessnext.ui.compose
+package com.ireddragonicy.konabessnext.ui.compose
+
 
 import com.ireddragonicy.konabessnext.viewmodel.common.UiState
 
@@ -185,6 +186,9 @@ fun SettingsScreenWrapper(
         onAutoSaveToggle = { settingsViewModel.toggleAutoSave() },
         onAmoledModeToggle = { settingsViewModel.toggleAmoledMode() },
         onHelpClick = { showHelpDialog = true },
+        // Dim brightness during stress tests
+        isDimBrightnessDuringStress = uiState.isDimBrightnessDuringStress,
+        onDimBrightnessDuringStressToggle = { settingsViewModel.toggleDimBrightnessDuringStress() },
         // Root Mode
         isRootMode = uiState.isRootMode,
         onRootModeToggle = { settingsViewModel.toggleRootMode() },

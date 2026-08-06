@@ -40,7 +40,7 @@ fun MainScreen(
     onLanguageChange: (String) -> Unit,
     onNavigateToExportHistory: () -> Unit
 ) {
-    val pagerState = rememberPagerState(pageCount = { 3 })
+    val pagerState = rememberPagerState(pageCount = { 4 })
     val scope = rememberCoroutineScope()
     var isTextSelectionActive by remember { mutableStateOf(false) }
 
@@ -77,13 +77,14 @@ fun MainScreen(
                     onStartRepack = onStartRepack,
                     onSelectionDragStateChanged = { isTextSelectionActive = it }
                 )
-                1 -> ImportExportScreenWrapper(
+                1 -> com.ireddragonicy.konabessnext.ui.compose.gpu.GpuStabilityScreen()
+                2 -> ImportExportScreenWrapper(
                     deviceViewModel = deviceViewModel,
                     importExportViewModel = importExportViewModel,
                     snackbarHostState = snackbarHostState,
                     onNavigateToExportHistory = onNavigateToExportHistory
                 )
-                2 -> SettingsScreenWrapper(
+                3 -> SettingsScreenWrapper(
                     settingsViewModel = settingsViewModel,
                     onLanguageChange = onLanguageChange
                 )

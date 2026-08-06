@@ -5,8 +5,11 @@ import android.content.SharedPreferences
 import com.ireddragonicy.konabessnext.viewmodel.SettingsViewModel
 import com.topjohnwu.superuser.Shell
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.update
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -38,6 +41,9 @@ class SettingsRepository @Inject constructor(
     fun isAmoledMode(): Boolean = prefs.getBoolean(SettingsViewModel.KEY_AMOLED_MODE, false)
     fun setAmoledMode(enabled: Boolean) = prefs.edit().putBoolean(SettingsViewModel.KEY_AMOLED_MODE, enabled).apply()
 
+    fun isDimBrightnessDuringStress(): Boolean = prefs.getBoolean(SettingsViewModel.KEY_DIM_BRIGHTNESS_DURING_STRESS, true)
+    fun setDimBrightnessDuringStress(enabled: Boolean) = prefs.edit().putBoolean(SettingsViewModel.KEY_DIM_BRIGHTNESS_DURING_STRESS, enabled).apply()
+
     fun getUpdateChannel(): String = prefs.getString("update_channel", "stable") ?: "stable"
     fun setUpdateChannel(channel: String) = prefs.edit().putString("update_channel", channel).apply()
     
@@ -61,6 +67,30 @@ class SettingsRepository @Inject constructor(
         return prefs.getBoolean("is_root_mode", false)
     }
     fun setRootMode(enabled: Boolean) = prefs.edit().putBoolean("is_root_mode", enabled).apply()
+
+    /**
+     * Hot flow that emits the current `is_root_mode` value and re-emits whenever
+     * it changes (either via [setRootMode] or any other process touching the
+     * same `SharedPreferences` file). The flow completes when the collector
+     * is cancelled.
+     *
+     * The first emission is the current value so collectors can use it as a
+     * regular state source. Subsequent emissions arrive on the calling
+     * coroutine's dispatcher via `Dispatchers.Main` (the SharedPreferences
+     * listener fires on the main thread).
+     */
+    fun rootModeFlow(): Flow<Boolean> = callbackFlow {
+        // Emit the current value immediately so collectors don't have to wait
+        // for the first write to seed their state.
+        trySend(isRootMode())
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { sp, key ->
+            if (key == "is_root_mode") {
+                trySend(sp.getBoolean("is_root_mode", false))
+            }
+        }
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
 
     // Export Location
     fun setAndPersistExportUri(uri: android.net.Uri) {

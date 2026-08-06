@@ -399,6 +399,8 @@
     <string name="settings_freq_unit_desc">Display frequency in Hz, MHz, or GHz</string>
     <string name="settings_auto_save">Auto-save GPU Table</string>
     <string name="settings_auto_save_desc">Automatically save changes to GPU frequency table</string>
+    <string name="settings_dim_brightness_during_stress">Dim screen brightness during stress tests</string>
+    <string name="settings_dim_brightness_during_stress_desc">Prevents screen burn-in during long tests</string>
     <string name="settings_root_mode">Root Mode</string>
     <string name="settings_root_mode_desc_on">Using root (su) for boot image extraction &amp; flashing</string>
     <string name="settings_root_mode_desc_off">Non-root: import/export files manually via SAF</string>
@@ -778,5 +780,74 @@
     <string name="copy_bin_to">Copy Bin To...</string>
     <string name="copy_bin_confirm_msg">Are you sure you want to overwrite this bin with the contents of the source bin? This will replace all frequencies and voltages.</string>
     <string name="copy_contents">Copy contents</string>
+
+    <!-- Bottom navigation -->
+    <string name="nav_dashboard">Dashboard</string>
+    <string name="nav_stability">Stability Test</string>
+
+    <!-- GPU Stability Test -->
+    <string name="stability_title">GPU Stability Test</string>
+    <string name="stability_root_required">This feature requires root permission to lock GPU frequencies.</string>
+    <string name="stability_no_freq">No GPU frequencies detected on this device.</string>
+    <string name="stability_config">Configuration</string>
+    <string name="stability_duration_label">Duration per point</string>
+    <string name="stability_total_points_fmt">Pending test: %1$d frequency point(s)</string>
+    <string name="stability_select_freq_title">Choose frequencies to test</string>
+    <string name="stability_select_freq_action">Select</string>
+    <string name="stability_select_all">Select all</string>
+    <string name="stability_deselect_all">Deselect all</string>
+    <string name="stability_start">Start Test</string>
+    <string name="stability_stop">Stop</string>
+    <string name="stability_clear">Clear Results</string>
+    <string name="stability_refresh">Reload</string>
+    <string name="stability_running_fmt">Testing %1$d MHz — %2$d / %3$d s</string>
+    <string name="stability_running_busy_fmt">GPU load %1$d%%</string>
+    <string name="stability_running_temp_fmt">Peak %1$.1f°C</string>
+    <string name="stability_pass_fmt">PASS — %1$d MHz (%2$d s)</string>
+    <string name="stability_fail_fmt">FAIL — %1$d MHz (%2$d s): %3$s</string>
+    <string name="stability_idle_hint">Tap "Start Test" to lock and stress each GPU frequency.</string>
+    <string name="stability_aborted">Test aborted. GPU limits have been restored.</string>
+    <string name="stability_failure_generic">Stability test failed.</string>
+    <string name="stability_chart_title">Live samples (cur MHz / temp °C)</string>
+    <string name="stability_results_title">Results</string>
+    <string name="stability_summary_title">GPU Stability Test</string>
+    <string name="stability_summary_pass">All frequency points passed.</string>
+    <string name="stability_summary_fail_fmt">%1$d of %2$d frequency points failed.</string>
+    <string name="stability_summary_passes_fmt">Passed %1$d / %2$d</string>
+    <string name="stability_status_idle">Idle — ready to lock and test each GPU frequency.</string>
+    <string name="stability_status_completed">All frequencies passed.</string>
+    <string name="stability_status_failed">Test stopped due to a failure.</string>
+    <string name="stability_status_aborted">Test aborted by user.</string>
+
+    <!-- GPU Stability chart legend / axis labels (kept separate so chart
+         code can pass them in directly without needing a Composable scope) -->
+    <string name="stability_chart_legend_freq">Cur MHz</string>
+    <string name="stability_chart_legend_temp">Temp °C</string>
+    <string name="stability_chart_axis_freq_fmt">%1$dM</string>
+    <string name="stability_chart_axis_seconds_fmt">%1$ds</string>
+
+    <!-- GPU Stability: free-run mode (no root, no frequency locking).
+         Shown only when the device doesn't have root mode enabled or root
+         access isn't granted. The user can still run a stress test, but the
+         GPU isn't pinned to any frequency and the test runs until they stop it. -->
+    <string name="stability_freerun_notice_title">Free-run mode (no root)</string>
+    <string name="stability_freerun_notice_body">Root mode is off or root isn\'t available, so the GPU won\'t be locked to a specific frequency and there\'s no per-point countdown. The stress test will keep running until you tap Stop.</string>
+    <string name="stability_status_freerun_idle">Idle — free-run stress test ready.</string>
+    <string name="stability_freerun_running_fmt">Free stress — %1$d s</string>
+
+    <!-- Failure reasons surfaced from the Repository. Keys mirror
+         com.ireddragonicy.konabessnext.model.gpu.FailureReason cases. -->
+    <string name="stability_failure_aborted_by_user">Aborted by user</string>
+    <string name="stability_failure_write_freq_rejected">Kernel refused to lock the GPU frequency</string>
+    <string name="stability_failure_renderer_gl_fmt">Renderer reported a GL error: %1$s</string>
+    <string name="stability_failure_throttled_below_fmt">GPU throttled below %1$d%% of target</string>
+    <string name="stability_failure_no_load">GPU load stayed at 0%% — stress failed to engage</string>
+    <string name="stability_failure_root_required">Root mode is required for stability testing.</string>
+    <string name="stability_failure_no_frequencies">No GPU frequencies to test.</string>
+    <string name="stability_failure_devfreq_node_missing">GPU devfreq node not found.</string>
+    <string name="stability_failure_unknown">Unknown failure.</string>
+    <!-- Per-point failure row format, used in the results list and dialog.
+         %1$d = MHz, %2$s = localized reason. -->
+    <string name="stability_fail_reason_fmt">FAIL — %1$d MHz: %2$s</string>
 
 </resources>
