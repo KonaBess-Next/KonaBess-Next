@@ -71,7 +71,7 @@ class HistoryManager @Inject constructor() {
         undoStack.push(HistoryItem(prefix, oldMid, newMid, description))
         
         if (undoStack.size > MAX_HISTORY) {
-            undoStack.removeLast()
+            undoStack.pollLast()
         }
         
         redoStack.clear()
