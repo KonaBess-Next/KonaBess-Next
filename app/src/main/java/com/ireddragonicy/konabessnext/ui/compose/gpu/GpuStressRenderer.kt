@@ -13,23 +13,6 @@ import javax.microedition.khronos.opengles.GL10
 /**
  * `GLSurfaceView` that runs the "Poison Mushroom" / Volume Shader BM 3D
  * benchmark from https://cznull.github.io/vsbm.
- *
- * The fragment shader ray-marches a 3D fractal scene (Mandelbulb-style
- * Mandelbox distance estimator); each pixel performs ~1000+ distance
- * evaluations plus bisection + golden-section refinement. On Adreno GPUs this
- * fully loads the shader cores at all frequency points.
- *
- * The shader source is **untouched** from the original cznull/vsbm public demo
- * — only adapted for GLES 2.0 (removed `#version 100` directives that conflict
- * with the Android driver and replaced `attribute`/`varying` qualifiers
- * implicitly via `precision highp float`).
- *
- * The view runs in [GLSurfaceView.RENDERMODE_CONTINUOUSLY] while
- * [setStressActive] is true; otherwise it stays in `RENDERMODE_WHEN_DIRTY` and
- * the GL thread idles.
- *
- * Errors from [GLES20.glGetError] are forwarded to [onError] so the ViewModel
- * can flag the current frequency point as failed.
  */
 class GpuStressSurfaceView @JvmOverloads constructor(
     context: Context,
@@ -39,6 +22,10 @@ class GpuStressSurfaceView @JvmOverloads constructor(
     private val rendererImpl = GpuStressRenderer()
 
     var onError: ((Int) -> Unit)? = null
+
+    // Track the last fixed size per instance so new view instances always apply setFixedSize.
+    private var lastFixedW: Int = 0
+    private var lastFixedH: Int = 0
 
     init {
         setEGLContextClientVersion(2)
@@ -51,28 +38,13 @@ class GpuStressSurfaceView @JvmOverloads constructor(
 
     /**
      * View layout hook (NOT a SurfaceHolder callback). Called by the
-     * platform whenever this View's laid-out size changes — that is, the
-     * real on-screen dimensions of the surface, *before* any
-     * `holder.setFixedSize` shenanigans. We use it to push a smaller buffer
-     * size to the holder so the GL thread renders at the reduced
-     * resolution; the platform then stretches the smaller buffer back to
-     * the View's full size on composite.
-     *
-     * Why `onSizeChanged` and not `surfaceChanged`? `surfaceChanged` fires
-     * every time the underlying Surface is recreated, including after
-     * `setFixedSize` shrinks it — feeding it back to the holder would
-     * cause a feedback loop where the buffer keeps halving. `onSizeChanged`
-     * is tied to the View tree's layout, not the EGL surface, so it's
-     * only called once per actual layout pass.
+     * platform whenever this View's laid-out size changes.
      */
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
         if (w <= 0 || h <= 0) return
         val scaledW = (w * RENDER_SCALE).toInt().coerceAtLeast(1)
         val scaledH = (h * RENDER_SCALE).toInt().coerceAtLeast(1)
-        // setFixedSize is a hint to the platform; if it equals the
-        // currently-set fixed size the call is a no-op. This is what
-        // gives us idempotency across multiple layout passes.
         if (scaledW != lastFixedW || scaledH != lastFixedH) {
             holder.setFixedSize(scaledW, scaledH)
             lastFixedW = scaledW
@@ -97,18 +69,9 @@ class GpuStressSurfaceView @JvmOverloads constructor(
          * Fraction of the View's laid-out size that the GL surface is
          * actually rendered at. 0.5 means we render into a buffer half the
          * width and half the height — a quarter of the fragments — and
-         * the platform stretches it back to fill the View. For a
-         * fragment-bound workload like the vsbm ray-march this is by far
-         * the most effective knob for raising frame rate: the shader
-         * itself is unchanged, so the GPU is still being exercised, but
-         * it has one quarter of the per-pixel work to do.
+         * the platform stretches it back to fill the View.
          */
         private const val RENDER_SCALE: Float = 0.5f
-
-        // Track the last fixed size we pushed so we don't redundantly call
-        // setFixedSize on every layout pass.
-        private var lastFixedW: Int = 0
-        private var lastFixedH: Int = 0
     }
 }
 
@@ -129,8 +92,7 @@ private class GpuStressRenderer : GLSurfaceView.Renderer {
     private var uYHandle: Int = -1
     private var uLenHandle: Int = -1
 
-    // Two triangles covering NDC [-1,1]^2. The original vsbm uses vec3
-    // positions with z=0; we use a fullscreen triangle strip.
+    // Two triangles covering NDC [-1,1]^2. Fullscreen quad.
     private val vertexBuffer: FloatBuffer = ByteBuffer
         .allocateDirect(VERTEX_DATA.size * Float.SIZE_BYTES)
         .order(ByteOrder.nativeOrder())
@@ -146,6 +108,10 @@ private class GpuStressRenderer : GLSurfaceView.Renderer {
 
     override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
         GLES20.glClearColor(0.075f, 0.067f, 0.082f, 1f)
+        if (program != 0) {
+            GLES20.glDeleteProgram(program)
+            program = 0
+        }
         program = buildProgram(VERTEX_SHADER, FRAGMENT_SHADER)
         if (program == 0) {
             reportError(0x100)
@@ -180,11 +146,7 @@ private class GpuStressRenderer : GLSurfaceView.Renderer {
         )
         GLES20.glEnableVertexAttribArray(aPositionHandle)
 
-        // Camera parameters — match the original vsbm demo at load() time.
-        // ang1 / ang2 are slowly animated so the camera orbits the fractal
-        // continuously, guaranteeing heavy ray-marching every frame.
-        // Use monotonic seconds since the GL thread started — no modulus so
-        // the camera never snaps back to its initial angle.
+        // Monotonic seconds since the GL thread started — smooth continuous orbit.
         val t = (System.nanoTime() - startTimeNanos) / 1_000_000_000f
         val ang1 = 2.8f + 0.4f * t
         val ang2 = 0.4f + 0.1f * kotlin.math.sin(t * 0.7f)
@@ -193,9 +155,11 @@ private class GpuStressRenderer : GLSurfaceView.Renderer {
         val ceny = 0f
         val cenz = 0f
 
-        // The original vsbm normalizes the viewport to a square and then scales
-        // the canvas. We use the actual pixel aspect ratio so the image isn't
-        // stretched on non-square surfaces.
+        val cosAng1 = kotlin.math.cos(ang1)
+        val sinAng1 = kotlin.math.sin(ang1)
+        val cosAng2 = kotlin.math.cos(ang2)
+        val sinAng2 = kotlin.math.sin(ang2)
+
         val xScale = if (widthPx < heightPx) 1f else heightPx.toFloat() / widthPx.toFloat()
         val yScale = if (heightPx < widthPx) 1f else widthPx.toFloat() / heightPx.toFloat()
 
@@ -204,30 +168,29 @@ private class GpuStressRenderer : GLSurfaceView.Renderer {
         GLES20.glUniform1f(uLenHandle, len)
         GLES20.glUniform3f(
             uOriginHandle,
-            len * kotlin.math.cos(ang1) * kotlin.math.cos(ang2) + cenx,
-            len * kotlin.math.sin(ang2) + ceny,
-            len * kotlin.math.sin(ang1) * kotlin.math.cos(ang2) + cenz,
+            len * cosAng1 * cosAng2 + cenx,
+            len * sinAng2 + ceny,
+            len * sinAng1 * cosAng2 + cenz,
         )
         GLES20.glUniform3f(
             uRightHandle,
-            kotlin.math.sin(ang1), 0f, -kotlin.math.cos(ang1)
+            sinAng1, 0f, -cosAng1
         )
         GLES20.glUniform3f(
             uUpHandle,
-            -kotlin.math.sin(ang2) * kotlin.math.cos(ang1),
-            kotlin.math.cos(ang2),
-            -kotlin.math.sin(ang2) * kotlin.math.sin(ang1),
+            -sinAng2 * cosAng1,
+            cosAng2,
+            -sinAng2 * sinAng1,
         )
         GLES20.glUniform3f(
             uForwardHandle,
-            -kotlin.math.cos(ang1) * kotlin.math.cos(ang2),
-            -kotlin.math.sin(ang2),
-            -kotlin.math.sin(ang1) * kotlin.math.cos(ang2),
+            -cosAng1 * cosAng2,
+            -sinAng2,
+            -sinAng1 * cosAng2,
         )
 
         GLES20.glDrawArrays(GLES20.GL_TRIANGLES, 0, 6)
-        GLES20.glDisableVertexAttribArray(aPositionHandle)
-        GLES20.glFinish()
+        GLES20.glFlush()
 
         val err = GLES20.glGetError()
         if (err != 0 && err != lastReportedError) {
@@ -252,7 +215,11 @@ private class GpuStressRenderer : GLSurfaceView.Renderer {
             return 0
         }
         val prog = GLES20.glCreateProgram()
-        if (prog == 0) return 0
+        if (prog == 0) {
+            GLES20.glDeleteShader(vs)
+            GLES20.glDeleteShader(fs)
+            return 0
+        }
         GLES20.glAttachShader(prog, vs)
         GLES20.glAttachShader(prog, fs)
         GLES20.glLinkProgram(prog)
@@ -261,8 +228,12 @@ private class GpuStressRenderer : GLSurfaceView.Renderer {
         if (status[0] == 0) {
             Log.e(TAG, "link failed: ${GLES20.glGetProgramInfoLog(prog)}")
             GLES20.glDeleteProgram(prog)
+            GLES20.glDeleteShader(vs)
+            GLES20.glDeleteShader(fs)
             return 0
         }
+        GLES20.glDetachShader(prog, vs)
+        GLES20.glDetachShader(prog, fs)
         GLES20.glDeleteShader(vs)
         GLES20.glDeleteShader(fs)
         return prog
@@ -287,8 +258,6 @@ private class GpuStressRenderer : GLSurfaceView.Renderer {
         private const val TAG = "GpuStressRenderer"
 
         // Two triangles covering NDC [-1,1]^2 — matches the original vsbm layout.
-        // Each vertex is a vec3 (x, y, z=0). The fragment shader uses position.xy
-        // to compute the camera ray direction.
         private val VERTEX_DATA = floatArrayOf(
             -1f, -1f, 0f,
             1f, -1f, 0f,
@@ -299,10 +268,7 @@ private class GpuStressRenderer : GLSurfaceView.Renderer {
         )
 
         /**
-         * Vertex shader — verbatim port from cznull/vsbm. Drops the
-         * `#version 100` header (Android driver adds it implicitly) and the
-         * `precision highp float` (also implicit in GLES 2.0 vertex shaders)
-         * but keeps every uniform / attribute exactly.
+         * Vertex shader — verbatim port from cznull/vsbm.
          */
         private val VERTEX_SHADER = """
             attribute vec4 position;
@@ -319,14 +285,8 @@ private class GpuStressRenderer : GLSurfaceView.Renderer {
         """.trimIndent()
 
         /**
-         * Fragment shader — verbatim port from cznull/vsbm. The `kernal` function
-         * is the spherical-fold Mandelbox distance estimator; the main loop walks
-         * up to 1000 ray steps with bisection + golden-section refinement when a
-         * hit is detected. Heavy ALU load on purpose.
-         *
-         * Note: original `#version 100`, `#define`, `precision highp float` and
-         * `kernal` prototype lines are kept because the Android shader compiler
-         * happily accepts them.
+         * Fragment shader — port from cznull/vsbm.
+         * The `kernal` function is the spherical-fold Mandelbox distance estimator.
          */
         private val FRAGMENT_SHADER = """
             #define PI 3.14159265358979324
@@ -340,21 +300,18 @@ private class GpuStressRenderer : GLSurfaceView.Renderer {
             varying vec3 dir, localdir;
             uniform float len;
             vec3 ver;
-            int sign;
+            int hitSign;
             float v, v1, v2;
             float r1, r2, r3, r4, m1, m2, m3, m4;
-            vec3 n, reflect;
+            vec3 n, refl;
             const float step = 0.002;
             vec3 color;
             float kernal(vec3 ver) {
-                vec3 a;
-                float b, c, d, e;
-                a = ver;
+                vec3 a = ver;
                 for (int i = 0; i < 5; i++) {
-                    b = length(a);
-                    c = atan(a.y, a.x) * 8.0;
-                    e = 1.0 / b;
-                    d = acos(a.z / b) * 8.0;
+                    float b = length(a);
+                    float c = atan(a.y, a.x) * 8.0;
+                    float d = acos(clamp(a.z / b, -1.0, 1.0)) * 8.0;
                     b = pow(b, 8.0);
                     a = vec3(b * sin(d) * cos(c), b * sin(d) * sin(c), b * cos(d)) + ver;
                     if (b > 6.0) {
@@ -367,7 +324,7 @@ private class GpuStressRenderer : GLSurfaceView.Renderer {
                 color.r = 0.0;
                 color.g = 0.0;
                 color.b = 0.0;
-                sign = 0;
+                hitSign = 0;
                 v1 = kernal(origin + dir * (step * len));
                 v2 = kernal(origin);
                 for (int k = 2; k < 1002; k++) {
@@ -390,7 +347,7 @@ private class GpuStressRenderer : GLSurfaceView.Renderer {
                             }
                         }
                         if (r3 < 2.0 * len) {
-                            sign = 1;
+                            hitSign = 1;
                             break;
                         }
                     }
@@ -433,7 +390,7 @@ private class GpuStressRenderer : GLSurfaceView.Renderer {
                                 }
                             }
                             if (r3 < 2.0 * len && r3 > step * len) {
-                                sign = 1;
+                                hitSign = 1;
                                 break;
                             }
                         } else if (m3 > 0.0) {
@@ -453,7 +410,7 @@ private class GpuStressRenderer : GLSurfaceView.Renderer {
                                 }
                             }
                             if (r3 < 2.0 * len && r3 > step * len) {
-                                sign = 1;
+                                hitSign = 1;
                                 break;
                             }
                         }
@@ -461,7 +418,7 @@ private class GpuStressRenderer : GLSurfaceView.Renderer {
                     v2 = v1;
                     v1 = v;
                 }
-                if (sign == 1) {
+                if (hitSign == 1) {
                     ver = origin + dir * r3;
                     r1 = ver.x * ver.x + ver.y * ver.y + ver.z * ver.z;
                     n.x = kernal(ver - right * (r3 * 0.00025)) - kernal(ver + right * (r3 * 0.00025));
@@ -472,8 +429,8 @@ private class GpuStressRenderer : GLSurfaceView.Renderer {
                     ver = localdir;
                     r3 = ver.x * ver.x + ver.y * ver.y + ver.z * ver.z;
                     ver = ver * (1.0 / sqrt(r3));
-                    reflect = n * (-2.0 * dot(ver, n)) + ver;
-                    r3 = reflect.x * 0.276 + reflect.y * 0.920 + reflect.z * 0.276;
+                    refl = n * (-2.0 * dot(ver, n)) + ver;
+                    r3 = refl.x * 0.276 + refl.y * 0.920 + refl.z * 0.276;
                     r4 = n.x * 0.276 + n.y * 0.920 + n.z * 0.276;
                     r3 = max(0.0, r3);
                     r3 = r3 * r3 * r3 * r3;
