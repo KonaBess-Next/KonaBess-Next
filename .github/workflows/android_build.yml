@@ -5,11 +5,14 @@ on:
     branches: [ main, master, develop ]
   pull_request:
     branches: [ main, master ]
+  workflow_dispatch:
 
 jobs:
   build:
     name: Build and Release
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
     - name: Checkout code
@@ -60,7 +63,7 @@ jobs:
         echo "EOF" >> $GITHUB_OUTPUT
 
     - name: Decode Keystore
-      if: github.event_name == 'push'
+      if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
       run: |
         if [ ! -z "${{ secrets.SIGNING_KEY }}" ]; then
           echo "${{ secrets.SIGNING_KEY }}" | base64 -d > ${{ github.workspace }}/keystore.jks
@@ -70,7 +73,7 @@ jobs:
         fi
 
     - name: Build Release APK
-      if: github.event_name == 'push'
+      if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
       run: |
         if [ ! -z "${{ secrets.SIGNING_KEY }}" ]; then
           echo "Building with release keystore..."
@@ -84,6 +87,10 @@ jobs:
             --stacktrace
         else
           echo "Using debug signing for release build."
+          mkdir -p $HOME/.android
+          if [ ! -f $HOME/.android/debug.keystore ]; then
+            keytool -genkey -v -keystore $HOME/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          fi
           ./gradlew assembleRelease \
             -PciVersionName="${{ steps.version.outputs.version }}" \
             -PciVersionCode="${{ steps.version.outputs.code }}" \
@@ -132,13 +139,14 @@ jobs:
         }
         
         process_apks "app/build/outputs/apk/debug" "debug"
-        if [ "${{ github.event_name }}" == "push" ]; then
+        if [ "${{ github.event_name }}" == "push" ] || [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
           process_apks "app/build/outputs/apk/release" "release"
         fi
 
     - name: VirusTotal Scan
       id: virustotal
-      if: github.event_name == 'push'
+      if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+      continue-on-error: true
       uses: crazy-max/ghaction-virustotal@v4
       with:
         vt_api_key: ${{ secrets.VT_API_KEY }}
@@ -148,7 +156,7 @@ jobs:
 
     - name: Parse VirusTotal Results
       id: vt_parsed
-      if: github.event_name == 'push' && steps.virustotal.outputs.analysis != ''
+      if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && steps.virustotal.outputs.analysis != ''
       shell: bash
       run: |
         ANALYSIS="${{ steps.virustotal.outputs.analysis }}"
@@ -200,7 +208,7 @@ jobs:
         echo "EOF" >> $GITHUB_OUTPUT
 
     - name: Create Release
-      if: github.event_name == 'push'
+      if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
       uses: softprops/action-gh-release@v3
       with:
         tag_name: "v${{ steps.version.outputs.version }}"

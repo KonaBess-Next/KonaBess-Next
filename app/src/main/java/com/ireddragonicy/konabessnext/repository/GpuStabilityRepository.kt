@@ -50,11 +50,20 @@ class GpuStabilityRepository @Inject constructor(
         val PROBE_COMMANDS: List<String> = listOf(
             "cat /sys/class/kgsl/kgsl-3d0/frequencies",
             "cat /sys/class/kgsl/kgsl-3d0/available_frequencies",
+            "cat /sys/class/kgsl/kgsl-3d0/gpu_available_frequencies",
+            "cat /sys/class/kgsl/kgsl-3d0/freq_table_mhz",
             "cat /sys/class/kgsl/kgsl-3d0/devfreq/available_frequencies",
             "cat /sys/devices/platform/soc/*.qcom,kgsl-3d0/kgsl/kgsl-3d0/frequencies",
             "cat /sys/devices/platform/soc/*.qcom,kgsl-3d0/kgsl/kgsl-3d0/available_frequencies",
+            "cat /sys/devices/platform/soc/*.qcom,kgsl-3d0/kgsl/kgsl-3d0/gpu_available_frequencies",
+            "cat /sys/devices/platform/soc/*.qcom,kgsl-3d0/kgsl/kgsl-3d0/freq_table_mhz",
             "cat /sys/devices/platform/soc@0/*.qcom,kgsl-3d0/kgsl/kgsl-3d0/frequencies",
+            "cat /sys/devices/platform/soc@0/*.qcom,kgsl-3d0/kgsl/kgsl-3d0/gpu_available_frequencies",
             "cat /sys/devices/platform/*.qcom,kgsl-3d0/kgsl/kgsl-3d0/frequencies",
+            "cat /sys/devices/platform/*.qcom,kgsl-3d0/kgsl/kgsl-3d0/gpu_available_frequencies",
+            "cat /sys/class/devfreq/3d00000.qcom,kgsl-3d0/available_frequencies",
+            "cat /sys/class/devfreq/*gpu*/available_frequencies",
+            "cat /sys/class/devfreq/*kgsl*/available_frequencies",
         )
 
         /** sysfs paths for the per-frequency governor / min / max knobs. */
@@ -62,6 +71,17 @@ class GpuStabilityRepository @Inject constructor(
             "/sys/class/kgsl/kgsl-3d0/devfreq",
             "/sys/devices/platform/soc/soc:qcom,kgsl-3d0/devfreq",
             "/sys/devices/platform/soc/*.qcom,kgsl-3d0/devfreq",
+            "/sys/class/devfreq/3d00000.qcom,kgsl-3d0",
+            "/sys/class/devfreq/*gpu*",
+            "/sys/class/devfreq/*kgsl*",
+        )
+
+        /** sysfs paths for direct KGSL clock control (fallback when devfreq has no knobs). */
+        val KGSL_NODE_CANDIDATES: List<String> = listOf(
+            "/sys/class/kgsl/kgsl-3d0",
+            "/sys/devices/platform/soc/*.qcom,kgsl-3d0/kgsl/kgsl-3d0",
+            "/sys/devices/platform/soc@0/*.qcom,kgsl-3d0/kgsl/kgsl-3d0",
+            "/sys/devices/platform/*.qcom,kgsl-3d0/kgsl/kgsl-3d0",
         )
 
         /** Cat paths used to read GPU samples. We try a list of candidate paths
@@ -70,8 +90,13 @@ class GpuStabilityRepository @Inject constructor(
             "/sys/class/kgsl/kgsl-3d0/devfreq/cur_freq",
             "/sys/class/kgsl/kgsl-3d0/cur_freq",
             "/sys/class/kgsl/kgsl-3d0/gpuclk",
+            "/sys/class/kgsl/kgsl-3d0/clock_mhz",
             "/sys/class/kgsl/kgsl-3d0/clock",
             "/sys/class/kgsl/kgsl-3d0/devfreq/curr_freq",
+            "/sys/devices/platform/soc/*.qcom,kgsl-3d0/kgsl/kgsl-3d0/gpuclk",
+            "/sys/class/devfreq/3d00000.qcom,kgsl-3d0/cur_freq",
+            "/sys/class/devfreq/*gpu*/cur_freq",
+            "/sys/class/devfreq/*kgsl*/cur_freq",
         )
         val BUSY_PATHS: List<String> = listOf(
             "/sys/class/kgsl/kgsl-3d0/gpu_busy_percentage",
@@ -80,6 +105,7 @@ class GpuStabilityRepository @Inject constructor(
             "/sys/class/kgsl/kgsl-3d0/devfreq/busy",
             "/sys/devices/platform/soc/soc:qcom,kgsl-3d0/devfreq/busy",
             "/sys/devices/platform/soc/*.qcom,kgsl-3d0/devfreq/busy",
+            "/sys/devices/platform/soc/*.qcom,kgsl-3d0/kgsl/kgsl-3d0/gpu_busy_percentage",
             "/sys/class/devfreq/*/busy",
         )
         val TEMP_FALLBACK_PATH = "/sys/class/kgsl/kgsl-3d0/temp"
@@ -102,6 +128,9 @@ class GpuStabilityRepository @Inject constructor(
         val minFreqHz: Long?,
         val maxFreqHz: Long?,
         val nodeDir: String?,
+        val isKgslDirect: Boolean = false,
+        val originalMaxGpuclk: Long? = null,
+        val originalPwrscale: String? = null,
     )
 
     private val _events = MutableSharedFlow<TestEvent>(extraBufferCapacity = 16)
@@ -284,11 +313,44 @@ class GpuStabilityRepository @Inject constructor(
      */
     suspend fun pinFrequency(nodeDir: String, targetFreqHz: Long): Boolean = withContext(Dispatchers.IO) {
         if (!shellExecutor.isRootMode) return@withContext false
-        shellExecutor.execAndCheck(
-            "echo performance > $nodeDir/governor",
-            "echo $targetFreqHz > $nodeDir/min_freq",
-            "echo $targetFreqHz > $nodeDir/max_freq",
+        val isKgsl = originalLimits?.isKgslDirect ?: (
+            shellExecutor.execAndCheck("[ -f '$nodeDir/max_gpuclk' ]") ||
+            shellExecutor.execAndCheck("[ -f '$nodeDir/gpuclk' ]")
         )
+        if (isKgsl) {
+            val targetMhz = targetFreqHz / 1_000_000L
+            val cmds = mutableListOf<String>()
+            if (shellExecutor.execAndCheck("[ -f '$nodeDir/pwrscale' ]")) {
+                cmds.add("echo 0 > $nodeDir/pwrscale 2>/dev/null || true")
+            }
+            if (shellExecutor.execAndCheck("[ -f '$nodeDir/max_gpuclk' ]")) {
+                cmds.add("echo $targetFreqHz > $nodeDir/max_gpuclk 2>/dev/null || true")
+            } else if (shellExecutor.execAndCheck("[ -f '$nodeDir/max_clock_mhz' ]")) {
+                cmds.add("echo $targetMhz > $nodeDir/max_clock_mhz 2>/dev/null || true")
+            }
+            if (shellExecutor.execAndCheck("[ -f '$nodeDir/gpuclk' ]")) {
+                cmds.add("echo $targetFreqHz > $nodeDir/gpuclk 2>/dev/null || true")
+            }
+            if (cmds.isEmpty()) return@withContext false
+            shellExecutor.execForOutput(cmds.joinToString("; "))
+            val cur = shellExecutor.execForOutput("cat $nodeDir/gpuclk 2>/dev/null").firstOrNull()?.trim()?.toLongOrNull()
+            val max = shellExecutor.execForOutput("cat $nodeDir/max_gpuclk 2>/dev/null").firstOrNull()?.trim()?.toLongOrNull()
+            (cur != null && cur > 0L) || (max != null && max > 0L)
+        } else {
+            val cmds = mutableListOf<String>()
+            if (shellExecutor.execAndCheck("[ -f '$nodeDir/governor' ]")) {
+                cmds.add("echo performance > $nodeDir/governor 2>/dev/null || true")
+            }
+            if (shellExecutor.execAndCheck("[ -f '$nodeDir/min_freq' ]")) {
+                cmds.add("echo $targetFreqHz > $nodeDir/min_freq 2>/dev/null || true")
+            }
+            if (shellExecutor.execAndCheck("[ -f '$nodeDir/max_freq' ]")) {
+                cmds.add("echo $targetFreqHz > $nodeDir/max_freq 2>/dev/null || true")
+            }
+            if (cmds.isEmpty()) return@withContext false
+            shellExecutor.execForOutput(cmds.joinToString("; "))
+            true
+        }
     }
 
     /**
@@ -299,9 +361,18 @@ class GpuStabilityRepository @Inject constructor(
     private suspend fun restoreLimits(original: OriginalLimits, nodeDir: String) = withContext(Dispatchers.IO) {
         if (!shellExecutor.isRootMode) return@withContext
         try {
-            original.minFreqHz?.let { shellExecutor.execAndCheck("echo $it > $nodeDir/min_freq") }
-            original.maxFreqHz?.let { shellExecutor.execAndCheck("echo $it > $nodeDir/max_freq") }
-            original.governor?.let { shellExecutor.execAndCheck("echo '$it' > $nodeDir/governor") }
+            if (original.isKgslDirect) {
+                original.originalMaxGpuclk?.let {
+                    shellExecutor.execForOutput("echo $it > $nodeDir/max_gpuclk 2>/dev/null || true")
+                }
+                original.originalPwrscale?.let {
+                    shellExecutor.execForOutput("echo $it > $nodeDir/pwrscale 2>/dev/null || true")
+                }
+            } else {
+                original.minFreqHz?.let { shellExecutor.execForOutput("echo $it > $nodeDir/min_freq 2>/dev/null || true") }
+                original.maxFreqHz?.let { shellExecutor.execForOutput("echo $it > $nodeDir/max_freq 2>/dev/null || true") }
+                original.governor?.let { shellExecutor.execForOutput("echo '$it' > $nodeDir/governor 2>/dev/null || true") }
+            }
         } catch (e: Exception) {
             Log.w(TAG, "restoreLimits failed: ${e.message}")
         }
@@ -409,7 +480,12 @@ class GpuStabilityRepository @Inject constructor(
         }
         val raw = shellExecutor.execForOutput(sb.toString())
 
-        val curFreq = raw.getOrNull(0)?.trim()?.toLongOrNull()?.takeIf { it > 0L } ?: 0L
+        val curFreqRaw = raw.getOrNull(0)?.trim()?.toLongOrNull()?.takeIf { it > 0L } ?: 0L
+        val curFreq = when {
+            curFreqRaw in 1..9_999L -> curFreqRaw * 1_000_000L
+            curFreqRaw in 10_000L..9_999_999L -> curFreqRaw * 1_000L
+            else -> curFreqRaw
+        }
         val busy = parsePercentInt(raw.getOrNull(1)?.trim())
         val tempRaw = raw.getOrNull(2)?.trim()?.toLongOrNull()
         val temp = if (tempRaw != null && tempRaw > 0L) {
@@ -459,27 +535,68 @@ class GpuStabilityRepository @Inject constructor(
 
     private suspend fun resolveGovernorNode(): String? {
         for (candidate in GOV_NODE_CANDIDATES) {
-            if (candidate.contains('*')) {
-                // glob, only valid through shell — use `ls` style probe
-                val out = shellExecutor.execForOutput("ls -d $candidate 2>/dev/null").firstOrNull()
-                if (!out.isNullOrBlank()) return out.trim()
+            val resolved = if (candidate.contains('*')) {
+                shellExecutor.execForOutput("ls -d $candidate 2>/dev/null").firstOrNull()?.trim()
             } else if (shellExecutor.execAndCheck("[ -d '$candidate' ]")) {
-                return candidate
+                candidate
+            } else null
+
+            if (!resolved.isNullOrBlank()) {
+                val hasControls = shellExecutor.execAndCheck("[ -f '$resolved/max_freq' ]") ||
+                    shellExecutor.execAndCheck("[ -f '$resolved/governor' ]")
+                if (hasControls) {
+                    return resolved
+                }
+            }
+        }
+
+        for (candidate in KGSL_NODE_CANDIDATES) {
+            val resolved = if (candidate.contains('*')) {
+                shellExecutor.execForOutput("ls -d $candidate 2>/dev/null").firstOrNull()?.trim()
+            } else if (shellExecutor.execAndCheck("[ -d '$candidate' ]")) {
+                candidate
+            } else null
+
+            if (!resolved.isNullOrBlank()) {
+                val hasControls = shellExecutor.execAndCheck("[ -f '$resolved/max_gpuclk' ]") ||
+                    shellExecutor.execAndCheck("[ -f '$resolved/max_clock_mhz' ]") ||
+                    shellExecutor.execAndCheck("[ -f '$resolved/gpuclk' ]")
+                if (hasControls) {
+                    return resolved
+                }
             }
         }
         return null
     }
 
     private suspend fun readOriginalLimits(nodeDir: String): OriginalLimits = withContext(Dispatchers.IO) {
-        OriginalLimits(
-            governor = shellExecutor.execForOutput("cat $nodeDir/governor")
-                .firstOrNull()?.trim()?.ifEmpty { null },
-            minFreqHz = shellExecutor.execForOutput("cat $nodeDir/min_freq")
-                .firstOrNull()?.trim()?.toLongOrNull(),
-            maxFreqHz = shellExecutor.execForOutput("cat $nodeDir/max_freq")
-                .firstOrNull()?.trim()?.toLongOrNull(),
-            nodeDir = nodeDir,
-        )
+        val isKgsl = shellExecutor.execAndCheck("[ -f '$nodeDir/max_gpuclk' ] || [ -f '$nodeDir/gpuclk' ]")
+        if (isKgsl) {
+            val maxGpuclk = shellExecutor.execForOutput("cat $nodeDir/max_gpuclk 2>/dev/null")
+                .firstOrNull()?.trim()?.toLongOrNull()
+            val pwrscale = shellExecutor.execForOutput("cat $nodeDir/pwrscale 2>/dev/null")
+                .firstOrNull()?.trim()?.ifEmpty { null }
+            OriginalLimits(
+                governor = null,
+                minFreqHz = null,
+                maxFreqHz = null,
+                nodeDir = nodeDir,
+                isKgslDirect = true,
+                originalMaxGpuclk = maxGpuclk,
+                originalPwrscale = pwrscale,
+            )
+        } else {
+            OriginalLimits(
+                governor = shellExecutor.execForOutput("cat $nodeDir/governor 2>/dev/null")
+                    .firstOrNull()?.trim()?.ifEmpty { null },
+                minFreqHz = shellExecutor.execForOutput("cat $nodeDir/min_freq 2>/dev/null")
+                    .firstOrNull()?.trim()?.toLongOrNull(),
+                maxFreqHz = shellExecutor.execForOutput("cat $nodeDir/max_freq 2>/dev/null")
+                    .firstOrNull()?.trim()?.toLongOrNull(),
+                nodeDir = nodeDir,
+                isKgslDirect = false,
+            )
+        }
     }
 
     private fun parseFrequencyList(lines: List<String>): List<Long> {
@@ -497,6 +614,13 @@ class GpuStabilityRepository @Inject constructor(
                 else token.toLongOrNull()
             }
             .filter { it > 0L }
+            .map { freq ->
+                when {
+                    freq < 10_000L -> freq * 1_000_000L
+                    freq < 10_000_000L -> freq * 1_000L
+                    else -> freq
+                }
+            }
             .toList()
             .distinct()
     }

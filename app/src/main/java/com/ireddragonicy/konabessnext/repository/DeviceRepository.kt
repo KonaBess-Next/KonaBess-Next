@@ -461,11 +461,20 @@ open class DeviceRepository @Inject constructor(
         val probeCommands = listOf(
             "cat /sys/class/kgsl/kgsl-3d0/frequencies",
             "cat /sys/class/kgsl/kgsl-3d0/available_frequencies",
+            "cat /sys/class/kgsl/kgsl-3d0/gpu_available_frequencies",
+            "cat /sys/class/kgsl/kgsl-3d0/freq_table_mhz",
             "cat /sys/class/kgsl/kgsl-3d0/devfreq/available_frequencies",
             "cat /sys/devices/platform/soc/*.qcom,kgsl-3d0/kgsl/kgsl-3d0/frequencies",
             "cat /sys/devices/platform/soc/*.qcom,kgsl-3d0/kgsl/kgsl-3d0/available_frequencies",
+            "cat /sys/devices/platform/soc/*.qcom,kgsl-3d0/kgsl/kgsl-3d0/gpu_available_frequencies",
+            "cat /sys/devices/platform/soc/*.qcom,kgsl-3d0/kgsl/kgsl-3d0/freq_table_mhz",
             "cat /sys/devices/platform/soc@0/*.qcom,kgsl-3d0/kgsl/kgsl-3d0/frequencies",
-            "cat /sys/devices/platform/*.qcom,kgsl-3d0/kgsl/kgsl-3d0/frequencies"
+            "cat /sys/devices/platform/soc@0/*.qcom,kgsl-3d0/kgsl/kgsl-3d0/gpu_available_frequencies",
+            "cat /sys/devices/platform/*.qcom,kgsl-3d0/kgsl/kgsl-3d0/frequencies",
+            "cat /sys/devices/platform/*.qcom,kgsl-3d0/kgsl/kgsl-3d0/gpu_available_frequencies",
+            "cat /sys/class/devfreq/3d00000.qcom,kgsl-3d0/available_frequencies",
+            "cat /sys/class/devfreq/*gpu*/available_frequencies",
+            "cat /sys/class/devfreq/*kgsl*/available_frequencies"
         )
 
         for (command in probeCommands) {
@@ -940,7 +949,15 @@ open class DeviceRepository @Inject constructor(
                 }
             }
             .filter { it > 0L }
+            .map { freq ->
+                when {
+                    freq < 10_000L -> freq * 1_000_000L
+                    freq < 10_000_000L -> freq * 1_000L
+                    else -> freq
+                }
+            }
             .toList()
+            .distinct()
     }
 
     private fun readFileToString(file: File): String = BufferedReader(FileReader(file)).use { it.readText() }
